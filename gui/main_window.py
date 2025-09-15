@@ -60,13 +60,28 @@ class MainWindow(QMainWindow):
         layout.addWidget(subtitle_label)
 
     def create_cards_section(self, layout):
-        """Create the two main cards"""
+        """Create the three main cards"""
         cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(40)
+        cards_layout.setSpacing(30)
         cards_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Steganography card
-        stego_card = self.create_steganography_card()
+        # Steganography Encoding card
+        encode_card = self.create_card(
+            "Steganography - Encoding",
+            "Hide secret messages within images, audio, or other media files using LSB techniques.",
+            "Start Encoding →",
+            "#3498db",
+            self.create_padlock_icon()
+        )
+
+        # Steganography Decoding card
+        decode_card = self.create_card(
+            "Steganography - Decoding",
+            "Extract hidden messages from steganographic media files using LSB techniques.",
+            "Start Decoding →",
+            "#e67e22",
+            self.create_unlock_icon()
+        )
 
         # Steganalysis card
         analysis_card = self.create_card(
@@ -77,7 +92,8 @@ class MainWindow(QMainWindow):
             self.create_magnifying_glass_icon()
         )
 
-        cards_layout.addWidget(stego_card)
+        cards_layout.addWidget(encode_card)
+        cards_layout.addWidget(decode_card)
         cards_layout.addWidget(analysis_card)
 
         layout.addLayout(cards_layout)
@@ -147,7 +163,11 @@ class MainWindow(QMainWindow):
         """)
 
         # Connect button click
-        if "Analyzing" in button_text:
+        if "Encoding" in button_text:
+            button.clicked.connect(self.start_steganography_encoding)
+        elif "Decoding" in button_text:
+            button.clicked.connect(self.start_steganography_decoding)
+        elif "Analyzing" in button_text:
             button.clicked.connect(self.start_steganalysis)
 
         layout.addWidget(icon_label)
@@ -155,108 +175,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(desc_label)
         layout.addStretch()
         layout.addWidget(button)
-
-        return card
-
-    def create_steganography_card(self):
-        """Create a steganography card with two buttons"""
-        card = QFrame()
-        card.setFixedSize(400, 350)
-        card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 15px;
-                border: none;
-            }
-        """)
-
-        # Add shadow effect
-        card.setGraphicsEffect(self.create_shadow_effect())
-
-        layout = QVBoxLayout(card)
-        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
-
-        # Icon
-        icon_label = QLabel()
-        icon_label.setPixmap(self.create_padlock_icon())
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_label.setFixedSize(80, 80)
-
-        # Title
-        title_label = QLabel("Steganography")
-        title_font = QFont()
-        title_font.setPointSize(24)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #2c3e50; margin: 10px 0;")
-
-        # Description
-        desc_label = QLabel(
-            "Hide and extract secret messages within images, audio, or other media files using LSB techniques.")
-        desc_font = QFont()
-        desc_font.setPointSize(12)
-        desc_label.setFont(desc_font)
-        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #7f8c8d; line-height: 1.4;")
-
-        # Buttons container
-        buttons_layout = QVBoxLayout()
-        buttons_layout.setSpacing(10)
-
-        # Encoding button
-        encode_button = QPushButton("Steganography - Encoding")
-        encode_button_font = QFont()
-        encode_button_font.setPointSize(14)
-        encode_button_font.setBold(True)
-        encode_button.setFont(encode_button_font)
-        encode_button.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #3498db;
-                border: none;
-                padding: 10px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                color: #2980b9;
-                text-decoration: underline;
-            }
-        """)
-        encode_button.clicked.connect(self.start_steganography_encoding)
-
-        # Decoding button
-        decode_button = QPushButton("Steganography - Decoding")
-        decode_button_font = QFont()
-        decode_button_font.setPointSize(14)
-        decode_button_font.setBold(True)
-        decode_button.setFont(decode_button_font)
-        decode_button.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                color: #e67e22;
-                border: none;
-                padding: 10px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                color: #d35400;
-                text-decoration: underline;
-            }
-        """)
-        decode_button.clicked.connect(self.start_steganography_decoding)
-
-        buttons_layout.addWidget(encode_button)
-        buttons_layout.addWidget(decode_button)
-
-        layout.addWidget(icon_label)
-        layout.addWidget(title_label)
-        layout.addWidget(desc_label)
-        layout.addStretch()
-        layout.addLayout(buttons_layout)
 
         return card
 
@@ -283,6 +201,36 @@ class MainWindow(QMainWindow):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(QColor("#95a5a6"), 4))
         painter.drawArc(25, 20, 30, 30, 0, 180 * 16)
+
+        painter.end()
+        return pixmap
+
+    def create_unlock_icon(self):
+        """Create an unlock icon"""
+        pixmap = QPixmap(80, 80)
+        pixmap.fill(Qt.GlobalColor.transparent)
+
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Lock body (orange)
+        painter.setBrush(QColor("#e67e22"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(20, 35, 40, 30, 5, 5)
+
+        # Keyhole
+        painter.setBrush(QColor("#2c3e50"))
+        painter.drawEllipse(35, 45, 10, 10)
+        painter.drawRect(38, 50, 4, 8)
+
+        # Lock shackle (open - gray)
+        painter.setPen(Qt.PenStyle.SolidLine)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor("#95a5a6"), 4))
+        # Draw open shackle (arc from top-left to top-right)
+        painter.drawArc(25, 20, 30, 30, 0, 90 * 16)  # Top arc
+        painter.drawLine(40, 20, 40, 15)  # Vertical line up
+        painter.drawLine(40, 15, 35, 15)  # Horizontal line left
 
         painter.end()
         return pixmap
