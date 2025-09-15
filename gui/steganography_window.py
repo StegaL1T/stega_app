@@ -697,7 +697,7 @@ class PayloadDropWidget(QFrame):
 
         # Drop zone
         self.drop_zone = QLabel()
-        self.drop_zone.setMinimumHeight(120)
+        self.drop_zone.setMinimumHeight(150)
         self.drop_zone.setStyleSheet("""
             QLabel {
                 border: 3px dashed #bdc3c7;
@@ -949,6 +949,49 @@ class SteganographyWindow(QMainWindow):
 
         layout.addLayout(content_layout)
 
+        # Add Hide Message button below all columns
+        self.create_hide_button(layout)
+
+    def create_hide_button(self, layout):
+        """Create the Hide Message button below all columns"""
+        # Add some spacing above the button
+        layout.addSpacing(30)
+
+        # Create button container with centered alignment
+        button_container = QWidget()
+        button_layout = QHBoxLayout(button_container)
+        button_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Hide Message button
+        hide_button = QPushButton("Hide Message")
+        hide_button.setMinimumHeight(60)
+        hide_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e67e22;
+                color: white;
+                border: none;
+                padding: 20px 40px;
+                border-radius: 10px;
+                font-size: 18px;
+                font-weight: bold;
+                min-width: 200px;
+            }
+            QPushButton:hover {
+                background-color: #d35400;
+            }
+            QPushButton:pressed {
+                background-color: #c0392b;
+            }
+        """)
+        hide_button.clicked.connect(self.hide_message)
+
+        # Center the button
+        button_layout.addStretch()
+        button_layout.addWidget(hide_button)
+        button_layout.addStretch()
+
+        layout.addWidget(button_container)
+
     def create_cover_panel(self):
         """Create the cover item panel (left column)"""
         panel = QFrame()
@@ -1042,7 +1085,7 @@ class SteganographyWindow(QMainWindow):
         self.message_text = QTextEdit()
         self.message_text.setPlaceholderText(
             "Enter your secret message here...")
-        self.message_text.setMinimumHeight(120)
+        self.message_text.setMaximumHeight(80)
         self.message_text.setStyleSheet("""
             QTextEdit {
                 border: 3px dashed #bdc3c7;
@@ -1071,7 +1114,7 @@ class SteganographyWindow(QMainWindow):
                 color: #7f8c8d;
                 font-size: 14px;
                 font-weight: bold;
-                margin: 10px 0;
+                margin: 5px 0;
             }
         """)
 
@@ -1138,9 +1181,11 @@ class SteganographyWindow(QMainWindow):
                 font-size: 16px;
                 font-weight: bold;
                 color: #2c3e50;
-                padding: 10px;
-                background-color: #ecf0f1;
-                border-radius: 5px;
+                padding: 15px;
+                background-color: #f8f9fa;
+                border: 3px dashed #bdc3c7;
+                border-radius: 15px;
+                font-family: 'Segoe UI', sans-serif;
             }
         """)
 
@@ -1183,13 +1228,21 @@ class SteganographyWindow(QMainWindow):
         self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.key_input.setStyleSheet("""
             QLineEdit {
-                padding: 10px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
+                padding: 15px;
+                border: 3px dashed #bdc3c7;
+                border-radius: 15px;
                 background-color: #f8f9fa;
+                color: #7f8c8d;
+                font-size: 14px;
+                font-family: 'Segoe UI', sans-serif;
             }
             QLineEdit:focus {
-                border-color: #e67e22;
+                border-color: #3498db;
+                background-color: #e3f2fd;
+            }
+            QLineEdit:hover {
+                border-color: #3498db;
+                background-color: #e3f2fd;
             }
         """)
 
@@ -1204,10 +1257,13 @@ class SteganographyWindow(QMainWindow):
         self.output_path.setReadOnly(True)
         self.output_path.setStyleSheet("""
             QLineEdit {
-                padding: 10px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
+                padding: 15px;
+                border: 3px dashed #bdc3c7;
+                border-radius: 15px;
                 background-color: #f8f9fa;
+                color: #7f8c8d;
+                font-size: 14px;
+                font-family: 'Segoe UI', sans-serif;
             }
         """)
 
@@ -1230,29 +1286,10 @@ class SteganographyWindow(QMainWindow):
         output_layout.addWidget(self.output_path)
         output_layout.addWidget(output_button)
 
-        # Hide button
-        hide_button = QPushButton("Hide Message")
-        hide_button.setStyleSheet("""
-            QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border: none;
-                padding: 15px 30px;
-                border-radius: 5px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #d35400;
-            }
-        """)
-        hide_button.clicked.connect(self.hide_message)
-
         layout.addLayout(header_layout)
         layout.addWidget(lsb_group)
         layout.addWidget(key_group)
         layout.addWidget(output_group)
-        layout.addWidget(hide_button)
         layout.addStretch()
 
         return panel
