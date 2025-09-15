@@ -1,18 +1,18 @@
-# machine/steganography_machine.py
+# machine/stega_encode_machine.py
 import os
 from typing import Optional, Tuple
 from PIL import Image
 import numpy as np
 
 
-class SteganographyMachine:
+class StegaEncodeMachine:
     """
-    Handles all steganography operations and business logic.
+    Handles all steganography encoding operations and business logic.
     Separated from GUI to maintain clean architecture.
     """
 
     def __init__(self):
-        """Initialize the steganography machine"""
+        """Initialize the steganography encoding machine"""
         self.cover_image_path: Optional[str] = None
         self.payload_data: Optional[str] = None
         self.payload_file_path: Optional[str] = None
@@ -24,7 +24,7 @@ class SteganographyMachine:
         self.cover_image: Optional[Image.Image] = None
         self.image_array: Optional[np.ndarray] = None
 
-        print("SteganographyMachine initialized")
+        print("StegaEncodeMachine initialized")
 
     def set_cover_image(self, image_path: str) -> bool:
         """
@@ -200,7 +200,7 @@ class SteganographyMachine:
 
     def hide_message(self) -> bool:
         """
-        Perform the steganography operation
+        Perform the steganography encoding operation
 
         Returns:
             bool: True if successful, False otherwise
@@ -212,7 +212,7 @@ class SteganographyMachine:
             return False
 
         try:
-            print("Starting steganography process...")
+            print("Starting steganography encoding process...")
 
             # TODO: Implement actual LSB steganography algorithm
             # This is where you would implement the core steganography logic
@@ -223,13 +223,13 @@ class SteganographyMachine:
             # Save the result
             result_image.save(self.output_path)
 
-            print(f"Steganography completed successfully!")
+            print(f"Steganography encoding completed successfully!")
             print(f"Output saved to: {self.output_path}")
 
             return True
 
         except Exception as e:
-            print(f"Error during steganography: {e}")
+            print(f"Error during steganography encoding: {e}")
             return False
 
     def get_image_info(self) -> dict:
@@ -255,4 +255,4 @@ class SteganographyMachine:
         """Clean up resources when machine is destroyed"""
         self.cover_image = None
         self.image_array = None
-        print("SteganographyMachine cleaned up")
+        print("StegaEncodeMachine cleaned up")

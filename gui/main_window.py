@@ -66,13 +66,7 @@ class MainWindow(QMainWindow):
         cards_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Steganography card
-        stego_card = self.create_card(
-            "Steganography",
-            "Hide secret messages within images, audio, or other media files using LSB techniques.",
-            "Start Hiding →",
-            "#3498db",
-            self.create_padlock_icon()
-        )
+        stego_card = self.create_steganography_card()
 
         # Steganalysis card
         analysis_card = self.create_card(
@@ -153,9 +147,7 @@ class MainWindow(QMainWindow):
         """)
 
         # Connect button click
-        if "Hiding" in button_text:
-            button.clicked.connect(self.start_steganography)
-        else:
+        if "Analyzing" in button_text:
             button.clicked.connect(self.start_steganalysis)
 
         layout.addWidget(icon_label)
@@ -163,6 +155,108 @@ class MainWindow(QMainWindow):
         layout.addWidget(desc_label)
         layout.addStretch()
         layout.addWidget(button)
+
+        return card
+
+    def create_steganography_card(self):
+        """Create a steganography card with two buttons"""
+        card = QFrame()
+        card.setFixedSize(400, 350)
+        card.setStyleSheet("""
+            QFrame {
+                background-color: white;
+                border-radius: 15px;
+                border: none;
+            }
+        """)
+
+        # Add shadow effect
+        card.setGraphicsEffect(self.create_shadow_effect())
+
+        layout = QVBoxLayout(card)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(20)
+        layout.setContentsMargins(30, 30, 30, 30)
+
+        # Icon
+        icon_label = QLabel()
+        icon_label.setPixmap(self.create_padlock_icon())
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        icon_label.setFixedSize(80, 80)
+
+        # Title
+        title_label = QLabel("Steganography")
+        title_font = QFont()
+        title_font.setPointSize(24)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("color: #2c3e50; margin: 10px 0;")
+
+        # Description
+        desc_label = QLabel(
+            "Hide and extract secret messages within images, audio, or other media files using LSB techniques.")
+        desc_font = QFont()
+        desc_font.setPointSize(12)
+        desc_label.setFont(desc_font)
+        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_label.setWordWrap(True)
+        desc_label.setStyleSheet("color: #7f8c8d; line-height: 1.4;")
+
+        # Buttons container
+        buttons_layout = QVBoxLayout()
+        buttons_layout.setSpacing(10)
+
+        # Encoding button
+        encode_button = QPushButton("Steganography - Encoding")
+        encode_button_font = QFont()
+        encode_button_font.setPointSize(14)
+        encode_button_font.setBold(True)
+        encode_button.setFont(encode_button_font)
+        encode_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #3498db;
+                border: none;
+                padding: 10px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                color: #2980b9;
+                text-decoration: underline;
+            }
+        """)
+        encode_button.clicked.connect(self.start_steganography_encoding)
+
+        # Decoding button
+        decode_button = QPushButton("Steganography - Decoding")
+        decode_button_font = QFont()
+        decode_button_font.setPointSize(14)
+        decode_button_font.setBold(True)
+        decode_button.setFont(decode_button_font)
+        decode_button.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: #e67e22;
+                border: none;
+                padding: 10px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                color: #d35400;
+                text-decoration: underline;
+            }
+        """)
+        decode_button.clicked.connect(self.start_steganography_decoding)
+
+        buttons_layout.addWidget(encode_button)
+        buttons_layout.addWidget(decode_button)
+
+        layout.addWidget(icon_label)
+        layout.addWidget(title_label)
+        layout.addWidget(desc_label)
+        layout.addStretch()
+        layout.addLayout(buttons_layout)
 
         return card
 
@@ -228,11 +322,18 @@ class MainWindow(QMainWindow):
         color = QColor(color_hex)
         return color.darker(120).name()
 
-    def start_steganography(self):
-        """Handle steganography button click"""
-        from gui.steganography_window import SteganographyWindow
-        self.steganography_window = SteganographyWindow()
-        self.steganography_window.show()
+    def start_steganography_encoding(self):
+        """Handle steganography encoding button click"""
+        from gui.stega_encode_window import StegaEncodeWindow
+        self.encode_window = StegaEncodeWindow()
+        self.encode_window.show()
+        self.close()
+
+    def start_steganography_decoding(self):
+        """Handle steganography decoding button click"""
+        from gui.stega_decode_window import StegaDecodeWindow
+        self.decode_window = StegaDecodeWindow()
+        self.decode_window.show()
         self.close()
 
     def start_steganalysis(self):

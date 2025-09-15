@@ -1,4 +1,4 @@
-# gui/steganography_window.py
+# gui/stega_encode_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
@@ -835,15 +835,15 @@ class PayloadDropWidget(QFrame):
         self.file_loaded.emit("")
 
 
-class SteganographyWindow(QMainWindow):
+class StegaEncodeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Steganography - Hide Messages")
         self.setMinimumSize(1200, 800)
 
         # Initialize the steganography machine
-        from machine.steganography_machine import SteganographyMachine
-        self.machine = SteganographyMachine()
+        from machine.stega_encode_machine import StegaEncodeMachine
+        self.machine = StegaEncodeMachine()
 
         # Set gradient background
         self.setStyleSheet("""
