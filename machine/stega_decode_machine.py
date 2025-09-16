@@ -6,8 +6,6 @@ import random
 import struct
 import zlib
 from PIL import Image
-from datetime import datetime
-from PyPDF2 import PdfReader
 import numpy as np
 
 
@@ -111,11 +109,11 @@ class StegaDecodeMachine:
             bool: True if successful, False otherwise
         """
         try:
-            # Ensure directory exists, create if needed
+            # Check if directory exists
             output_dir = os.path.dirname(output_path)
-            if output_dir:
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir, exist_ok=True)
+            if output_dir and not os.path.exists(output_dir):
+                print(f"Error: Output directory does not exist: {output_dir}")
+                return False
 
             self.output_path = output_path
             print(f"Output path set: {output_path}")
@@ -281,33 +279,16 @@ class StegaDecodeMachine:
                 return False
 
             # Decide output path
-            # Prefer the user-provided path exactly; if it's a folder or name without extension,
-            # generate datetime.<suggested_filename>. Otherwise, use suggested name next to stego with datetime prefix.
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-            def build_final_name(suggested: str) -> str:
-                if suggested:
-                    return f"{timestamp}.{suggested}"
-                return f"{timestamp}_extracted.bin"
-
-            if self.output_path and self.output_path.strip():
-                chosen_dir = os.path.dirname(self.output_path)
-                chosen_base = os.path.basename(self.output_path)
-                name, ext = os.path.splitext(chosen_base)
-                # If no extension, treat as a directory/name base and attach datetime.<suggested>
-                if not ext:
-                    base_dir = chosen_dir if chosen_dir else os.getcwd()
-                    final_name = build_final_name(suggested_filename)
-                    output_path = os.path.join(base_dir, final_name)
-                else:
-                    # Explicit filename with extension provided by user; honor exactly
-                    output_path = self.output_path
-            elif suggested_filename:
-                stego_dir = os.path.dirname(self.stego_image_path) or ''
-                final_name = build_final_name(suggested_filename)
-                output_path = os.path.join(stego_dir, final_name)
-            else:
-                output_path = os.path.join(os.getcwd(), f"{timestamp}_extracted_payload.bin")
+            output_path = self.output_path
+            if suggested_filename:
+                try:
+                    base_dir = os.path.dirname(self.output_path) if self.output_path else ''
+                    if base_dir and os.path.isdir(base_dir):
+                        output_path = os.path.join(base_dir, suggested_filename)
+                    else:
+                        output_path = suggested_filename
+                except Exception:
+                    pass
 
             with open(output_path, 'wb') as f:
                 f.write(payload)
@@ -319,27 +300,7 @@ class StegaDecodeMachine:
             try:
                 self.extracted_data = payload.decode('utf-8')
             except Exception:
-                # Try PDF text extraction if extension indicates a PDF
-                self.extracted_data = None
-                try:
-                    if output_path.lower().endswith('.pdf'):
-                        with open(output_path, 'rb') as pf:
-                            reader = PdfReader(pf)
-                            texts = []
-                            for page in reader.pages:
-                                try:
-                                    t = page.extract_text() or ''
-                                except Exception:
-                                    t = ''
-                                if t:
-                                    texts.append(t)
-                            preview = "\n".join(texts).strip()
-                            if preview:
-                                self.extracted_data = preview
-                except Exception:
-                    pass
-                if self.extracted_data is None:
-                    self.extracted_data = f"Binary payload extracted ({len(payload)} bytes) -> {output_path}"
+                self.extracted_data = f"Binary payload extracted ({len(payload)} bytes) -> {output_path}"
 
             print(f"Steganography decoding completed successfully!")
             print(f"Extracted data saved to: {output_path}")
