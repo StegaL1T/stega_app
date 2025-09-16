@@ -667,34 +667,10 @@ class StegaDecodeWindow(QMainWindow):
         # Perform steganography extraction
         if self.machine.extract_message():
             print("✅ Steganography extraction completed successfully!")
-            # Display extracted data and header info in results text area
+            # Display extracted data in results text area
             extracted_data = self.machine.get_extracted_data()
-            header_info = self.machine.get_header_info() or {}
-            out_path = self.machine.output_path or "(unknown)"
-
-            lines = []
-            lines.append("=== Decode Success ===")
-            if header_info:
-                lines.append(f"Version: {header_info.get('version')}")
-                lines.append(f"LSB bits: {header_info.get('lsb_bits')}")
-                if header_info.get('start_offset') is not None:
-                    lines.append(f"Header start offset: {header_info.get('start_offset')}")
-                lines.append(f"Computed start: {header_info.get('computed_start')}")
-                lines.append(f"Payload length: {header_info.get('payload_length')} bytes")
-                if header_info.get('filename'):
-                    lines.append(f"Filename: {header_info.get('filename')}")
-            lines.append(f"Saved to: {out_path}")
-
-            # Always show some message in results pane
-            if extracted_data and isinstance(extracted_data, str):
-                # Limit overly long text previews
-                preview = extracted_data
-                if len(preview) > 5000:
-                    preview = preview[:5000] + "\n...[truncated]"
-                lines.append("")
-                lines.append(preview)
-
-            self.results_text.setPlainText("\n".join(lines))
+            if extracted_data:
+                self.results_text.setPlainText(extracted_data)
 
             # Show success dialog with option to open file
             from PyQt6.QtWidgets import QMessageBox
