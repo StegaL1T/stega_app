@@ -1,0 +1,48 @@
+Decode demo script/checklist (for images)
+
+Header v1 (current)
+Magic: 4 bytes = "STGA"
+Version: 1 byte = 0x01
+LSB bits: 1 byte = 1..8
+Payload length: 4 bytes, big-endian (uint32)
+Filename length: 1 byte = 0..100
+Filename: N bytes UTF-8 (N = filename length)
+CRC32: 4 bytes, big-endian (uint32 of payload only)
+
+Standard test parameters
+LSB bits: 2
+Key: 12345
+
+Generate a compliant stego (if encoder sample not ready)
+Command:
+python scripts/generate_stego_png.py --cover asset/input/stega_encode/cover_photo.png --payload asset/input/stega_encode/secret_small.pdf --key 12345 --lsb 2 --out asset/output/stega_encode/test_stego.png
+
+GUI happy-path (Decode)
+1. Open app -> Decode tab.
+2. Stego image: asset/output/stega_encode/test_stego.png
+3. LSB bits: 2
+4. Key: 12345
+5. Output path: asset/output/stega_decode/secret_small.pdf
+6. Click Extract.
+Expect: Success popup; file saved; if payload is text, preview appears.
+
+Negative tests
+1) Wrong key
+   - Key: 99999 (keep others same)
+   - Expect: CRC32 mismatch error popup.
+2) Wrong LSB bits
+   - LSB bits: 1 (keep key correct)
+   - Expect: LSB bits mismatch error.
+3) Non-stego/cover file
+   - Use the original cover as stego input
+   - Expect: Magic bytes mismatch error.
+
+Text payload check (optional)
+1. Generate stego with a small TXT payload (e.g., asset/input/stega_encode/hello.txt).
+2. Decode with correct key/lsb.
+3. Expect: text shown in results area; file also saved.
+
+Troubleshooting quick notes
+- Ensure output directory exists and is writable.
+- Do not re-compress/resize stego files before decoding.
+- Key and LSB bits must exactly match the encoder settings.

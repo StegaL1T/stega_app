@@ -652,6 +652,11 @@ class StegaDecodeWindow(QMainWindow):
         self.machine.set_lsb_bits(self.lsb_slider.value())
         self.machine.set_encryption_key(self.key_input.text())
 
+        # Require non-empty key
+        if not self.key_input.text().strip():
+            self.results_text.setPlainText("Error: A key is required to decode.")
+            return
+
         # Set default output path if none specified
         if not self.output_path.text().strip():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -666,10 +671,29 @@ class StegaDecodeWindow(QMainWindow):
             extracted_data = self.machine.get_extracted_data()
             if extracted_data:
                 self.results_text.setPlainText(extracted_data)
+
+            # Show success dialog with option to open file
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Decode Successful")
+            out_path = self.machine.output_path or "saved file"
+            msg.setText(f"Payload extracted successfully.\nSaved to: {out_path}")
+            open_btn = msg.addButton("Open file", QMessageBox.ButtonRole.AcceptRole)
+            msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+            if msg.clickedButton() == open_btn and self.machine.output_path:
+                from PyQt6.QtGui import QDesktopServices
+                from PyQt6.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.output_path))
         else:
             print("❌ Steganography extraction failed!")
-            self.results_text.setPlainText(
-                "Extraction failed. Please check your settings and try again.")
+            error_msg = self.machine.get_last_error() or "Extraction failed. Please check your settings and try again."
+            self.results_text.setPlainText(error_msg)
+
+            # Show error popup
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Decode Failed", error_msg)
 
     def go_back(self):
         """Go back to main window"""
