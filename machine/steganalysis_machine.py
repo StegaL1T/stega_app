@@ -200,58 +200,148 @@ class SteganalysisMachine:
 
         return chi2 / 1000  # Normalize for display
 
-    def _perform_rs_analysis(self):
-        """Perform RS (Regular-Singular) analysis"""
-        print("Performing RS analysis...")
-
-        # Simplified RS analysis
-        # In practice, you'd implement the full RS analysis algorithm
-
-        r_channel = self.image_array[:, :, 0]
-
-        # Calculate RS statistics (simplified)
-        rs_ratio = 0.5  # Placeholder calculation
-
-        self.results = {
-            'method': 'RS Analysis',
-            'rs_ratio': rs_ratio,
-            'suspicious': abs(rs_ratio - 0.5) > 0.1
-        }
-
     def _perform_sample_pairs_analysis(self):
-        """Perform Sample Pairs analysis"""
+        """Perform Sample Pairs analysis across all color channels"""
         print("Performing Sample Pairs analysis...")
 
-        # Simplified sample pairs analysis
-        r_channel = self.image_array[:, :, 0]
+        results_per_channel = {}
+        suspicious_flag = False
 
-        # Calculate sample pairs statistics (simplified)
-        pairs_ratio = 0.5  # Placeholder calculation
+        for idx, color in enumerate(['R', 'G', 'B']):
+            channel = self.image_array[:, :, idx].astype(np.int32)
 
+            total_pairs = 0
+            equal_pairs = 0
+            different_pairs = 0
+
+            # Iterate over rows and check adjacent pixel pairs
+            for row in channel:
+                for i in range(0, len(row) - 1):
+                    p1, p2 = row[i], row[i + 1]
+                    total_pairs += 1
+                    if p1 == p2:
+                        equal_pairs += 1
+                    else:
+                        different_pairs += 1
+
+            # Calculate ratio (normalized)
+            equal_ratio = equal_pairs / max(total_pairs, 1)
+            diff_ratio = different_pairs / max(total_pairs, 1)
+
+            # Store per-channel results
+            results_per_channel[color] = {
+                'total_pairs': total_pairs,
+                'equal_pairs': equal_pairs,
+                'different_pairs': different_pairs,
+                'equal_ratio': equal_ratio,
+                'diff_ratio': diff_ratio
+            }
+
+            # Suspicion check: if equal/diff balance looks skewed
+            if abs(equal_ratio - diff_ratio) > 0.2:  
+                suspicious_flag = True
+
+        # Save combined results
         self.results = {
             'method': 'Sample Pairs Analysis',
-            'pairs_ratio': pairs_ratio,
-            'suspicious': abs(pairs_ratio - 0.5) > 0.1
+            'channels': results_per_channel,
+            'suspicious': suspicious_flag
         }
+
+
+    def _perform_rs_analysis(self):
+        """Perform RS (Regular-Singular) analysis across all color channels"""
+        print("Performing RS analysis...")
+
+        results_per_channel = {}
+        suspicious_flag = False
+
+        # Go through R, G, B channels
+        for idx, color in enumerate(['R', 'G', 'B']):
+            channel = self.image_array[:, :, idx].astype(np.int32)
+
+            # Helper: flip LSBs
+            def flip_lsb(block):
+                return block ^ 1
+
+            # Helper: discriminant (smoothness measure)
+            def discriminant(block):
+                return np.sum(np.abs(np.diff(block)))
+
+            regular, singular = 0, 0
+
+            # Iterate over rows in 2-pixel groups
+            for row in channel:
+                for i in range(0, len(row) - 1, 2):
+                    block = row[i:i+2]
+                    if len(block) < 2:
+                        continue
+
+                    d_original = discriminant(block)
+                    block_flipped = flip_lsb(block)
+                    d_flipped = discriminant(block_flipped)
+
+                    if d_flipped > d_original:
+                        regular += 1
+                    elif d_flipped < d_original:
+                        singular += 1
+
+            total = max(regular + singular, 1)
+            rs_ratio = regular / total
+
+            # Store channel results
+            results_per_channel[color] = {
+                'regular_groups': regular,
+                'singular_groups': singular,
+                'rs_ratio': rs_ratio
+            }
+
+            # If RS ratio deviates from ~0.5, flag as suspicious
+            if abs(rs_ratio - 0.5) > 0.05:
+                suspicious_flag = True
+
+        # Save combined results
+        self.results = {
+            'method': 'RS Analysis',
+            'channels': results_per_channel,
+            'suspicious': suspicious_flag
+        }
+
 
     def _perform_comprehensive_analysis(self):
         """Perform comprehensive analysis using multiple methods"""
         print("Performing comprehensive analysis...")
 
-        # Run multiple analysis methods
+        # Run all methods and store their results
+        all_results = {}
+
+        # LSB Analysis
         self._perform_lsb_analysis()
-        lsb_results = self.results.copy()
+        all_results['lsb_analysis'] = self.results.copy()
 
+        # Chi-Square Test
         self._perform_chi_square_test()
-        chi2_results = self.results.copy()
+        all_results['chi_square_test'] = self.results.copy()
 
-        # Combine results
+        # RS Analysis
+        self._perform_rs_analysis()
+        all_results['rs_analysis'] = self.results.copy()
+
+        # Sample Pairs Analysis
+        self._perform_sample_pairs_analysis()
+        all_results['sample_pairs_analysis'] = self.results.copy()
+
+        # Combine into final results
+        suspicious_flag = any(
+            res.get('suspicious', False) for res in all_results.values()
+        )
+
         self.results = {
             'method': 'Comprehensive Analysis',
-            'lsb_analysis': lsb_results,
-            'chi_square_test': chi2_results,
-            'suspicious': lsb_results.get('suspicious', False) or chi2_results.get('suspicious', False)
+            'analyses': all_results,
+            'suspicious': suspicious_flag
         }
+
 
     def _calculate_confidence(self):
         """Calculate confidence level in the analysis"""
@@ -259,17 +349,32 @@ class SteganalysisMachine:
             self.confidence_level = 0.0
             return
 
-        # Calculate confidence based on results
-        if self.results.get('suspicious', False):
-            self.confidence_level = 0.85  # High confidence if suspicious
+        # Default: for single methods
+        if self.analysis_method != "Comprehensive Analysis":
+            if self.results.get('suspicious', False):
+                self.confidence_level = 0.85  # suspicious
+            else:
+                self.confidence_level = 0.95  # clean
+            return
+
+        # For comprehensive analysis
+        analyses = self.results.get('analyses', {})
+        total_methods = len(analyses)
+        suspicious_count = sum(
+            1 for res in analyses.values() if res.get('suspicious', False)
+        )
+
+        if suspicious_count == 0:
+            self.confidence_level = 0.95  # very confident it's clean
         else:
-            self.confidence_level = 0.95  # Very high confidence if clean
+            # Confidence increases with agreement across methods
+            agreement_ratio = suspicious_count / total_methods
+            self.confidence_level = 0.7 + (0.3 * agreement_ratio)
+            # Range: 0.7 (1 method flagged) → 1.0 (all flagged)
 
-        # Adjust based on method
-        if self.analysis_method == "Comprehensive Analysis":
-            self.confidence_level += 0.05
+        # Ensure stays between 0.0 and 1.0
+        self.confidence_level = min(max(self.confidence_level, 0.0), 1.0)
 
-        self.confidence_level = min(self.confidence_level, 1.0)
 
     def get_results(self) -> Dict:
         """
