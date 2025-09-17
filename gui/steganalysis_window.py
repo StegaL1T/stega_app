@@ -144,7 +144,7 @@ class SteganalysisWindow(QMainWindow):
         image_layout.addWidget(browse_button)
 
         # Analysis method selection
-        method_group = QGroupBox("Analysis Method")
+        method_group = QGroupBox("Image Analysis Method")
         method_layout = QVBoxLayout(method_group)
 
         self.method_combo = QComboBox()
@@ -153,7 +153,11 @@ class SteganalysisWindow(QMainWindow):
             "Chi-Square Test",
             "RS Analysis",
             "Sample Pairs Analysis",
-            "Comprehensive Analysis"
+            "DCT Analysis",
+            "Wavelet Analysis",
+            "Histogram Analysis",
+            "Comprehensive Analysis",
+            "Advanced Comprehensive"
         ])
         self.method_combo.setStyleSheet("""
             QComboBox {
@@ -187,10 +191,85 @@ class SteganalysisWindow(QMainWindow):
         """)
         analyze_button.clicked.connect(self.analyze_image)
 
+        # Audio selection
+        audio_group = QGroupBox("Suspicious Audio")
+        audio_layout = QVBoxLayout(audio_group)
+
+        self.audio_path = QLineEdit()
+        self.audio_path.setPlaceholderText("Select WAV audio to analyze...")
+        self.audio_path.setReadOnly(True)
+
+        browse_audio_button = QPushButton("Browse Audio")
+        browse_audio_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        browse_audio_button.clicked.connect(self.browse_audio)
+
+        audio_layout.addWidget(self.audio_path)
+        audio_layout.addWidget(browse_audio_button)
+
+        # Audio method selection
+        audio_method_group = QGroupBox("Audio Analysis Method")
+        audio_method_layout = QVBoxLayout(audio_method_group)
+
+        self.audio_method_combo = QComboBox()
+        self.audio_method_combo.addItems([
+            "Audio LSB Analysis",
+            "Audio Chi-Square Test",
+            "Audio Spectral Analysis",
+            "Audio Autocorrelation Analysis",
+            "Audio Entropy Analysis",
+            "Audio Comprehensive Analysis",
+            "Audio Advanced Comprehensive"
+        ])
+        self.audio_method_combo.setStyleSheet("""
+            QComboBox {
+                padding: 8px;
+                border: 2px solid #bdc3c7;
+                border-radius: 5px;
+                background-color: white;
+            }
+            QComboBox:focus {
+                border-color: #3498db;
+            }
+        """)
+
+        audio_method_layout.addWidget(self.audio_method_combo)
+
+        # Analyze audio button
+        analyze_audio_button = QPushButton("Analyze Audio")
+        analyze_audio_button.setStyleSheet("""
+            QPushButton {
+                background-color: #16a085;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 5px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #138d75;
+            }
+        """)
+        analyze_audio_button.clicked.connect(self.analyze_audio)
+
         layout.addWidget(title)
         layout.addWidget(image_group)
         layout.addWidget(method_group)
         layout.addWidget(analyze_button)
+        layout.addWidget(audio_group)
+        layout.addWidget(audio_method_group)
+        layout.addWidget(analyze_audio_button)
         layout.addStretch()
 
         return panel
@@ -302,8 +381,24 @@ class SteganalysisWindow(QMainWindow):
         )
         if file_path:
             self.image_path.setText(file_path)
-            self.results_text.append(
-                f"Image selected for analysis: {file_path}")
+            # Load into machine
+            if self.machine.set_image(file_path):
+                self.results_text.append(f"Image selected: {file_path}")
+            else:
+                self.results_text.append(f"Error loading image: {file_path}")
+
+    def browse_audio(self):
+        """Browse for audio to analyze"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select Audio to Analyze", "",
+            "WAV Files (*.wav)"
+        )
+        if file_path:
+            self.audio_path.setText(file_path)
+            if self.machine.set_audio(file_path):
+                self.results_text.append(f"Audio selected: {file_path}")
+            else:
+                self.results_text.append(f"Error loading audio: {file_path}")
 
     def analyze_image(self):
         """Analyze the selected image"""
@@ -312,35 +407,64 @@ class SteganalysisWindow(QMainWindow):
                 "Error: Please select an image to analyze")
             return
 
-        # Show progress bar
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
+        # Run analysis via machine
+        method = self.method_combo.currentText()
+        self.machine.set_analysis_method(method)
+        ok = self.machine.analyze_image()
 
-        # TODO: Implement actual steganalysis algorithms
-        self.results_text.append(
-            "Steganalysis functionality will be implemented here...")
-        self.results_text.append(
-            f"Analysis method: {self.method_combo.currentText()}")
-        self.results_text.append("Simulating analysis...")
+        self.results_text.append("\n=== IMAGE ANALYSIS ===")
+        if not ok:
+            self.results_text.append("Error during image analysis.")
+            return
 
-        # Simulate progress
-        for i in range(101):
-            self.progress_bar.setValue(i)
-            QApplication.processEvents()
+        results = self.machine.get_results()
+        confidence = self.machine.get_confidence_level()
+        stats = self.machine.get_statistics()
 
-        # Hide progress bar
-        self.progress_bar.setVisible(False)
+        self.results_text.append(f"Method: {results.get('method', method)}")
+        self.results_text.append(f"Suspicious: {results.get('suspicious', False)}")
+        for k, v in results.items():
+            if k in ("method", "suspicious"):
+                continue
+            self.results_text.append(f"{k}: {v}")
 
-        # Simulate results
-        self.results_text.append("\n=== ANALYSIS COMPLETE ===")
-        self.results_text.append("No steganographic content detected.")
-        self.results_text.append("Confidence level: 95%")
+        self.results_text.append(f"Confidence level: {confidence*100:.2f}%")
 
         self.stats_text.append("Image Statistics:")
-        self.stats_text.append("- File size: 2.3 MB")
-        self.stats_text.append("- Dimensions: 1920x1080")
-        self.stats_text.append("- Color channels: RGB")
-        self.stats_text.append("- Compression: JPEG (Quality: 85%)")
+        for k, v in stats.items():
+            self.stats_text.append(f"- {k}: {v}")
+
+    def analyze_audio(self):
+        """Analyze the selected audio"""
+        if not self.audio_path.text():
+            self.results_text.append(
+                "Error: Please select an audio file to analyze")
+            return
+
+        method = self.audio_method_combo.currentText()
+        ok = self.machine.analyze_audio(method)
+
+        self.results_text.append("\n=== AUDIO ANALYSIS ===")
+        if not ok:
+            self.results_text.append("Error during audio analysis.")
+            return
+
+        results = self.machine.get_results()
+        confidence = self.machine.get_confidence_level()
+        stats = self.machine.get_audio_statistics()
+
+        self.results_text.append(f"Method: {results.get('method', method)}")
+        self.results_text.append(f"Suspicious: {results.get('suspicious', False)}")
+        for k, v in results.items():
+            if k in ("method", "suspicious"):
+                continue
+            self.results_text.append(f"{k}: {v}")
+
+        self.results_text.append(f"Confidence level: {confidence*100:.2f}%")
+
+        self.stats_text.append("Audio Statistics:")
+        for k, v in stats.items():
+            self.stats_text.append(f"- {k}: {v}")
 
     def export_report(self):
         """Export analysis report"""
@@ -349,7 +473,10 @@ class SteganalysisWindow(QMainWindow):
             "Text Files (*.txt);;All Files (*)"
         )
         if file_path:
-            self.results_text.append(f"Report exported to: {file_path}")
+            if self.machine.export_report(file_path):
+                self.results_text.append(f"Report exported to: {file_path}")
+            else:
+                self.results_text.append("Error exporting report.")
 
     def go_back(self):
         """Go back to main window"""
