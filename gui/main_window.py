@@ -11,11 +11,21 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Steganography Tool")
         self.setMinimumSize(1000, 700)
 
-        # Set gradient background
+        # Cybersecurity theme: fonts & background
+        # Colors:
+        #   Background: #0e1625 (very dark navy)
+        #   Headings/accents: #49299a (purple)
+        #   Highlights/buttons: #45edf2 (aqua/cyan)
+        #   Light contrast: #e8e8fc (very light lavender)
         self.setStyleSheet("""
             QMainWindow {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #e3f2fd, stop:1 #ffffff);
+                background-color: #0e1625;
+                font-family: 'Syne', 'Segoe UI', 'Arial', sans-serif;
+                color: #e8e8fc;
+            }
+            QWidget {
+                font-family: 'Syne', 'Segoe UI', 'Arial', sans-serif;
+                color: #e8e8fc;
             }
         """)
 
@@ -46,7 +56,7 @@ class MainWindow(QMainWindow):
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
+        title_label.setStyleSheet("color: #49299a; margin-bottom: 10px;")
 
         subtitle_label = QLabel(
             "Hide and detect hidden information in digital media.")
@@ -54,7 +64,7 @@ class MainWindow(QMainWindow):
         subtitle_font.setPointSize(16)
         subtitle_label.setFont(subtitle_font)
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_label.setStyleSheet("color: #7f8c8d; margin-bottom: 20px;")
+        subtitle_label.setStyleSheet("color: rgba(232,232,252,0.8); margin-bottom: 20px;")
 
         layout.addWidget(title_label)
         layout.addWidget(subtitle_label)
@@ -70,7 +80,7 @@ class MainWindow(QMainWindow):
             "Steganography - Encoding",
             "Hide secret messages within images, audio, or other media files using LSB techniques.",
             "Start Encoding →",
-            "#3498db",
+            "#45edf2",
             self.create_padlock_icon()
         )
 
@@ -79,7 +89,7 @@ class MainWindow(QMainWindow):
             "Steganography - Decoding",
             "Extract hidden messages from steganographic media files using LSB techniques.",
             "Start Decoding →",
-            "#e67e22",
+            "#45edf2",
             self.create_unlock_icon()
         )
 
@@ -88,7 +98,7 @@ class MainWindow(QMainWindow):
             "Steganalysis",
             "Detect and analyze hidden information in digital media files.",
             "Start Analyzing →",
-            "#27ae60",
+            "#45edf2",
             self.create_magnifying_glass_icon()
         )
 
@@ -104,9 +114,9 @@ class MainWindow(QMainWindow):
         card.setFixedSize(400, 350)
         card.setStyleSheet("""
             QFrame {
-                background-color: white;
-                border-radius: 15px;
-                border: none;
+                background-color: #0e1625;
+                border-radius: 16px;
+                border: 1px solid rgba(73,41,154,0.45);
             }
         """)
 
@@ -131,7 +141,7 @@ class MainWindow(QMainWindow):
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #2c3e50; margin: 10px 0;")
+        title_label.setStyleSheet("color: #49299a; margin: 10px 0;")
 
         # Description
         desc_label = QLabel(description)
@@ -140,7 +150,7 @@ class MainWindow(QMainWindow):
         desc_label.setFont(desc_font)
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #7f8c8d; line-height: 1.4;")
+        desc_label.setStyleSheet("color: rgba(232,232,252,0.85); line-height: 1.4;")
 
         # Button
         button = QPushButton(button_text)
@@ -150,15 +160,16 @@ class MainWindow(QMainWindow):
         button.setFont(button_font)
         button.setStyleSheet(f"""
             QPushButton {{
-                background-color: transparent;
+                background-color: rgba(69,237,242,0.08);
                 color: {button_color};
-                border: none;
-                padding: 10px;
+                border: 1px solid rgba(69,237,242,0.5);
+                padding: 10px 16px;
                 text-align: center;
+                border-radius: 10px;
             }}
             QPushButton:hover {{
+                background-color: rgba(69,237,242,0.15);
                 color: {self.darken_color(button_color)};
-                text-decoration: underline;
             }}
         """)
 
@@ -186,20 +197,20 @@ class MainWindow(QMainWindow):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Lock body (orange)
-        painter.setBrush(QColor("#e67e22"))
+        # Lock body (purple)
+        painter.setBrush(QColor("#49299a"))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(20, 35, 40, 30, 5, 5)
 
-        # Keyhole
-        painter.setBrush(QColor("#2c3e50"))
+        # Keyhole (light lavender)
+        painter.setBrush(QColor("#e8e8fc"))
         painter.drawEllipse(35, 45, 10, 10)
         painter.drawRect(38, 50, 4, 8)
 
-        # Lock shackle (gray)
+        # Lock shackle (cyan)
         painter.setPen(Qt.PenStyle.SolidLine)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#95a5a6"), 4))
+        painter.setPen(QPen(QColor("#45edf2"), 4))
         painter.drawArc(25, 20, 30, 30, 0, 180 * 16)
 
         painter.end()
@@ -213,20 +224,20 @@ class MainWindow(QMainWindow):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Lock body (orange)
-        painter.setBrush(QColor("#e67e22"))
+        # Lock body (purple)
+        painter.setBrush(QColor("#49299a"))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(20, 35, 40, 30, 5, 5)
 
-        # Keyhole
-        painter.setBrush(QColor("#2c3e50"))
+        # Keyhole (light lavender)
+        painter.setBrush(QColor("#e8e8fc"))
         painter.drawEllipse(35, 45, 10, 10)
         painter.drawRect(38, 50, 4, 8)
 
-        # Lock shackle (open - gray)
+        # Lock shackle (open - cyan)
         painter.setPen(Qt.PenStyle.SolidLine)
         painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor("#95a5a6"), 4))
+        painter.setPen(QPen(QColor("#45edf2"), 4))
         # Draw open shackle (arc from top-left to top-right)
         painter.drawArc(25, 20, 30, 30, 0, 90 * 16)  # Top arc
         painter.drawLine(40, 20, 40, 15)  # Vertical line up
@@ -243,13 +254,13 @@ class MainWindow(QMainWindow):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Glass circle (light blue)
-        painter.setBrush(QColor("#3498db"))
-        painter.setPen(QPen(QColor("#2980b9"), 3))
+        # Glass circle (cyan)
+        painter.setBrush(QColor("#45edf2"))
+        painter.setPen(QPen(QColor("#49299a"), 3))
         painter.drawEllipse(15, 15, 35, 35)
 
         # Handle (purple)
-        painter.setPen(QPen(QColor("#9b59b6"), 6))
+        painter.setPen(QPen(QColor("#49299a"), 6))
         painter.drawLine(45, 45, 60, 60)
 
         painter.end()
@@ -259,10 +270,11 @@ class MainWindow(QMainWindow):
         """Create a shadow effect for cards"""
         from PyQt6.QtWidgets import QGraphicsDropShadowEffect
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
+        shadow.setBlurRadius(28)
         shadow.setXOffset(0)
-        shadow.setYOffset(5)
-        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setYOffset(8)
+        # Subtle cyan glow
+        shadow.setColor(QColor(69, 237, 242, 50))
         return shadow
 
     def darken_color(self, color_hex):
