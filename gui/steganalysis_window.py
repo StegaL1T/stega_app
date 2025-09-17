@@ -1,7 +1,10 @@
+import datetime
+from pathlib import Path
+
 # gui/steganalysis_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
-                             QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar)
+                             QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar, QApplication)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen
 
@@ -308,48 +311,88 @@ class SteganalysisWindow(QMainWindow):
     def analyze_image(self):
         """Analyze the selected image"""
         if not self.image_path.text():
-            self.results_text.append(
-                "Error: Please select an image to analyze")
+            self.results_text.append("Error: Please select an image to analyze")
             return
+
+        # Clear old outputs
+        self.results_text.clear()
+        self.stats_text.clear()
 
         # Show progress bar
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
+        QApplication.processEvents()
 
-        # TODO: Implement actual steganalysis algorithms
-        self.results_text.append(
-            "Steganalysis functionality will be implemented here...")
-        self.results_text.append(
-            f"Analysis method: {self.method_combo.currentText()}")
-        self.results_text.append("Simulating analysis...")
+        # Load image into the machine
+        success = self.machine.set_image(self.image_path.text())
+        if not success:
+            self.results_text.append("Error: Failed to load image for analysis")
+            self.progress_bar.setVisible(False)
+            return
 
-        # Simulate progress
-        for i in range(101):
-            self.progress_bar.setValue(i)
-            QApplication.processEvents()
+        # Set selected analysis method
+        method = self.method_combo.currentText()
+        self.machine.set_analysis_method(method)
+
+        # Run analysis
+        if self.machine.analyze_image():
+            results = self.machine.get_results()
+            stats = self.machine.get_statistics()
+            confidence = self.machine.get_confidence_level()
+
+            # === Results section ===
+            self.results_text.append("\n=== ANALYSIS COMPLETE ===")
+            self.results_text.append(f"Method: {results.get('method')}")
+            self.results_text.append(f"Suspicious: {results.get('suspicious')}")
+            self.results_text.append(f"Confidence level: {confidence:.2%}\n")
+
+            # Helper function to pretty print nested dicts
+            def print_dict(d: dict, indent: int = 0):
+                for key, value in d.items():
+                    if isinstance(value, dict):
+                        self.results_text.append(" " * indent + f"{key}:")
+                        print_dict(value, indent + 4)
+                    else:
+                        self.results_text.append(" " * indent + f"- {key}: {value}")
+
+            # Print details (skip redundant top-level keys)
+            for key, value in results.items():
+                if key in ['method', 'suspicious']:
+                    continue
+                if isinstance(value, dict):
+                    self.results_text.append(f"{key}:")
+                    print_dict(value, 4)
+                else:
+                    self.results_text.append(f"{key}: {value}")
+
+            # === Stats section ===
+            self.stats_text.append("Image Statistics:")
+            for key, value in stats.items():
+                self.stats_text.append(f"- {key}: {value}")
+
+        else:
+            self.results_text.append("Error: Analysis failed")
 
         # Hide progress bar
         self.progress_bar.setVisible(False)
 
-        # Simulate results
-        self.results_text.append("\n=== ANALYSIS COMPLETE ===")
-        self.results_text.append("No steganographic content detected.")
-        self.results_text.append("Confidence level: 95%")
-
-        self.stats_text.append("Image Statistics:")
-        self.stats_text.append("- File size: 2.3 MB")
-        self.stats_text.append("- Dimensions: 1920x1080")
-        self.stats_text.append("- Color channels: RGB")
-        self.stats_text.append("- Compression: JPEG (Quality: 85%)")
 
     def export_report(self):
         """Export analysis report"""
+        # Generate timestamp string
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"steganalysis_report_{timestamp}.txt"
+
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export Analysis Report", "",
+            self, "Export Analysis Report", default_name,
             "Text Files (*.txt);;All Files (*)"
         )
         if file_path:
-            self.results_text.append(f"Report exported to: {file_path}")
+            success = self.machine.export_report(file_path)  # <-- calls the machine
+            if success:
+                self.results_text.append(f"Report exported to: {file_path}")
+            else:
+                self.results_text.append("Error: Could not export report.")
 
     def go_back(self):
         """Go back to main window"""
