@@ -1,7 +1,10 @@
+import datetime
+from pathlib import Path
+
 # gui/steganalysis_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
-                             QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar)
+                             QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar, QApplication)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen
 
@@ -403,36 +406,70 @@ class SteganalysisWindow(QMainWindow):
     def analyze_image(self):
         """Analyze the selected image"""
         if not self.image_path.text():
-            self.results_text.append(
-                "Error: Please select an image to analyze")
+            self.results_text.append("Error: Please select an image to analyze")
             return
 
-        # Run analysis via machine
+        # Clear old outputs
+        self.results_text.clear()
+        self.stats_text.clear()
+
+        # Show progress bar
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        QApplication.processEvents()
+
+        # Load image into the machine
+        success = self.machine.set_image(self.image_path.text())
+        if not success:
+            self.results_text.append("Error: Failed to load image for analysis")
+            self.progress_bar.setVisible(False)
+            return
+
+        # Set selected analysis method
         method = self.method_combo.currentText()
         self.machine.set_analysis_method(method)
-        ok = self.machine.analyze_image()
 
-        self.results_text.append("\n=== IMAGE ANALYSIS ===")
-        if not ok:
-            self.results_text.append("Error during image analysis.")
-            return
+        # Run analysis
+        if self.machine.analyze_image():
+            results = self.machine.get_results()
+            stats = self.machine.get_statistics()
+            confidence = self.machine.get_confidence_level()
 
-        results = self.machine.get_results()
-        confidence = self.machine.get_confidence_level()
-        stats = self.machine.get_statistics()
+            # === Results section ===
+            self.results_text.append("\n=== ANALYSIS COMPLETE ===")
+            self.results_text.append(f"Method: {results.get('method')}")
+            self.results_text.append(f"Suspicious: {results.get('suspicious')}")
+            self.results_text.append(f"Confidence level: {confidence:.2%}\n")
 
-        self.results_text.append(f"Method: {results.get('method', method)}")
-        self.results_text.append(f"Suspicious: {results.get('suspicious', False)}")
-        for k, v in results.items():
-            if k in ("method", "suspicious"):
-                continue
-            self.results_text.append(f"{k}: {v}")
+            # Helper function to pretty print nested dicts
+            def print_dict(d: dict, indent: int = 0):
+                for key, value in d.items():
+                    if isinstance(value, dict):
+                        self.results_text.append(" " * indent + f"{key}:")
+                        print_dict(value, indent + 4)
+                    else:
+                        self.results_text.append(" " * indent + f"- {key}: {value}")
 
-        self.results_text.append(f"Confidence level: {confidence*100:.2f}%")
+            # Print details (skip redundant top-level keys)
+            for key, value in results.items():
+                if key in ['method', 'suspicious']:
+                    continue
+                if isinstance(value, dict):
+                    self.results_text.append(f"{key}:")
+                    print_dict(value, 4)
+                else:
+                    self.results_text.append(f"{key}: {value}")
 
-        self.stats_text.append("Image Statistics:")
-        for k, v in stats.items():
-            self.stats_text.append(f"- {k}: {v}")
+            # === Stats section ===
+            self.stats_text.append("Image Statistics:")
+            for key, value in stats.items():
+                self.stats_text.append(f"- {key}: {value}")
+
+        else:
+            self.results_text.append("Error: Analysis failed")
+
+        # Hide progress bar
+        self.progress_bar.setVisible(False)
 
     def analyze_audio(self):
         """Analyze the selected audio"""
@@ -468,15 +505,20 @@ class SteganalysisWindow(QMainWindow):
 
     def export_report(self):
         """Export analysis report"""
+        # Generate timestamp string
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"steganalysis_report_{timestamp}.txt"
+
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Export Analysis Report", "",
+            self, "Export Analysis Report", default_name,
             "Text Files (*.txt);;All Files (*)"
         )
         if file_path:
-            if self.machine.export_report(file_path):
+            success = self.machine.export_report(file_path)
+            if success:
                 self.results_text.append(f"Report exported to: {file_path}")
             else:
-                self.results_text.append("Error exporting report.")
+                self.results_text.append("Error: Could not export report.")
 
     def go_back(self):
         """Go back to main window"""
