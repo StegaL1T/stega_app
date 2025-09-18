@@ -14,6 +14,7 @@ import cv2
 # Matplotlib for charts (QtAgg backend for PyQt6)
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 class SteganalysisWindow(QMainWindow):
@@ -204,9 +205,15 @@ class SteganalysisWindow(QMainWindow):
         # Image charts
         image_charts_group = QGroupBox("Image Charts")
         image_charts_layout = QGridLayout(image_charts_group)
-        self.img_canvas_lsb = FigureCanvas(Figure(figsize=(3, 2)))
-        self.img_canvas_diff = FigureCanvas(Figure(figsize=(3, 2)))
-        self.img_canvas_hist = FigureCanvas(Figure(figsize=(3, 2)))
+        # Larger canvases for readability
+        self.img_canvas_lsb = FigureCanvas(Figure(figsize=(4, 4), dpi=100))
+        self.img_canvas_diff = FigureCanvas(Figure(figsize=(4, 4), dpi=100))
+        self.img_canvas_hist = FigureCanvas(Figure(figsize=(8, 3), dpi=100))
+        # Ensure minimum display size ~400x400 for image plots
+        self.img_canvas_lsb.setMinimumSize(400, 400)
+        self.img_canvas_diff.setMinimumSize(400, 400)
+        # Histogram full-width and taller
+        self.img_canvas_hist.setMinimumHeight(300)
         image_charts_layout.addWidget(self.img_canvas_lsb, 0, 0)
         image_charts_layout.addWidget(self.img_canvas_diff, 0, 1)
         image_charts_layout.addWidget(self.img_canvas_hist, 1, 0, 1, 2)
@@ -222,6 +229,14 @@ class SteganalysisWindow(QMainWindow):
         layout.addWidget(img_results_group)
         layout.addWidget(image_charts_group)
         layout.addWidget(img_stats_group)
+        # Export charts to PDF button
+        export_img_pdf_btn = QPushButton("Export Charts to PDF")
+        export_img_pdf_btn.setStyleSheet("""
+            QPushButton { background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
+            QPushButton:hover { background-color: #27ae60; }
+        """)
+        export_img_pdf_btn.clicked.connect(self.export_charts_pdf)
+        layout.addWidget(export_img_pdf_btn)
         layout.addStretch()
         return panel
 
@@ -314,10 +329,19 @@ class SteganalysisWindow(QMainWindow):
         """)
         export_button.clicked.connect(self.export_report)
 
+        # Export charts to PDF button
+        export_aud_pdf_btn = QPushButton("Export Charts to PDF")
+        export_aud_pdf_btn.setStyleSheet("""
+            QPushButton { background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
+            QPushButton:hover { background-color: #27ae60; }
+        """)
+        export_aud_pdf_btn.clicked.connect(self.export_charts_pdf)
+
         layout.addWidget(title)
         layout.addWidget(aud_results_group)
         layout.addWidget(audio_charts_group)
         layout.addWidget(aud_stats_group)
+        layout.addWidget(export_aud_pdf_btn)
         layout.addWidget(export_button)
         layout.addStretch()
         return panel
@@ -819,7 +843,7 @@ class SteganalysisWindow(QMainWindow):
         else:
             lsb_vis = (lsb * 255).astype(np.uint8)
         ax_lsb.imshow(lsb_vis, cmap='gray')
-        ax_lsb.set_title('LSB Plane')
+        ax_lsb.set_title('LSB Plane', fontsize=11)
         ax_lsb.axis('off')
         self.img_canvas_lsb.draw()
 
@@ -831,7 +855,7 @@ class SteganalysisWindow(QMainWindow):
         residual = cv2.absdiff(img, blurred)
         residual_gray = cv2.cvtColor(residual, cv2.COLOR_BGR2GRAY) if residual.ndim == 3 else residual
         ax_diff.imshow(residual_gray, cmap='inferno')
-        ax_diff.set_title('Difference Map')
+        ax_diff.set_title('Difference Map', fontsize=11)
         ax_diff.axis('off')
         self.img_canvas_diff.draw()
 
@@ -847,9 +871,11 @@ class SteganalysisWindow(QMainWindow):
         else:
             hist, _ = np.histogram(img.flatten(), bins=256, range=(0, 256))
             ax_hist.plot(hist, color='k', label='Gray')
-        ax_hist.set_title('Histogram')
+        ax_hist.set_title('Histogram', fontsize=12)
+        ax_hist.set_xlabel('Pixel value', fontsize=10)
+        ax_hist.set_ylabel('Count', fontsize=10)
         ax_hist.set_xlim(0, 255)
-        ax_hist.legend(loc='upper right', fontsize=8)
+        ax_hist.legend(loc='upper right', fontsize=9)
         ax_hist.grid(True, alpha=0.2)
         self.img_canvas_hist.draw()
 
@@ -919,3 +945,147 @@ class SteganalysisWindow(QMainWindow):
         ax_ent.set_ylabel('Entropy (bits)')
         ax_ent.grid(True, alpha=0.2)
         self.aud_canvas_entropy.draw()
+
+    # ======== Export charts to PDF ========
+    def export_charts_pdf(self):
+        """Export currently displayed charts (image and/or audio) to a multi-page high-res PDF."""
+        # Ask user where to save
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"steganalysis_charts_{timestamp}.pdf"
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export Charts to PDF", default_name, "PDF Files (*.pdf)")
+        if not file_path:
+            return
+
+        try:
+            with PdfPages(file_path) as pdf:
+                # Cover page with summary text
+                fig_cover = Figure(figsize=(8.27, 11.69), dpi=200)  # A4 portrait
+                axc = fig_cover.subplots(1, 1)
+                axc.axis('off')
+                lines = []
+                # Basic summary details
+                if getattr(self.machine, 'image_path', None):
+                    lines.append(f"Image: {self.machine.image_path}")
+                if getattr(self.machine, 'audio_path', None):
+                    lines.append(f"Audio: {self.machine.audio_path}")
+                lines.append(f"Confidence: {self.machine.get_confidence_level():.2%}")
+                y = 0.95
+                axc.text(0.05, y, "Steganalysis Charts", fontsize=16, weight='bold', transform=axc.transAxes)
+                y -= 0.05
+                for s in lines:
+                    axc.text(0.05, y, s, fontsize=10, transform=axc.transAxes)
+                    y -= 0.035
+                pdf.savefig(fig_cover, bbox_inches='tight')
+                
+                # Image page: LSB + Diff side-by-side
+                if hasattr(self, 'img_canvas_lsb') and hasattr(self, 'img_canvas_diff'):
+                    fig_img = Figure(figsize=(11.69, 8.27), dpi=200)  # A4 landscape
+                    ax1, ax2 = fig_img.subplots(1, 2)
+                    # Recompute from machine to ensure high-res
+                    img = self.machine.image_array
+                    if img is not None:
+                        if img.dtype != np.uint8:
+                            img = img.astype(np.uint8)
+                        lsb = (img & 1)
+                        if lsb.ndim == 3:
+                            lsb_vis = (np.mean(lsb, axis=2) * 255).astype(np.uint8)
+                        else:
+                            lsb_vis = (lsb * 255).astype(np.uint8)
+                        ax1.imshow(lsb_vis, cmap='gray')
+                        ax1.set_title('LSB Plane', fontsize=14)
+                        ax1.axis('off')
+                        blurred = cv2.GaussianBlur(img, (5, 5), 0)
+                        residual = cv2.absdiff(img, blurred)
+                        residual_gray = cv2.cvtColor(residual, cv2.COLOR_BGR2GRAY) if residual.ndim == 3 else residual
+                        ax2.imshow(residual_gray, cmap='inferno')
+                        ax2.set_title('Difference Map', fontsize=14)
+                        ax2.axis('off')
+                        pdf.savefig(fig_img, bbox_inches='tight')
+
+                    # Histogram page full width
+                    fig_hist = Figure(figsize=(11.69, 8.27), dpi=200)
+                    axh = fig_hist.subplots(1, 1)
+                    if img is not None:
+                        colors = ('r', 'g', 'b') if (img.ndim == 3 and img.shape[2] == 3) else ('k',)
+                        if len(colors) == 3:
+                            for i, c in enumerate(colors):
+                                hist = cv2.calcHist([img], [i], None, [256], [0, 256]).flatten()
+                                axh.plot(hist, color=c, label=f'Channel {c.upper()}')
+                        else:
+                            hist, _ = np.histogram(img.flatten(), bins=256, range=(0, 256))
+                            axh.plot(hist, color='k', label='Gray')
+                        axh.set_title('Histogram', fontsize=16)
+                        axh.set_xlabel('Pixel value', fontsize=12)
+                        axh.set_ylabel('Count', fontsize=12)
+                        axh.set_xlim(0, 255)
+                        axh.legend(loc='upper right', fontsize=10)
+                        axh.grid(True, alpha=0.2)
+                        pdf.savefig(fig_hist, bbox_inches='tight')
+
+                # Audio page(s): waveform + spectrogram + entropy
+                samples = getattr(self.machine, 'audio_samples', None)
+                sr = getattr(self.machine, 'audio_sample_rate', None)
+                if samples is not None and sr:
+                    if samples.ndim == 2:
+                        data = samples[:, 0].astype(np.float32)
+                    else:
+                        data = samples.astype(np.float32)
+
+                    # Waveform page
+                    fig_wave = Figure(figsize=(11.69, 8.27), dpi=200)
+                    axw = fig_wave.subplots(1, 1)
+                    t = np.arange(len(data)) / float(sr)
+                    axw.plot(t, data, color='#34495e', linewidth=0.7)
+                    axw.set_title('Waveform', fontsize=16)
+                    axw.set_xlabel('Time (s)', fontsize=12)
+                    axw.set_ylabel('Amplitude', fontsize=12)
+                    axw.grid(True, alpha=0.2)
+                    pdf.savefig(fig_wave, bbox_inches='tight')
+
+                    # Spectrogram page
+                    fig_spec = Figure(figsize=(11.69, 8.27), dpi=200)
+                    axs = fig_spec.subplots(1, 1)
+                    nfft = 1024
+                    noverlap = 512
+                    axs.specgram(data, NFFT=nfft, Fs=sr, noverlap=noverlap, cmap='magma')
+                    axs.set_title('Spectrogram', fontsize=16)
+                    axs.set_xlabel('Time (s)', fontsize=12)
+                    axs.set_ylabel('Frequency (Hz)', fontsize=12)
+                    pdf.savefig(fig_spec, bbox_inches='tight')
+
+                    # Entropy page
+                    fig_ent = Figure(figsize=(11.69, 8.27), dpi=200)
+                    axe = fig_ent.subplots(1, 1)
+                    x = data - np.min(data)
+                    denom = (np.max(x) - np.min(x) + 1e-9)
+                    x = (x / denom * 255.0).astype(np.uint8)
+                    win = max(int(sr * 0.05), 256)
+                    hop = max(win // 2, 128)
+                    ent_values = []
+                    times = []
+                    for start in range(0, len(x) - win + 1, hop):
+                        seg = x[start:start + win]
+                        hist, _ = np.histogram(seg, bins=256, range=(0, 256))
+                        p = hist.astype(np.float32)
+                        p = p / max(np.sum(p), 1.0)
+                        p = p[p > 0]
+                        ent = float(-np.sum(p * np.log2(p)))
+                        ent_values.append(ent)
+                        times.append(start / float(sr))
+                    axe.plot(times, ent_values, color='#8e44ad', linewidth=1.0)
+                    axe.set_title('Short-time Entropy', fontsize=16)
+                    axe.set_xlabel('Time (s)', fontsize=12)
+                    axe.set_ylabel('Entropy (bits)', fontsize=12)
+                    axe.grid(True, alpha=0.2)
+                    pdf.savefig(fig_ent, bbox_inches='tight')
+
+            # Notify success
+            if hasattr(self, 'img_results_text'):
+                self.img_results_text.append(f"Charts exported to PDF: {file_path}")
+            if hasattr(self, 'aud_results_text'):
+                self.aud_results_text.append(f"Charts exported to PDF: {file_path}")
+        except Exception as e:
+            if hasattr(self, 'img_results_text'):
+                self.img_results_text.append(f"Error exporting charts: {e}")
+            if hasattr(self, 'aud_results_text'):
+                self.aud_results_text.append(f"Error exporting charts: {e}")
