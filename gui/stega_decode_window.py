@@ -652,6 +652,11 @@ class StegaDecodeWindow(QMainWindow):
         self.machine.set_lsb_bits(self.lsb_slider.value())
         self.machine.set_encryption_key(self.key_input.text())
 
+        # Require non-empty key
+        if not self.key_input.text().strip():
+            self.results_text.setPlainText("Error: A key is required to decode.")
+            return
+
         # Set default output path if none specified
         if not self.output_path.text().strip():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -662,14 +667,57 @@ class StegaDecodeWindow(QMainWindow):
         # Perform steganography extraction
         if self.machine.extract_message():
             print("✅ Steganography extraction completed successfully!")
-            # Display extracted data in results text area
+            # Display extracted data and header info in results text area
             extracted_data = self.machine.get_extracted_data()
-            if extracted_data:
-                self.results_text.setPlainText(extracted_data)
+            header_info = self.machine.get_header_info() or {}
+            out_path = self.machine.output_path or "(unknown)"
+
+            lines = []
+            lines.append("=== Decode Success ===")
+            if header_info:
+                lines.append(f"Version: {header_info.get('version')}")
+                lines.append(f"LSB bits: {header_info.get('lsb_bits')}")
+                if header_info.get('start_offset') is not None:
+                    lines.append(f"Header start offset: {header_info.get('start_offset')}")
+                lines.append(f"Computed start: {header_info.get('computed_start')}")
+                lines.append(f"Payload length: {header_info.get('payload_length')} bytes")
+                if header_info.get('filename'):
+                    lines.append(f"Filename: {header_info.get('filename')}")
+            lines.append(f"Saved to: {out_path}")
+
+            # Always show some message in results pane
+            if extracted_data and isinstance(extracted_data, str):
+                # Limit overly long text previews
+                preview = extracted_data
+                if len(preview) > 5000:
+                    preview = preview[:5000] + "\n...[truncated]"
+                lines.append("")
+                lines.append(preview)
+
+            self.results_text.setPlainText("\n".join(lines))
+
+            # Show success dialog with option to open file
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Decode Successful")
+            out_path = self.machine.output_path or "saved file"
+            msg.setText(f"Payload extracted successfully.\nSaved to: {out_path}")
+            open_btn = msg.addButton("Open file", QMessageBox.ButtonRole.AcceptRole)
+            msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+            if msg.clickedButton() == open_btn and self.machine.output_path:
+                from PyQt6.QtGui import QDesktopServices
+                from PyQt6.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.output_path))
         else:
             print("❌ Steganography extraction failed!")
-            self.results_text.setPlainText(
-                "Extraction failed. Please check your settings and try again.")
+            error_msg = self.machine.get_last_error() or "Extraction failed. Please check your settings and try again."
+            self.results_text.setPlainText(error_msg)
+
+            # Show error popup
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Decode Failed", error_msg)
 
     def go_back(self):
         """Go back to main window"""
