@@ -59,31 +59,24 @@ class CyberBackgroundWidget(QWidget):
         # Base dark background
         painter.fillRect(self.rect(), QColor("#0e1625"))
         
-        # Enhanced grid pattern
-        self.draw_enhanced_grid(painter)
+        # Subtle grid pattern
+        self.draw_grid(painter)
         
-        # Floating data packets with trails
-        self.draw_enhanced_particles(painter)
+        # Floating particles (data packets)
+        self.draw_particles(painter)
         
-        # Circuit patterns with connections
-        self.draw_enhanced_circuit_patterns(painter)
+        # Subtle circuit-like patterns
+        self.draw_circuit_patterns(painter)
         
         # Cybersecurity scan lines
-        self.draw_enhanced_scan_lines(painter)
-        
-        # Data flow streams
-        self.draw_data_streams(painter)
-        
-        # Security indicators
-        self.draw_security_indicators(painter)
+        self.draw_scan_lines(painter)
         
         self.time += 0.02
         
-    def draw_enhanced_grid(self, painter):
+    def draw_grid(self, painter):
         """Draw an enhanced grid pattern with cybersecurity elements"""
-        # Main grid lines with pulsing effect
-        pulse_intensity = 8 + 4 * math.sin(self.time * 3)
-        painter.setPen(QPen(QColor(69, 237, 242, int(pulse_intensity)), 1))
+        # Main grid lines with better visibility
+        painter.setPen(QPen(QColor(69, 237, 242, 18), 1))  # Increased opacity
         grid_size = 40
         
         for x in range(0, self.width(), grid_size):
@@ -91,149 +84,106 @@ class CyberBackgroundWidget(QWidget):
         for y in range(0, self.height(), grid_size):
             painter.drawLine(0, y, self.width(), y)
         
-        # Animated grid intersections with pulsing dots
-        pulse_dots = 15 + 10 * math.sin(self.time * 2)
-        painter.setPen(QPen(QColor(69, 237, 242, int(pulse_dots)), 2))
+        # Add some grid intersections with small dots
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 2))  # Increased opacity
         for x in range(grid_size, self.width(), grid_size * 2):
             for y in range(grid_size, self.height(), grid_size * 2):
                 painter.drawPoint(x, y)
         
-        # Animated diagonal accent lines
-        diagonal_intensity = 6 + 3 * math.cos(self.time * 1.5)
-        painter.setPen(QPen(QColor(73, 41, 154, int(diagonal_intensity)), 1))
+        # Add some diagonal accent lines for tech feel
+        painter.setPen(QPen(QColor(73, 41, 154, 12), 1))  # Increased opacity
         for i in range(0, self.width(), grid_size * 3):
-            offset = 5 * math.sin(self.time + i * 0.1)
-            painter.drawLine(i, int(0 + offset), i + grid_size, int(grid_size + offset))
-            painter.drawLine(i, int(self.height() - offset), i + grid_size, int(self.height() - grid_size - offset))
-    
-    def draw_enhanced_particles(self, painter):
-        """Draw enhanced floating cybersecurity data packets with trails"""
-        # Main data packets with pulsing intensity
-        for i in range(8):
-            x = (self.width() * 0.1 + i * self.width() * 0.1 + 
-                 math.sin(self.time + i * 0.5) * 20) % self.width()
-            y = (self.height() * 0.2 + i * self.height() * 0.1 + 
-                 math.cos(self.time * 0.7 + i * 0.3) * 15) % self.height()
-            
-            # Pulsing intensity
-            intensity = 20 + 15 * math.sin(self.time * 2 + i)
-            painter.setPen(QPen(QColor(69, 237, 242, int(intensity)), 2))
-            
-            # Draw data packet with trail effect
-            trail_length = 3
-            for j in range(trail_length):
-                alpha = intensity * (1 - j / trail_length) * 0.3
-                painter.setPen(QPen(QColor(69, 237, 242, int(alpha)), 1))
-                offset_x = -j * 2
-                offset_y = -j * 2
-                painter.drawRect(int(x + offset_x), int(y + offset_y), 4 - j, 4 - j)
+            painter.drawLine(i, 0, i + grid_size, grid_size)
+            painter.drawLine(i, self.height(), i + grid_size, self.height() - grid_size)
         
-        # Security indicators with different patterns
-        painter.setPen(QPen(QColor(73, 41, 154, 25), 1))
+        # Add animated grid highlights
+        painter.setPen(QPen(QColor(69, 237, 242, 30), 2))
+        highlight_x = int((math.sin(self.time * 0.8) * self.width() * 0.3 + self.width() * 0.5) % self.width())
+        highlight_y = int((math.cos(self.time * 0.6) * self.height() * 0.3 + self.height() * 0.5) % self.height())
+        
+        # Draw highlighted grid lines
+        painter.drawLine(highlight_x, 0, highlight_x, self.height())
+        painter.drawLine(0, highlight_y, self.width(), highlight_y)
+    
+    def draw_particles(self, painter):
+        """Draw floating cybersecurity data packets"""
+        # Main data packets
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 2))
+        
         for i in range(6):
-            x = (self.width() * 0.15 + i * self.width() * 0.15 + 
-                 math.sin(self.time * 1.3 + i) * 30) % self.width()
-            y = (self.height() * 0.3 + i * self.height() * 0.12 + 
-                 math.cos(self.time * 0.8 + i) * 20) % self.height()
+            x = (self.width() * 0.15 + i * self.width() * 0.12 + 
+                 math.sin(self.time + i) * 15) % self.width()
+            y = (self.height() * 0.25 + i * self.height() * 0.12 + 
+                 math.cos(self.time * 0.8 + i) * 12) % self.height()
             
-            # Draw security indicators with different shapes
-            if i % 2 == 0:
-                painter.drawEllipse(int(x), int(y), 3, 3)
-            else:
-                painter.drawRect(int(x), int(y), 3, 3)
+            # Draw data packet squares
+            painter.drawRect(int(x), int(y), 4, 4)
+        
+        # Add some smaller security indicators
+        painter.setPen(QPen(QColor(73, 41, 154, 20), 1))
+        for i in range(4):
+            x = (self.width() * 0.1 + i * self.width() * 0.2 + 
+                 math.sin(self.time * 1.2 + i) * 25) % self.width()
+            y = (self.height() * 0.3 + i * self.height() * 0.15 + 
+                 math.cos(self.time * 0.6 + i) * 18) % self.height()
+            
+            # Draw small security dots
+            painter.drawPoint(int(x), int(y))
     
-    def draw_enhanced_circuit_patterns(self, painter):
-        """Draw enhanced circuit-like patterns with connections"""
-        # Animated circuit intensity
-        circuit_intensity = 12 + 8 * math.sin(self.time * 1.5)
-        painter.setPen(QPen(QColor(73, 41, 154, int(circuit_intensity)), 1))
+    def draw_circuit_patterns(self, painter):
+        """Draw subtle circuit-like patterns"""
+        painter.setPen(QPen(QColor(73, 41, 154, 15), 1))
         
-        # Draw animated circuit-like lines in corners
-        corner_size = 120
-        offset = 3 * math.sin(self.time * 2)
-        
-        # Top-left corner with animation
-        painter.drawLine(int(20 + offset), 20, int(corner_size + offset), 20)
-        painter.drawLine(20, int(20 + offset), 20, int(corner_size + offset))
-        painter.drawLine(int(20 + offset), corner_size, int(corner_size + offset), corner_size)
+        # Draw some circuit-like lines in corners
+        corner_size = 100
+        # Top-left corner
+        painter.drawLine(20, 20, corner_size, 20)
+        painter.drawLine(20, 20, 20, corner_size)
+        painter.drawLine(20, corner_size, corner_size, corner_size)
         
         # Top-right corner
-        painter.drawLine(int(self.width() - 20 - offset), 20, int(self.width() - corner_size - offset), 20)
-        painter.drawLine(self.width() - 20, int(20 + offset), self.width() - 20, int(corner_size + offset))
-        painter.drawLine(int(self.width() - 20 - offset), corner_size, int(self.width() - corner_size - offset), corner_size)
+        painter.drawLine(self.width() - 20, 20, self.width() - corner_size, 20)
+        painter.drawLine(self.width() - 20, 20, self.width() - 20, corner_size)
+        painter.drawLine(self.width() - 20, corner_size, self.width() - corner_size, corner_size)
         
         # Bottom corners
-        painter.drawLine(int(20 + offset), self.height() - 20, int(corner_size + offset), self.height() - 20)
-        painter.drawLine(20, int(self.height() - 20 - offset), 20, int(self.height() - corner_size - offset))
-        painter.drawLine(int(20 + offset), self.height() - corner_size, int(corner_size + offset), self.height() - corner_size)
+        painter.drawLine(20, self.height() - 20, corner_size, self.height() - 20)
+        painter.drawLine(20, self.height() - 20, 20, self.height() - corner_size)
+        painter.drawLine(20, self.height() - corner_size, corner_size, self.height() - corner_size)
         
-        painter.drawLine(int(self.width() - 20 - offset), self.height() - 20, int(self.width() - corner_size - offset), self.height() - 20)
-        painter.drawLine(self.width() - 20, int(self.height() - 20 - offset), self.width() - 20, int(self.height() - corner_size - offset))
-        painter.drawLine(int(self.width() - 20 - offset), self.height() - corner_size, int(self.width() - corner_size - offset), self.height() - corner_size)
-        
-        # Add connecting lines between corners
-        painter.setPen(QPen(QColor(69, 237, 242, 8), 1))
-        painter.drawLine(corner_size, 20, self.width() - corner_size, 20)
-        painter.drawLine(corner_size, self.height() - 20, self.width() - corner_size, self.height() - 20)
+        painter.drawLine(self.width() - 20, self.height() - 20, self.width() - corner_size, self.height() - 20)
+        painter.drawLine(self.width() - 20, self.height() - 20, self.width() - 20, self.height() - corner_size)
+        painter.drawLine(self.width() - 20, self.height() - corner_size, self.width() - corner_size, self.height() - corner_size)
     
-    def draw_enhanced_scan_lines(self, painter):
+    def draw_scan_lines(self, painter):
         """Draw enhanced cybersecurity scan lines effect"""
-        # Multiple horizontal scan lines with different speeds
-        for i in range(3):
-            speed = 1.5 + i * 0.5
-            intensity = 12 + 8 * math.sin(self.time * speed)
-            painter.setPen(QPen(QColor(69, 237, 242, int(intensity)), 1))
-            scan_y = int((self.height() * (0.2 + i * 0.3) + math.sin(self.time * speed) * self.height() * 0.15) % self.height())
-            painter.drawLine(0, scan_y, self.width(), scan_y)
+        # Enhanced horizontal scan lines with better visibility
+        painter.setPen(QPen(QColor(69, 237, 242, 45), 2))  # More visible with good opacity
+        scan_y = int((self.height() * 0.3 + math.sin(self.time * 2) * self.height() * 0.4) % self.height())  # Bigger range
+        painter.drawLine(0, scan_y, self.width(), scan_y)
         
-        # Multiple vertical scan lines
-        for i in range(2):
-            speed = 1.2 + i * 0.3
-            intensity = 10 + 6 * math.cos(self.time * speed)
-            painter.setPen(QPen(QColor(69, 237, 242, int(intensity)), 1))
-            scan_x = int((self.width() * (0.15 + i * 0.4) + math.cos(self.time * speed) * self.width() * 0.2) % self.width())
-            painter.drawLine(scan_x, 0, scan_x, self.height())
+        # Add a second horizontal scan line with different timing
+        painter.setPen(QPen(QColor(69, 237, 242, 30), 1))
+        scan_y2 = int((self.height() * 0.7 + math.cos(self.time * 1.8) * self.height() * 0.35) % self.height())  # Bigger range
+        painter.drawLine(0, scan_y2, self.width(), scan_y2)
         
-        # Animated binary code patterns
-        painter.setPen(QPen(QColor(73, 41, 154, 15), 1))
-        binary_patterns = ["1010", "1101", "0110", "1001", "1110", "0001"]
+        # Enhanced vertical scan lines with better visibility
+        painter.setPen(QPen(QColor(69, 237, 242, 40), 2))  # More visible with good opacity
+        scan_x = int((self.width() * 0.2 + math.cos(self.time * 1.5) * self.width() * 0.5) % self.width())  # Bigger range
+        painter.drawLine(scan_x, 0, scan_x, self.height())
+        
+        # Add a second vertical scan line with different timing
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 1))
+        scan_x2 = int((self.width() * 0.8 + math.sin(self.time * 1.2) * self.width() * 0.4) % self.width())  # Bigger range
+        painter.drawLine(scan_x2, 0, scan_x2, self.height())
+        
+        # Add some binary code patterns in corners with better visibility
+        painter.setPen(QPen(QColor(73, 41, 154, 25), 1))  # Slightly more visible
+        binary_patterns = ["1010", "1101", "0110", "1001"]
         for i, pattern in enumerate(binary_patterns):
-            x = 30 + (i % 3) * (self.width() - 150)
-            y = 30 + (i // 3) * (self.height() - 150)
-            # Add slight animation to binary text
-            offset = 2 * math.sin(self.time * 3 + i)
-            painter.drawText(int(x + offset), int(y + offset), pattern)
-
-    def draw_data_streams(self, painter):
-        """Draw flowing data streams"""
-        # Flowing data streams with wave patterns
-        painter.setPen(QPen(QColor(69, 237, 242, 12), 2))
-        for i in range(4):
-            wave_amplitude = 20 + 10 * math.sin(self.time + i)
-            wave_frequency = 0.02 + i * 0.005
-            
-            # Draw flowing stream
-            for x in range(0, self.width(), 5):
-                y = self.height() * (0.3 + i * 0.15) + wave_amplitude * math.sin(x * wave_frequency + self.time * 2)
-                if 0 <= y <= self.height():
-                    painter.drawPoint(x, int(y))
-    
-    def draw_security_indicators(self, painter):
-        """Draw security status indicators"""
-        # Security status lights
-        for i in range(5):
-            x = self.width() * 0.1 + i * self.width() * 0.2
-            y = self.height() * 0.1
-            
-            # Pulsing security indicators
-            pulse = 15 + 10 * math.sin(self.time * 4 + i)
-            painter.setPen(QPen(QColor(69, 237, 242, int(pulse)), 3))
-            painter.drawEllipse(int(x), int(y), 6, 6)
-            
-            # Add status text
-            painter.setPen(QPen(QColor(73, 41, 154, 20), 1))
-            status_texts = ["SEC", "AUTH", "ENCR", "MON", "LOG"]
-            painter.drawText(int(x - 10), int(y + 20), status_texts[i])
+            x = 20 + (i % 2) * (self.width() - 100)
+            y = 20 + (i // 2) * (self.height() - 100)
+            painter.drawText(x, y, pattern)
 
 
 class MainWindow(QMainWindow):
