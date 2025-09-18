@@ -28,6 +28,28 @@ def build_header_v1(lsb_bits: int, payload: bytes, suggested_filename: Optional[
     return b''.join([magic, version, lsb, start, length, fname_len, fname_bytes, crc32])
 
 
+def parse_header_v1(h: bytes) -> dict:
+    off = 0
+    magic = h[off:off+4]; off += 4
+    if magic != b'STGA':
+        raise ValueError('Bad magic')
+    ver = h[off]; off += 1
+    lsb = h[off]; off += 1
+    start = struct.unpack('>Q', h[off:off+8])[0]; off += 8
+    length = struct.unpack('>I', h[off:off+4])[0]; off += 4
+    flen = h[off]; off += 1
+    fname = h[off:off+flen].decode('utf-8', errors='replace'); off += flen
+    crc32 = struct.unpack('>I', h[off:off+4])[0]
+    return {
+        'version': ver,
+        'lsb_bits': lsb,
+        'start_bit_offset': start,
+        'payload_len': length,
+        'filename': fname,
+        'crc32': crc32,
+    }
+
+
 def write_bits_into_image(flat_bytes: np.ndarray, lsb_bits: int, start_bit: int, bit_order: list[int], bits: bytes) -> None:
     total_lsb_bits = flat_bytes.size * lsb_bits
 
@@ -62,12 +84,32 @@ def main():
     if not (1 <= args.lsb <= 8):
         raise SystemExit('lsb must be between 1 and 8')
 
+    # Create fixtures if needed
     if not os.path.exists(args.cover):
-        raise SystemExit(f'Cover image not found: {args.cover}')
+        base_dir = os.path.dirname(args.cover)
+        if base_dir and not os.path.isdir(base_dir):
+            os.makedirs(base_dir, exist_ok=True)
+        # Create a simple RGB gradient fixture
+        w = 256
+        h = 256
+        x = np.linspace(0, 255, w, dtype=np.uint8)
+        y = np.linspace(0, 255, h, dtype=np.uint8)
+        xv, yv = np.meshgrid(x, y)
+        fixture = np.stack([xv, yv, ((xv.astype(int)+yv.astype(int))//2).astype(np.uint8)], axis=2)
+        Image.fromarray(fixture, mode='RGB').save(args.cover, format='PNG')
+        print(f'Created fixture cover image at {args.cover}')
     if not os.path.exists(args.payload):
         raise SystemExit(f'Payload file not found: {args.payload}')
 
     # Load inputs
+    if not os.path.exists(args.payload):
+        # Create a small text payload fixture
+        base_dir = os.path.dirname(args.payload)
+        if base_dir and not os.path.isdir(base_dir):
+            os.makedirs(base_dir, exist_ok=True)
+        with open(args.payload, 'wb') as f:
+            f.write(b'This is a small payload for stego demo.\n' * 64)
+        print(f'Created fixture payload at {args.payload}')
     with open(args.payload, 'rb') as f:
         payload = f.read()
     suggested_filename = os.path.basename(args.payload)
@@ -112,6 +154,9 @@ def main():
     out_img.save(args.out, format='PNG')
     print(f'Wrote stego PNG to {args.out}')
     print(f'Header bytes: {len(header)}  Payload bytes: {len(payload)}  Start bit: {start_bit}')
+    # Print parsed header fields from the bytes we embedded
+    parsed = parse_header_v1(header)
+    print('Parsed header:', parsed)
 
     if args.diff:
         # Create a visual diff map of changed LSBs
