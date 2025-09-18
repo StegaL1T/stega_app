@@ -17,12 +17,12 @@ class GradientLabel(QLabel):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Create gradient
+        # Create gradient - smooth fade from blue to purple
         gradient = QLinearGradient(0, 0, self.width(), 0)
-        gradient.setColorAt(0, QColor("#45edf2"))  # Cyan
-        gradient.setColorAt(0.5, QColor("#45edf2"))  # Cyan
-        gradient.setColorAt(0.6, QColor("#49299a"))  # Purple
-        gradient.setColorAt(1, QColor("#49299a"))    # Purple
+        gradient.setColorAt(0, QColor("#45edf2"))    # Cyan blue at start
+        gradient.setColorAt(0.3, QColor("#45edf2"))  # Blue continues
+        gradient.setColorAt(0.7, QColor("#49299a"))  # Purple starts
+        gradient.setColorAt(1, QColor("#49299a"))    # Purple at end
         
         # Set the gradient as the brush
         painter.setBrush(QBrush(gradient))
@@ -96,14 +96,7 @@ class CyberBackgroundWidget(QWidget):
             painter.drawLine(i, 0, i + grid_size, grid_size)
             painter.drawLine(i, self.height(), i + grid_size, self.height() - grid_size)
         
-        # Add animated grid highlights
-        painter.setPen(QPen(QColor(69, 237, 242, 30), 2))
-        highlight_x = int((math.sin(self.time * 0.8) * self.width() * 0.3 + self.width() * 0.5) % self.width())
-        highlight_y = int((math.cos(self.time * 0.6) * self.height() * 0.3 + self.height() * 0.5) % self.height())
-        
-        # Draw highlighted grid lines
-        painter.drawLine(highlight_x, 0, highlight_x, self.height())
-        painter.drawLine(0, highlight_y, self.width(), highlight_y)
+        # Static grid - no animated highlights to reduce visual clutter
     
     def draw_particles(self, painter):
         """Draw floating cybersecurity data packets"""
@@ -156,34 +149,24 @@ class CyberBackgroundWidget(QWidget):
         painter.drawLine(self.width() - 20, self.height() - corner_size, self.width() - corner_size, self.height() - corner_size)
     
     def draw_scan_lines(self, painter):
-        """Draw enhanced cybersecurity scan lines effect"""
-        # Enhanced horizontal scan lines with better visibility
-        painter.setPen(QPen(QColor(69, 237, 242, 45), 2))  # More visible with good opacity
-        scan_y = int((self.height() * 0.3 + math.sin(self.time * 2) * self.height() * 0.4) % self.height())  # Bigger range
+        """Draw cybersecurity scan lines effect - maximum 4 lines"""
+        # Two horizontal scan lines
+        painter.setPen(QPen(QColor(69, 237, 242, 45), 2))
+        scan_y = int((self.height() * 0.3 + math.sin(self.time * 2) * self.height() * 0.4) % self.height())
         painter.drawLine(0, scan_y, self.width(), scan_y)
         
-        # Add a second horizontal scan line with different timing
         painter.setPen(QPen(QColor(69, 237, 242, 30), 1))
-        scan_y2 = int((self.height() * 0.7 + math.cos(self.time * 1.8) * self.height() * 0.35) % self.height())  # Bigger range
+        scan_y2 = int((self.height() * 0.7 + math.cos(self.time * 1.8) * self.height() * 0.35) % self.height())
         painter.drawLine(0, scan_y2, self.width(), scan_y2)
         
-        # Enhanced vertical scan lines with better visibility
-        painter.setPen(QPen(QColor(69, 237, 242, 40), 2))  # More visible with good opacity
-        scan_x = int((self.width() * 0.2 + math.cos(self.time * 1.5) * self.width() * 0.5) % self.width())  # Bigger range
+        # Two vertical scan lines
+        painter.setPen(QPen(QColor(69, 237, 242, 40), 2))
+        scan_x = int((self.width() * 0.2 + math.cos(self.time * 1.5) * self.width() * 0.5) % self.width())
         painter.drawLine(scan_x, 0, scan_x, self.height())
         
-        # Add a second vertical scan line with different timing
         painter.setPen(QPen(QColor(69, 237, 242, 25), 1))
-        scan_x2 = int((self.width() * 0.8 + math.sin(self.time * 1.2) * self.width() * 0.4) % self.width())  # Bigger range
+        scan_x2 = int((self.width() * 0.8 + math.sin(self.time * 1.2) * self.width() * 0.4) % self.width())
         painter.drawLine(scan_x2, 0, scan_x2, self.height())
-        
-        # Add some binary code patterns in corners with better visibility
-        painter.setPen(QPen(QColor(73, 41, 154, 25), 1))  # Slightly more visible
-        binary_patterns = ["1010", "1101", "0110", "1001"]
-        for i, pattern in enumerate(binary_patterns):
-            x = 20 + (i % 2) * (self.width() - 100)
-            y = 20 + (i // 2) * (self.height() - 100)
-            painter.drawText(x, y, pattern)
 
 
 class MainWindow(QMainWindow):
@@ -219,11 +202,11 @@ class MainWindow(QMainWindow):
         self.background_widget.setParent(central_widget)
         self.background_widget.lower()  # Put it behind other widgets
 
-        # Main layout with gradient background
+        # Main layout with gradient background - centered with equal margins
         main_layout = QVBoxLayout(central_widget)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.setSpacing(50)  # Increased spacing for better balance
-        main_layout.setContentsMargins(50, 80, 50, 50)  # More top margin to push content down
+        main_layout.setContentsMargins(80, 80, 80, 80)  # Equal margins on all sides
 
         # Title section
         self.create_title_section(main_layout)
@@ -252,7 +235,7 @@ class MainWindow(QMainWindow):
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("margin-bottom: 20px;")  # Increased spacing
+        title_label.setStyleSheet("margin-top: 40px; margin-bottom: 20px;")  # Added top spacing to push down
 
         subtitle_label = QLabel(
             "Advanced steganography and steganalysis platform for secure data hiding and detection.")
@@ -271,6 +254,7 @@ class MainWindow(QMainWindow):
         cards_layout = QHBoxLayout()
         cards_layout.setSpacing(50)  # Increased spacing between cards for better visual balance
         cards_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cards_layout.setContentsMargins(0, 0, 0, 0)  # No extra margins on cards container
 
         # Steganography Encoding card
         encode_card = self.create_card(
@@ -303,10 +287,10 @@ class MainWindow(QMainWindow):
         cards_layout.addWidget(decode_card)
         cards_layout.addWidget(analysis_card)
 
-        # Add some top spacing to the cards section
+        # Create cards widget with centered layout
         cards_widget = QWidget()
         cards_widget.setLayout(cards_layout)
-        cards_widget.setStyleSheet("margin-top: 20px;")
+        cards_widget.setStyleSheet("")  # No extra styling for perfect centering
         
         layout.addWidget(cards_widget)
 
@@ -320,7 +304,7 @@ class MainWindow(QMainWindow):
             QFrame {
                 background-color: #0e1625;
                 border-radius: 18px;
-                border: 1px solid rgba(73,41,154,0.45);
+                border: 3px solid rgba(73,41,154,0.6);
                 padding: 5px;
             }
         """)
@@ -330,12 +314,12 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout(card)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(10)  # Better spacing for readability
+        layout.setSpacing(6)  # Reduced spacing for tighter layout
         layout.setContentsMargins(20, 20, 20, 20)  # More breathing room
 
         # Icon with proper centering - no borders
         icon_container = QWidget()
-        icon_container.setFixedHeight(80)  # Larger icons for better visibility
+        icon_container.setFixedHeight(120)  # Bigger icons for better visibility
         icon_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         icon_container.setStyleSheet("""
             QWidget {
@@ -350,7 +334,7 @@ class MainWindow(QMainWindow):
         icon_label = QLabel()
         icon_label.setPixmap(icon)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_label.setFixedSize(80, 80)  # Larger icon size
+        icon_label.setFixedSize(120, 120)  # Bigger icon size
         # Remove icon border styling - explicitly no borders
         icon_label.setStyleSheet("""
             QLabel {
@@ -372,8 +356,8 @@ class MainWindow(QMainWindow):
         title_label.setStyleSheet("""
             color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
                 stop:0 #45edf2, stop:0.5 #45edf2, stop:0.6 #7B2CBF, stop:1 #7B2CBF);
-            margin: 8px 0;
-            padding: 4px 0;
+            margin: 4px 0;
+            padding: 2px 0;
             border: none;
             background: transparent;
         """)
@@ -391,7 +375,7 @@ class MainWindow(QMainWindow):
         desc_label.setStyleSheet("""
             color: #D9D9D9;
             line-height: 1.5;
-            padding: 8px 4px 4px 4px;
+            padding: 4px 4px 2px 4px;
             text-align: center;
             border: none;
             background: transparent;
@@ -419,9 +403,8 @@ class MainWindow(QMainWindow):
             }}
             QPushButton:hover {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(69,237,242,0.2), stop:1 rgba(73,41,154,0.1));
-                border: 2px solid rgba(69,237,242,0.8);
-                transform: scale(1.02);
+                    stop:0 rgba(69,237,242,0.3), stop:1 rgba(73,41,154,0.15));
+                border: 3px solid rgba(69,237,242,1.0);
             }}
             QPushButton:pressed {{
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
@@ -441,18 +424,18 @@ class MainWindow(QMainWindow):
         layout.addWidget(title_label)
         layout.addWidget(desc_label)
         # Add minimal spacing for compact cards
-        layout.addSpacing(6)
+        layout.addSpacing(2)
         layout.addWidget(button)
 
         return card
 
     def load_icon(self, icon_path):
-        """Load an icon from a PNG file and resize it to 80x80"""
+        """Load an icon from a PNG file and resize it to 120x120"""
         try:
             pixmap = QPixmap(icon_path)
             if not pixmap.isNull():
-                # Scale the icon to 80x80 while maintaining aspect ratio
-                scaled_pixmap = pixmap.scaled(80, 80, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                # Scale the icon to 120x120 while maintaining aspect ratio
+                scaled_pixmap = pixmap.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 return scaled_pixmap
             else:
                 print(f"Warning: Could not load icon from {icon_path}")
@@ -479,11 +462,11 @@ class MainWindow(QMainWindow):
         """Create an enhanced shadow effect for cards"""
         from PyQt6.QtWidgets import QGraphicsDropShadowEffect
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
+        shadow.setBlurRadius(35)  # Increased blur for stronger glow
         shadow.setXOffset(0)
-        shadow.setYOffset(4)
-        # Enhanced cyan glow
-        shadow.setColor(QColor(69, 237, 242, 40))
+        shadow.setYOffset(8)  # Increased offset for more depth
+        # Enhanced cyan glow with higher opacity
+        shadow.setColor(QColor(69, 237, 242, 80))  # Doubled opacity for stronger effect
         return shadow
 
     def darken_color(self, color_hex):
