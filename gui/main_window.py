@@ -1,8 +1,152 @@
 # gui/main_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QApplication)
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QLinearGradient, QBrush, QPen
+import math
+import random
+
+
+class GradientLabel(QLabel):
+    """Custom QLabel with gradient text effect"""
+    def __init__(self, text):
+        super().__init__(text)
+        self.setMinimumHeight(50)
+        
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Create gradient
+        gradient = QLinearGradient(0, 0, self.width(), 0)
+        gradient.setColorAt(0, QColor("#45edf2"))  # Cyan
+        gradient.setColorAt(0.5, QColor("#45edf2"))  # Cyan
+        gradient.setColorAt(0.6, QColor("#49299a"))  # Purple
+        gradient.setColorAt(1, QColor("#49299a"))    # Purple
+        
+        # Set the gradient as the brush
+        painter.setBrush(QBrush(gradient))
+        painter.setPen(Qt.PenStyle.NoPen)
+        
+        # Draw text with gradient
+        font = self.font()
+        painter.setFont(font)
+        painter.setBrush(QBrush(gradient))
+        painter.setPen(QPen(gradient, 1))
+        
+        # Get text metrics
+        metrics = painter.fontMetrics()
+        text_rect = metrics.boundingRect(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+        
+        # Draw the text
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.text())
+
+
+class CyberBackgroundWidget(QWidget):
+    """Custom background widget with subtle cybersecurity elements"""
+    def __init__(self):
+        super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.update)
+        self.animation_timer.start(50)  # 20 FPS animation
+        self.time = 0
+        
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Base dark background
+        painter.fillRect(self.rect(), QColor("#0e1625"))
+        
+        # Subtle grid pattern
+        self.draw_grid(painter)
+        
+        # Floating particles (data packets)
+        self.draw_particles(painter)
+        
+        # Subtle circuit-like patterns
+        self.draw_circuit_patterns(painter)
+        
+        # Cybersecurity scan lines
+        self.draw_scan_lines(painter)
+        
+        self.time += 0.02
+        
+    def draw_grid(self, painter):
+        """Draw an enhanced grid pattern with cybersecurity elements"""
+        # Main grid lines
+        painter.setPen(QPen(QColor(69, 237, 242, 12), 1))
+        grid_size = 40
+        
+        for x in range(0, self.width(), grid_size):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(0, self.height(), grid_size):
+            painter.drawLine(0, y, self.width(), y)
+        
+        # Add some grid intersections with small dots
+        painter.setPen(QPen(QColor(69, 237, 242, 20), 2))
+        for x in range(grid_size, self.width(), grid_size * 2):
+            for y in range(grid_size, self.height(), grid_size * 2):
+                painter.drawPoint(x, y)
+        
+        # Add some diagonal accent lines for tech feel
+        painter.setPen(QPen(QColor(73, 41, 154, 8), 1))
+        for i in range(0, self.width(), grid_size * 3):
+            painter.drawLine(i, 0, i + grid_size, grid_size)
+            painter.drawLine(i, self.height(), i + grid_size, self.height() - grid_size)
+    
+    def draw_particles(self, painter):
+        """Draw floating data particles"""
+        painter.setPen(QPen(QColor(69, 237, 242, 30), 2))
+        
+        # Create some floating particles
+        for i in range(8):
+            x = (self.width() * 0.1 + i * self.width() * 0.1 + 
+                 math.sin(self.time + i) * 20) % self.width()
+            y = (self.height() * 0.2 + i * self.height() * 0.1 + 
+                 math.cos(self.time * 0.7 + i) * 15) % self.height()
+            
+            # Draw small circles
+            painter.drawEllipse(int(x), int(y), 3, 3)
+    
+    def draw_circuit_patterns(self, painter):
+        """Draw subtle circuit-like patterns"""
+        painter.setPen(QPen(QColor(73, 41, 154, 15), 1))
+        
+        # Draw some circuit-like lines in corners
+        corner_size = 100
+        # Top-left corner
+        painter.drawLine(20, 20, corner_size, 20)
+        painter.drawLine(20, 20, 20, corner_size)
+        painter.drawLine(20, corner_size, corner_size, corner_size)
+        
+        # Top-right corner
+        painter.drawLine(self.width() - 20, 20, self.width() - corner_size, 20)
+        painter.drawLine(self.width() - 20, 20, self.width() - 20, corner_size)
+        painter.drawLine(self.width() - 20, corner_size, self.width() - corner_size, corner_size)
+        
+        # Bottom corners
+        painter.drawLine(20, self.height() - 20, corner_size, self.height() - 20)
+        painter.drawLine(20, self.height() - 20, 20, self.height() - corner_size)
+        painter.drawLine(20, self.height() - corner_size, corner_size, self.height() - corner_size)
+        
+        painter.drawLine(self.width() - 20, self.height() - 20, self.width() - corner_size, self.height() - 20)
+        painter.drawLine(self.width() - 20, self.height() - 20, self.width() - 20, self.height() - corner_size)
+        painter.drawLine(self.width() - 20, self.height() - corner_size, self.width() - corner_size, self.height() - corner_size)
+    
+    def draw_connection_lines(self, painter):
+        """Draw animated connection lines between particles"""
+        painter.setPen(QPen(QColor(69, 237, 242, 20), 1))
+        
+        # Draw some connecting lines
+        for i in range(3):
+            x1 = self.width() * 0.2 + i * self.width() * 0.2
+            y1 = self.height() * 0.3 + math.sin(self.time + i) * 10
+            x2 = self.width() * 0.8 - i * self.width() * 0.2
+            y2 = self.height() * 0.7 + math.cos(self.time + i) * 10
+            
+            painter.drawLine(int(x1), int(y1), int(x2), int(y2))
 
 
 class MainWindow(QMainWindow):
@@ -29,9 +173,14 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        # Create central widget and main layout
+        # Create central widget with background
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
+        
+        # Create background widget
+        self.background_widget = CyberBackgroundWidget()
+        self.background_widget.setParent(central_widget)
+        self.background_widget.lower()  # Put it behind other widgets
 
         # Main layout with gradient background
         main_layout = QVBoxLayout(central_widget)
@@ -47,19 +196,29 @@ class MainWindow(QMainWindow):
 
         # Make the window fullscreen
         self.showMaximized()
+        
+        # Initialize background widget size
+        self.background_widget.setGeometry(0, 0, self.width(), self.height())
+        
+    def resizeEvent(self, event):
+        """Handle window resize to update background"""
+        super().resizeEvent(event)
+        if hasattr(self, 'background_widget'):
+            self.background_widget.setGeometry(0, 0, self.width(), self.height())
 
     def create_title_section(self, layout):
         """Create the title and subtitle section"""
-        title_label = QLabel("Steganography Tool")
+        # Main title with gradient effect using custom painting
+        title_label = GradientLabel("LSB Steganography & Steganalysis Tool")
         title_font = QFont()
         title_font.setPointSize(36)
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #49299a; margin-bottom: 10px;")
+        title_label.setStyleSheet("margin-bottom: 10px;")
 
         subtitle_label = QLabel(
-            "Hide and detect hidden information in digital media.")
+            "Advanced steganography and steganalysis platform for secure data hiding and detection.")
         subtitle_font = QFont()
         subtitle_font.setPointSize(16)
         subtitle_label.setFont(subtitle_font)
@@ -77,18 +236,18 @@ class MainWindow(QMainWindow):
 
         # Steganography Encoding card
         encode_card = self.create_card(
-            "Steganography - Encoding",
-            "Hide secret messages within images, audio, or other media files using LSB techniques.",
-            "Start Encoding →",
+            "Steganography Encoding",
+            "Hide sensitive data within images using advanced LSB and DCT algorithms. Supports multiple file formats with military-grade encryption.",
+            "Start Encoding",
             "#45edf2",
             self.create_padlock_icon()
         )
 
         # Steganography Decoding card
         decode_card = self.create_card(
-            "Steganography - Decoding",
-            "Extract hidden messages from steganographic media files using LSB techniques.",
-            "Start Decoding →",
+            "Steganography Decoding",
+            "Extract hidden data from steganographic images. Advanced detection algorithms can reveal concealed information with high accuracy.",
+            "Start Decoding",
             "#45edf2",
             self.create_unlock_icon()
         )
@@ -96,8 +255,8 @@ class MainWindow(QMainWindow):
         # Steganalysis card
         analysis_card = self.create_card(
             "Steganalysis",
-            "Detect and analyze hidden information in digital media files.",
-            "Start Analyzing →",
+            "Detect and analyze potential steganographic content using AI-powered statistical analysis and machine learning techniques.",
+            "Start Analyzing",
             "#45edf2",
             self.create_magnifying_glass_icon()
         )
@@ -111,7 +270,7 @@ class MainWindow(QMainWindow):
     def create_card(self, title, description, button_text, button_color, icon):
         """Create a card widget"""
         card = QFrame()
-        card.setFixedSize(400, 350)
+        card.setFixedSize(450, 400)  # Increased size to prevent text truncation
         card.setStyleSheet("""
             QFrame {
                 background-color: #0e1625;
@@ -125,8 +284,8 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout(card)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(15)
+        layout.setContentsMargins(25, 25, 25, 25)
 
         # Icon
         icon_label = QLabel()
@@ -146,10 +305,11 @@ class MainWindow(QMainWindow):
         # Description
         desc_label = QLabel(description)
         desc_font = QFont()
-        desc_font.setPointSize(12)
+        desc_font.setPointSize(11)
         desc_label.setFont(desc_font)
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
+        desc_label.setMaximumWidth(380)  # Ensure proper text wrapping
         desc_label.setStyleSheet("color: rgba(232,232,252,0.85); line-height: 1.4;")
 
         # Button
@@ -174,11 +334,11 @@ class MainWindow(QMainWindow):
         """)
 
         # Connect button click
-        if "Encoding" in button_text:
+        if "Start Encoding" in button_text:
             button.clicked.connect(self.start_steganography_encoding)
-        elif "Decoding" in button_text:
+        elif "Start Decoding" in button_text:
             button.clicked.connect(self.start_steganography_decoding)
-        elif "Analyzing" in button_text:
+        elif "Start Analyzing" in button_text:
             button.clicked.connect(self.start_steganalysis)
 
         layout.addWidget(icon_label)
