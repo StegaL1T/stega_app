@@ -3,21 +3,83 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
                              QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-                             QScrollArea, QSlider as QTimeSlider, QToolTip)
-from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage
+                             QScrollArea, QSlider as QTimeSlider, QToolTip, QProgressBar)
+from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal, QRegularExpression
+from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QIntValidator, QRegularExpressionValidator, QCursor
 import os
 import numpy as np
 from PIL import Image
 import soundfile as sf
 import cv2
 from datetime import datetime
+from machine.stega_encode_machine import HeaderMeta
+
+
+def _human_size(num: int) -> str:
+    """Return human readable file size."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if num < 1024.0:
+            return f"{num:.1f} {unit}"
+        num /= 1024.0
+    return f"{num:.1f} PB"
+
+
+class NotificationBanner(QFrame):
+    """Persistent, dismissible banner for inline notifications."""
+    closed = pyqtSignal()
+
+    def __init__(self, message: str, severity: str = 'info', parent: QWidget | None = None):
+        super().__init__(parent)
+        self._message_label = QLabel()
+        self._close_btn = QPushButton("×")
+        self._close_btn.setFixedWidth(24)
+        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._close_btn.clicked.connect(self._on_close)
+
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setFrameShadow(QFrame.Shadow.Raised)
+        self.setObjectName("notificationBanner")
+
+        # Colors by severity
+        if severity == 'error':
+            bg = "#fdecea"; fg = "#c0392b"; border = "#e6b0aa"
+        elif severity == 'warning':
+            bg = "#fff4e5"; fg = "#8e5b00"; border = "#f5c16c"
+        else:
+            bg = "#eef5ff"; fg = "#2c3e50"; border = "#a9c8ff"
+        self.setStyleSheet(
+            f"#notificationBanner {{ background-color:{bg}; border:1px solid {border}; border-radius:8px; }}"
+            f"QLabel {{ color:{fg}; font-weight:bold; }}"
+            "QPushButton { background: transparent; color: #7f8c8d; border: none; font-size: 16px; }"
+            "QPushButton:hover { color: #2c3e50; }"
+        )
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 8, 8, 8)
+        lay.setSpacing(8)
+        self._message_label.setWordWrap(True)
+        self._message_label.setText(message)
+        lay.addWidget(self._message_label)
+        lay.addStretch()
+        lay.addWidget(self._close_btn)
+
+    def setText(self, message: str):
+        self._message_label.setText(message)
+
+    def _on_close(self):
+        try:
+            self.closed.emit()
+        except Exception:
+            pass
+        self.hide()
+        self.deleteLater()
 
 
 class MediaDropWidget(QFrame):
     """Custom widget for drag and drop media upload with interactive previews"""
 
     media_loaded = pyqtSignal(str, str)  # file_path, media_type
+    notify = pyqtSignal(str, str)  # message, severity
 
     def __init__(self):
         super().__init__()
@@ -176,6 +238,14 @@ class MediaDropWidget(QFrame):
         elif ext in ['.mp4', '.avi', '.mov']:
             media_type = 'video'
         else:
+            # Notify parent via signal for persistent banner
+            try:
+                self.notify.emit(f"Unsupported media type: {ext}", 'warning')
+            except Exception:
+                pass
+            # Brief inline hint
+            self.drop_zone.setText("Unsupported media type")
+            QTimer.singleShot(1500, lambda: self.drop_zone.setText("Drag & Drop Media Here\n\nSupported: Images, Audio, Video"))
             return
 
         self.media_path = file_path
@@ -188,6 +258,12 @@ class MediaDropWidget(QFrame):
 
         # Update UI with proper file path formatting
         self.file_info.setText(f"<b>File Path</b><br>{file_path}")
+        # Tooltip with size info
+        try:
+            size = os.path.getsize(file_path)
+            self.file_info.setToolTip(f"{os.path.basename(file_path)}\nSize: {_human_size(size)} ({size} bytes)")
+        except Exception:
+            self.file_info.setToolTip(os.path.basename(file_path))
         self.file_info.show()
 
         # Create preview
@@ -498,6 +574,7 @@ class VideoPreviewWidget(QWidget):
     """Interactive video preview with frame selection"""
 
     frame_selected = pyqtSignal(int)  # frame number
+    xy_selected = pyqtSignal(int, int, int)  # frame, x, y
 
     def __init__(self, video_path):
         super().__init__()
@@ -508,6 +585,10 @@ class VideoPreviewWidget(QWidget):
         self.duration = 0
         self.selected_frame = 0
         self.current_frame = 0
+        self._last_scaled_size = None  # (w,h) of pixmap displayed
+        self._last_offset = (0, 0)     # (offset_x, offset_y) inside label
+        self._frame_size = None        # (w,h) original frame size
+        self._last_click = None        # (frame, x, y) in frame coords
 
         self.setup_ui()
         self.load_video()
@@ -531,6 +612,40 @@ class VideoPreviewWidget(QWidget):
         """)
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_label.setText("Loading video...")
+        # Enable click selection on the video label
+        self.video_label.mousePressEvent = self.on_video_click
+
+        # Status pill and clear control
+        status_layout = QHBoxLayout()
+        self.status_pill = QLabel("Click video to set start")
+        self.status_pill.setStyleSheet(
+            """
+            QLabel {
+                background-color: #eef5ff;
+                color: #2c3e50;
+                border-radius: 12px;
+                padding: 4px 10px;
+                font-weight: bold;
+            }
+            """
+        )
+        self.clear_marker_btn = QPushButton("Clear Marker")
+        self.clear_marker_btn.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #bdc3c7;
+                color: #2c3e50;
+                border: none;
+                padding: 6px 10px;
+                border-radius: 6px;
+            }
+            QPushButton:hover { background-color: #aeb6bf; }
+            """
+        )
+        self.clear_marker_btn.clicked.connect(self.on_clear_marker)
+        status_layout.addWidget(self.status_pill)
+        status_layout.addStretch()
+        status_layout.addWidget(self.clear_marker_btn)
 
         # Frame slider
         self.frame_slider = QTimeSlider(Qt.Orientation.Horizontal)
@@ -595,6 +710,7 @@ class VideoPreviewWidget(QWidget):
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         layout.addWidget(self.video_label)
+        layout.addLayout(status_layout)
         layout.addWidget(self.frame_slider)
         layout.addLayout(button_layout)
         layout.addWidget(self.info_label)
@@ -648,7 +764,33 @@ class VideoPreviewWidget(QWidget):
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation
             )
-            self.video_label.setPixmap(scaled_pixmap)
+            # If there's a click marker for this frame, draw it
+            if self._last_click and self._last_click[0] == frame_number:
+                try:
+                    _, cx, cy = self._last_click
+                    # Map frame coords -> scaled pixmap coords
+                    sx = int(cx * scaled_pixmap.width() / max(1, w))
+                    sy = int(cy * scaled_pixmap.height() / max(1, h))
+                    pm_to_draw = QPixmap(scaled_pixmap)
+                    painter = QPainter(pm_to_draw)
+                    painter.setPen(QPen(QColor(231, 76, 60), 2))  # red
+                    painter.drawLine(max(0, sx-10), sy, min(pm_to_draw.width()-1, sx+10), sy)
+                    painter.drawLine(sx, max(0, sy-10), sx, min(pm_to_draw.height()-1, sy+10))
+                    painter.end()
+                    self.video_label.setPixmap(pm_to_draw)
+                except Exception as _e:
+                    # Fallback to plain pixmap
+                    self.video_label.setPixmap(scaled_pixmap)
+            else:
+                self.video_label.setPixmap(scaled_pixmap)
+            # Store mapping state
+            self._last_scaled_size = (scaled_pixmap.width(), scaled_pixmap.height())
+            self._frame_size = (w, h)
+            off_x = max(0, (label_size.width() - scaled_pixmap.width()) // 2)
+            off_y = max(0, (label_size.height() - scaled_pixmap.height()) // 2)
+            # account for the -20 margin used in scaling
+            # ensure offsets are not negative
+            self._last_offset = (max(0, off_x), max(0, off_y))
 
             self.current_frame = frame_number
             self.info_label.setText(
@@ -672,19 +814,69 @@ class VideoPreviewWidget(QWidget):
             new_frame = self.current_frame + 1
             self.frame_slider.setValue(new_frame)
 
+    def on_video_click(self, event):
+        """Map click on label back to frame pixel coordinates and emit xy_selected"""
+        try:
+            if event.button() != Qt.MouseButton.LeftButton:
+                return
+            if not self._frame_size or not self._last_scaled_size:
+                return
+            lx = event.position().x() if hasattr(event, 'position') else event.pos().x()
+            ly = event.position().y() if hasattr(event, 'position') else event.pos().y()
+            off_x, off_y = self._last_offset
+            disp_w, disp_h = self._last_scaled_size
+            # Check inside displayed pixmap area
+            if lx < off_x or ly < off_y or lx > off_x + disp_w or ly > off_y + disp_h:
+                return
+            fx, fy = self._frame_size
+            x = int((lx - off_x) * fx / max(1, disp_w))
+            y = int((ly - off_y) * fy / max(1, disp_h))
+            # Clamp to bounds
+            x = max(0, min(fx - 1, x))
+            y = max(0, min(fy - 1, y))
+            # Remember selected frame
+            self.selected_frame = self.current_frame
+            self._last_click = (self.current_frame, x, y)
+            # Redraw current frame with marker
+            self.show_frame(self.current_frame)
+            try:
+                self.status_pill.setText(f"Start: frame {self.current_frame}, x:{x}, y:{y}")
+            except Exception:
+                pass
+            print(f"[VideoPreview] label=({lx:.1f},{ly:.1f}) -> frame=({x},{y}), frame#={self.current_frame}")
+            self.xy_selected.emit(self.current_frame, x, y)
+        except Exception as e:
+            # Fallback: ignore click errors silently
+            print(f"Video click mapping failed: {e}")
+
     def __del__(self):
         """Cleanup video capture"""
         if self.cap:
             self.cap.release()
+
+    def on_clear_marker(self):
+        """Clear the click marker overlay and reset status pill"""
+        self._last_click = None
+        try:
+            self.status_pill.setText("Click video to set start")
+        except Exception:
+            pass
+        # Redraw current frame without marker
+        try:
+            self.show_frame(self.current_frame)
+        except Exception:
+            pass
 
 
 class PayloadDropWidget(QFrame):
     """Custom widget for drag and drop payload file upload"""
 
     file_loaded = pyqtSignal(str)  # file_path
+    notify = pyqtSignal(str, str)  # message, severity
 
     def __init__(self):
         super().__init__()
+        self.setAcceptDrops(True)
         self.file_path = None
         self.setup_ui()
 
@@ -772,6 +964,35 @@ class PayloadDropWidget(QFrame):
         """Handle drag enter event"""
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
+            # Highlight drop zone
+            self.drop_zone.setStyleSheet(
+                """
+                QLabel {
+                    border: 3px dashed #27ae60;
+                    border-radius: 15px;
+                    background-color: #d5f4e6;
+                    color: #27ae60;
+                    font-size: 16px;
+                    font-weight: bold;
+                }
+                """
+            )
+            self.drop_zone.setText("Drop File Here!")
+
+    def dragLeaveEvent(self, event):
+        """Reset styles on drag leave"""
+        self.drop_zone.setStyleSheet(
+            """
+            QLabel {
+                border: 3px dashed #bdc3c7;
+                border-radius: 15px;
+                background-color: #f8f9fa;
+                color: #7f8c8d;
+                font-size: 16px;
+            }
+            """
+        )
+        self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .exe, .wav, .mp3, .mov, .mp4")
 
     def dropEvent(self, event: QDropEvent):
         """Handle drop event"""
@@ -802,6 +1023,14 @@ class PayloadDropWidget(QFrame):
 
         if ext not in supported_extensions:
             print(f"Unsupported file type: {ext}")
+            # Persistent banner notification via parent
+            try:
+                self.notify.emit(f"Unsupported payload type: {ext}", 'warning')
+            except Exception:
+                pass
+            # Brief inline hint
+            self.drop_zone.setText("Unsupported file type")
+            QTimer.singleShot(1500, lambda: self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .exe, .wav, .mp3, .mov, .mp4"))
             return
 
         self.file_path = file_path
@@ -813,6 +1042,12 @@ class PayloadDropWidget(QFrame):
 
         # Update UI with proper file path formatting
         self.file_info.setText(f"<b>File Path</b><br>{file_path}")
+        # Tooltip with size info
+        try:
+            size = os.path.getsize(file_path)
+            self.file_info.setToolTip(f"{os.path.basename(file_path)}\nSize: {_human_size(size)} ({size} bytes)")
+        except Exception:
+            self.file_info.setToolTip(os.path.basename(file_path))
         self.file_info.show()
 
         # Emit signal
@@ -844,6 +1079,13 @@ class StegaEncodeWindow(QMainWindow):
         # Initialize the steganography machine
         from machine.stega_encode_machine import StegaEncodeMachine
         self.machine = StegaEncodeMachine()
+        self.media_type = None
+        self.start_xy = None  # (x,y) for image start
+        self.start_sample = None  # for audio
+        self.audio_info = None  # dict from machine.get_audio_info
+        self.video_start = (0, 0, 0)  # (frame,x,y)
+        self.video_meta = None  # {'frames':int,'w':int,'h':int,'fps':float}
+        self.available_bytes = 0
 
         # Set gradient background
         self.setStyleSheet("""
@@ -855,11 +1097,21 @@ class StegaEncodeWindow(QMainWindow):
 
         # Create central widget and main layout
         central_widget = QWidget()
+        # Transparent background so the window gradient shows cleanly (avoids dark corners)
+        central_widget.setStyleSheet("background: transparent;")
         self.setCentralWidget(central_widget)
 
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(20)
         main_layout.setContentsMargins(30, 30, 30, 30)
+
+        # Persistent notification area at the top
+        self.notice_container = QVBoxLayout()
+        self.notice_container.setSpacing(8)
+        self.notice_container.setContentsMargins(0, 0, 0, 0)
+        main_layout.addLayout(self.notice_container)
+        # Track overflow banner to avoid duplicates
+        self._overflow_banner = None
 
         # Title section
         self.create_title_section(main_layout)
@@ -934,18 +1186,36 @@ class StegaEncodeWindow(QMainWindow):
 
         # Left column - Cover Item (fixed width)
         cover_panel = self.create_cover_panel()
-        cover_panel.setFixedWidth(400)
-        content_layout.addWidget(cover_panel)
+        cover_scroll = QScrollArea()
+        cover_scroll.setWidget(cover_panel)
+        cover_scroll.setWidgetResizable(True)
+        cover_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        cover_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        cover_scroll.setFixedWidth(400)
+        cover_scroll.setStyleSheet("QScrollArea{background:transparent;border:none;} QScrollArea>Viewport{background:transparent;}")
+        content_layout.addWidget(cover_scroll)
 
         # Middle column - Payload (fixed width)
         payload_panel = self.create_payload_panel()
-        payload_panel.setFixedWidth(400)
-        content_layout.addWidget(payload_panel)
+        payload_scroll = QScrollArea()
+        payload_scroll.setWidget(payload_panel)
+        payload_scroll.setWidgetResizable(True)
+        payload_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        payload_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        payload_scroll.setFixedWidth(400)
+        payload_scroll.setStyleSheet("QScrollArea{background:transparent;border:none;} QScrollArea>Viewport{background:transparent;}")
+        content_layout.addWidget(payload_scroll)
 
         # Right column - Controls (fixed width)
         controls_panel = self.create_controls_panel()
-        controls_panel.setFixedWidth(400)
-        content_layout.addWidget(controls_panel)
+        controls_scroll = QScrollArea()
+        controls_scroll.setWidget(controls_panel)
+        controls_scroll.setWidgetResizable(True)
+        controls_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        controls_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        controls_scroll.setFixedWidth(400)
+        controls_scroll.setStyleSheet("QScrollArea{background:transparent;border:none;} QScrollArea>Viewport{background:transparent;}")
+        content_layout.addWidget(controls_scroll)
 
         layout.addLayout(content_layout)
 
@@ -963,9 +1233,9 @@ class StegaEncodeWindow(QMainWindow):
         button_layout.setContentsMargins(0, 0, 0, 0)
 
         # Hide Message button
-        hide_button = QPushButton("Hide Message")
-        hide_button.setMinimumHeight(60)
-        hide_button.setStyleSheet("""
+        self.hide_button = QPushButton("Hide Message")
+        self.hide_button.setMinimumHeight(60)
+        self.hide_button.setStyleSheet("""
             QPushButton {
                 background-color: #e67e22;
                 color: white;
@@ -983,11 +1253,11 @@ class StegaEncodeWindow(QMainWindow):
                 background-color: #c0392b;
             }
         """)
-        hide_button.clicked.connect(self.hide_message)
+        self.hide_button.clicked.connect(self.hide_message)
 
         # Center the button
         button_layout.addStretch()
-        button_layout.addWidget(hide_button)
+        button_layout.addWidget(self.hide_button)
         button_layout.addStretch()
 
         layout.addWidget(button_container)
@@ -1035,6 +1305,11 @@ class StegaEncodeWindow(QMainWindow):
         self.media_drop_widget.media_loaded.connect(self.on_media_loaded)
 
         layout.addLayout(header_layout)
+        # Connect notify signal for persistent messages
+        try:
+            self.media_drop_widget.notify.connect(self.show_persistent_notice)
+        except Exception:
+            pass
         layout.addWidget(self.media_drop_widget)
         layout.addStretch()
 
@@ -1120,8 +1395,11 @@ class StegaEncodeWindow(QMainWindow):
 
         # File drop widget (similar to cover item)
         self.payload_drop_widget = PayloadDropWidget()
-        self.payload_drop_widget.file_loaded.connect(
-            self.on_payload_file_loaded)
+        self.payload_drop_widget.file_loaded.connect(self.on_payload_file_loaded)
+        try:
+            self.payload_drop_widget.notify.connect(self.show_persistent_notice)
+        except Exception:
+            pass
 
         layout.addLayout(header_layout)
         layout.addWidget(self.message_text)
@@ -1162,7 +1440,7 @@ class StegaEncodeWindow(QMainWindow):
         info_btn = self.create_info_button(
             "For Controls:\n"
             "• LSB: Higher -> more capacity, lower quality\n"
-            "• Encryption Key: Any string\n"
+            "• Key: Numeric, required for reproducibility\n"
             "• Output Path: Default to datetime")
 
         header_layout.addWidget(title)
@@ -1220,12 +1498,14 @@ class StegaEncodeWindow(QMainWindow):
         lsb_layout.addWidget(self.lsb_slider)
 
         # Key input
-        key_group = QGroupBox("Encryption Key")
+        key_group = QGroupBox("Key (numeric, required)")
         key_layout = QVBoxLayout(key_group)
 
         self.key_input = QLineEdit()
-        self.key_input.setPlaceholderText("Enter encryption key (optional)...")
+        self.key_input.setPlaceholderText("Enter numeric key, e.g. 123456")
         self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        # Use regex validator to allow long numeric keys without 32-bit limits
+        self.key_input.setValidator(QRegularExpressionValidator(QRegularExpression(r"^\d{1,32}$")))
         self.key_input.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
@@ -1247,6 +1527,38 @@ class StegaEncodeWindow(QMainWindow):
         """)
 
         key_layout.addWidget(self.key_input)
+
+        # Capacity group
+        capacity_group = QGroupBox("Capacity")
+        cap_layout = QVBoxLayout(capacity_group)
+        self.cap_dims = QLabel("Cover: -")
+        self.cap_lsb = QLabel("LSB bits: 1")
+        self.cap_header = QLabel("Header bytes: -")
+        self.cap_startbits = QLabel("Start bit offset: 0")
+        self.cap_max = QLabel("Capacity (bytes): -")
+        self.cap_avail = QLabel("Available bytes: -")
+        for lbl in [self.cap_dims, self.cap_lsb, self.cap_header, self.cap_startbits, self.cap_max, self.cap_avail]:
+            lbl.setStyleSheet("color:#2c3e50;")
+            cap_layout.addWidget(lbl)
+        # Capacity usage bar
+        self.cap_usage_bar = QProgressBar()
+        self.cap_usage_bar.setRange(0, 100)
+        self.cap_usage_bar.setValue(0)
+        self.cap_usage_bar.setTextVisible(True)
+        self.cap_usage_bar.setFormat("Payload: %v / %m bytes")
+        self.cap_usage_bar.setStyleSheet(
+            "QProgressBar{border:1px solid #bdc3c7;border-radius:6px;background:#ecf0f1;text-align:center;}"
+            "QProgressBar::chunk{background-color:#2ecc71;border-radius:6px;}"
+        )
+        cap_layout.addWidget(self.cap_usage_bar)
+        # Capacity status pill
+        self.cap_status = QLabel("OK")
+        self.cap_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.cap_status.setStyleSheet(
+            "QLabel{background:#eafaf1;color:#2e7d32;border-radius:10px;padding:4px 8px;font-weight:bold;}" 
+        )
+        cap_layout.addWidget(self.cap_status)
+        capacity_group.setLayout(cap_layout)
 
         # Output path
         output_group = QGroupBox("Output Path")
@@ -1289,10 +1601,115 @@ class StegaEncodeWindow(QMainWindow):
         layout.addLayout(header_layout)
         layout.addWidget(lsb_group)
         layout.addWidget(key_group)
+        # Proof panel (How embedded)
+        proof_group = QGroupBox("How embedded")
+        proof_layout = QVBoxLayout(proof_group)
+        self.proof_lsb = QLabel("LSB bits: -")
+        self.proof_start = QLabel("Start bit: -")
+        self.proof_perm = QLabel("Perm [0:8]: -")
+        self.proof_header = QLabel("Header: -")
+        for lbl in [self.proof_lsb, self.proof_start, self.proof_perm, self.proof_header]:
+            lbl.setStyleSheet("color:#2c3e50;")
+            lbl.setWordWrap(True)
+            proof_layout.addWidget(lbl)
+        # Mini visualization for permutation (8-wide max)
+        self.perm_vis = QLabel()
+        self.perm_vis.setFixedHeight(20)
+        self.perm_vis.setStyleSheet("QLabel{background:#f8f9fa;border:1px dashed #bdc3c7;border-radius:8px;}")
+        proof_layout.addWidget(self.perm_vis)
+
+        # Visualization toggles
+        vis_group = QGroupBox("Visualization")
+        vis_layout = QVBoxLayout(vis_group)
+        self.lsb_toggle_btn = QPushButton("Show LSB plane")
+        self.lsb_toggle_btn.setCheckable(True)
+        self.lsb_toggle_btn.setStyleSheet("""
+            QPushButton { background-color: #95a5a6; color: white; border: none; padding: 8px 12px; border-radius: 5px; }
+            QPushButton:checked { background-color: #2ecc71; }
+        """)
+        self.lsb_toggle_btn.toggled.connect(self.on_lsb_toggle)
+        vis_layout.addWidget(self.lsb_toggle_btn)
+        # Diff map toggle (enabled after stego exists)
+        self.diff_toggle_btn = QPushButton("Show Difference Map")
+        self.diff_toggle_btn.setCheckable(True)
+        self.diff_toggle_btn.setEnabled(False)
+        self.diff_toggle_btn.setStyleSheet("""
+            QPushButton { background-color: #95a5a6; color: white; border: none; padding: 8px 12px; border-radius: 5px; }
+            QPushButton:checked { background-color: #e67e22; }
+        """)
+        self.diff_toggle_btn.toggled.connect(self.on_diff_toggle)
+        vis_layout.addWidget(self.diff_toggle_btn)
+
         layout.addWidget(output_group)
+        layout.addWidget(capacity_group)
+        # Video start controls
+        video_group = QGroupBox("Video Start")
+        video_vlayout = QVBoxLayout(video_group)
+        self.video_frame_slider = QSlider(Qt.Orientation.Horizontal)
+        self.video_frame_slider.setMinimum(0)
+        self.video_frame_slider.setMaximum(0)
+        self.video_frame_slider.valueChanged.connect(self.on_video_frame_changed)
+        self.video_pos_label = QLabel("Frame: 0, X: 0, Y: 0")
+        video_vlayout.addWidget(self.video_frame_slider)
+        video_vlayout.addWidget(self.video_pos_label)
+        layout.addWidget(video_group)
+        layout.addWidget(proof_group)
+        layout.addWidget(vis_group)
+
+        # Audio playback controls (enabled only for audio)
+        audio_play_group = QGroupBox("Audio Playback")
+        audio_play_layout = QHBoxLayout(audio_play_group)
+        self.play_cover_btn = QPushButton("Play Cover")
+        self.play_stego_btn = QPushButton("Play Stego")
+        for btn in (self.play_cover_btn, self.play_stego_btn):
+            btn.setEnabled(False)
+            btn.setStyleSheet("QPushButton { background-color: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 5px; }")
+        self.play_cover_btn.clicked.connect(self.play_cover_audio)
+        self.play_stego_btn.clicked.connect(self.play_stego_audio)
+        audio_play_layout.addWidget(self.play_cover_btn)
+        audio_play_layout.addWidget(self.play_stego_btn)
+        layout.addWidget(audio_play_group)
         layout.addStretch()
 
         return panel
+
+    def _update_capacity_visuals(self, max_bytes: int, available_bytes: int):
+        """Update progress bar and status pill for capacity usage."""
+        try:
+            need = self.current_payload_len()
+            # Progress proportion: show portion of available used; clamp to show overflow as 100%
+            denom = max(available_bytes, need, 1)
+            self.cap_usage_bar.setRange(0, denom)
+            self.cap_usage_bar.setValue(need)
+            # Text shows exact numbers
+            self.cap_usage_bar.setFormat(f"Need: {need} bytes  |  Available: {available_bytes} bytes")
+            # Style/state
+            if available_bytes <= 0:
+                chunk = "#bdc3c7"  # gray
+                status_css = "QLabel{background:#eceff1;color:#546e7a;border-radius:10px;padding:4px 8px;font-weight:bold;}"
+                status_txt = "No capacity"
+            else:
+                ratio = need / available_bytes if available_bytes else 1.0
+                if need > available_bytes:
+                    chunk = "#e74c3c"  # red
+                    status_css = "QLabel{background:#fdecea;color:#c62828;border-radius:10px;padding:4px 8px;font-weight:bold;}"
+                    status_txt = "Too large"
+                elif ratio >= 0.9:
+                    chunk = "#f1c40f"  # yellow
+                    status_css = "QLabel{background:#fff8e1;color:#ff8f00;border-radius:10px;padding:4px 8px;font-weight:bold;}"
+                    status_txt = "Near limit"
+                else:
+                    chunk = "#2ecc71"  # green
+                    status_css = "QLabel{background:#eafaf1;color:#2e7d32;border-radius:10px;padding:4px 8px;font-weight:bold;}"
+                    status_txt = "Fits"
+            self.cap_usage_bar.setStyleSheet(
+                "QProgressBar{border:1px solid #bdc3c7;border-radius:6px;background:#ecf0f1;text-align:center;}"
+                f"QProgressBar::chunk{{background-color:{chunk};border-radius:6px;}}"
+            )
+            self.cap_status.setStyleSheet(status_css)
+            self.cap_status.setText(status_txt)
+        except Exception:
+            pass
 
     def create_shadow_effect(self):
         """Create a shadow effect for panels"""
@@ -1309,6 +1726,57 @@ class StegaEncodeWindow(QMainWindow):
         self.lsb_value_label.setText(f"LSB Bits: {value}")
         # Update machine with new LSB value
         self.machine.set_lsb_bits(value)
+        # Recompute capacity when LSB changes
+        try:
+            self.update_capacity_panel()
+        except Exception:
+            pass
+
+    def show_persistent_notice(self, message: str, severity: str = 'info'):
+        """Display a persistent banner at the top of the window."""
+        try:
+            banner = NotificationBanner(message, severity, self)
+            # Auto-remove when closed
+            try:
+                banner.closed.connect(lambda: None)
+            except Exception:
+                pass
+            self.notice_container.addWidget(banner)
+            banner.show()
+        except Exception as e:
+            print(f"Failed to show banner: {e}")
+
+    def _set_overflow_banner(self, message: str | None):
+        """Create/update/clear the capacity overflow persistent banner."""
+        try:
+            # Create/update
+            if message:
+                if self._overflow_banner is None:
+                    banner = NotificationBanner(message, 'error', self)
+                    def _on_closed():
+                        try:
+                            self._overflow_banner = None
+                        except Exception:
+                            pass
+                    try:
+                        banner.closed.connect(_on_closed)
+                    except Exception:
+                        pass
+                    self.notice_container.addWidget(banner)
+                    banner.show()
+                    self._overflow_banner = banner
+                else:
+                    self._overflow_banner.setText(message)
+            else:
+                # Clear existing
+                if self._overflow_banner is not None:
+                    try:
+                        self._overflow_banner._on_close()
+                    except Exception:
+                        pass
+                    self._overflow_banner = None
+        except Exception as e:
+            print(f"Failed to manage overflow banner: {e}")
 
     def on_media_loaded(self, file_path, media_type):
         """Handle media loaded from drag and drop or browse"""
@@ -1316,19 +1784,128 @@ class StegaEncodeWindow(QMainWindow):
             return
 
         print(f"Media loaded: {file_path} ({media_type})")
+        self.media_type = media_type
+        self.start_xy = None
 
         # Update machine with media
         if media_type == 'image':
+            # Handle JPEG prompt and GIF frame 0 conversion
+            ext = os.path.splitext(file_path)[1].lower()
+            convert_path = None
+            if ext in ['.jpg', '.jpeg']:
+                from PyQt6.QtWidgets import QMessageBox
+                resp = QMessageBox.question(self, "Convert JPEG to PNG?",
+                                            "JPEG is lossy and will not preserve LSBs reliably. Convert to PNG for lossless embedding?",
+                                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                            QMessageBox.StandardButton.Yes)
+                if resp == QMessageBox.StandardButton.Yes:
+                    try:
+                        img = Image.open(file_path)
+                        if img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        base, _ = os.path.splitext(file_path)
+                        convert_path = base + "_lossless.png"
+                        img.save(convert_path, format='PNG')
+                        file_path = convert_path
+                    except Exception as e:
+                        print(f"JPEG->PNG conversion failed: {e}")
+            elif ext == '.gif':
+                try:
+                    img = Image.open(file_path)
+                    try:
+                        img.seek(0)
+                    except Exception:
+                        pass
+                    if img.mode != 'RGB':
+                        img = img.convert('RGB')
+                    base, _ = os.path.splitext(file_path)
+                    convert_path = base + "_frame0.png"
+                    img.save(convert_path, format='PNG')
+                    file_path = convert_path
+                except Exception as e:
+                    print(f"GIF frame0 conversion failed: {e}")
+
             if self.machine.set_cover_image(file_path):
                 info = self.machine.get_image_info()
                 print(f"✅ Image loaded: {os.path.basename(file_path)}")
                 print(f"Size: {info.get('dimensions', 'Unknown')}")
                 print(f"Capacity: {info.get('max_capacity_bytes', 0)} bytes")
+                # connect to pixel selection if available
+                if self.media_drop_widget.preview_widget and hasattr(self.media_drop_widget.preview_widget, 'pixel_selected'):
+                    try:
+                        self.media_drop_widget.preview_widget.pixel_selected.connect(self.on_start_pixel_selected)
+                    except Exception:
+                        pass
+                self.update_capacity_panel()
+                # Reset visualization toggle
+                if hasattr(self, 'lsb_toggle_btn'):
+                    self.lsb_toggle_btn.setChecked(False)
+                if hasattr(self, 'diff_toggle_btn'):
+                    self.diff_toggle_btn.setChecked(False)
+                    self.diff_toggle_btn.setEnabled(False)
             else:
                 print("❌ Error loading image")
-        else:
-            # For audio and video, we'll need to extend the machine
-            print(f"✅ {media_type.upper()} loaded: {os.path.basename(file_path)}")
+        elif media_type == 'audio':
+            # WAV PCM
+            if self.machine.set_cover_audio(file_path):
+                try:
+                    self.audio_info = self.machine.get_audio_info(file_path)
+                    print(f"✅ WAV loaded: {os.path.basename(file_path)}  {self.audio_info}")
+                except Exception as e:
+                    print(f"Error reading audio info: {e}")
+                    self.audio_info = None
+                # connect time selection
+                if self.media_drop_widget.preview_widget and hasattr(self.media_drop_widget.preview_widget, 'time_selected'):
+                    try:
+                        self.media_drop_widget.preview_widget.time_selected.connect(self.on_audio_time_selected)
+                    except Exception:
+                        pass
+                # Enable cover play
+                if hasattr(self, 'play_cover_btn'):
+                    self.play_cover_btn.setEnabled(True)
+                self.update_capacity_panel()
+            else:
+                print("❌ Error loading audio")
+        elif media_type == 'video':
+            # Probe metadata and enable lossless embed path
+            try:
+                cap = cv2.VideoCapture(file_path)
+                if not cap.isOpened():
+                    raise RuntimeError("Cannot open video")
+                frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                fps = cap.get(cv2.CAP_PROP_FPS) or 24
+                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cap.release()
+                self.video_meta = {'frames': frames, 'w': w, 'h': h, 'fps': float(fps)}
+                self.cap_dims.setText(f"Video: {frames}f, {w}x{h}, {int(fps)}fps")
+                # init frame slider and start tuple
+                if hasattr(self, 'video_frame_slider'):
+                    self.video_frame_slider.setMaximum(max(0, frames - 1))
+                    self.video_frame_slider.setValue(0)
+                self.video_start = (0, 0, 0)
+                if hasattr(self, 'video_pos_label'):
+                    self.video_pos_label.setText("Frame: 0, X: 0, Y: 0")
+                # connect preview frame selection if available
+                if self.media_drop_widget.preview_widget and hasattr(self.media_drop_widget.preview_widget, 'frame_selected'):
+                    try:
+                        self.media_drop_widget.preview_widget.frame_selected.connect(self.on_video_frame_changed)
+                    except Exception:
+                        pass
+                # connect XY selection from preview if available
+                if self.media_drop_widget.preview_widget and hasattr(self.media_drop_widget.preview_widget, 'xy_selected'):
+                    try:
+                        self.media_drop_widget.preview_widget.xy_selected.connect(self.on_video_xy_selected)
+                    except Exception:
+                        pass
+                # Allow embedding now that we will write lossless AVI
+                if hasattr(self, 'hide_button'):
+                    self.hide_button.setEnabled(True)
+            except Exception as e:
+                print(f"Video probe failed: {e}")
+                if hasattr(self, 'hide_button'):
+                    self.hide_button.setEnabled(False)
+            self.update_capacity_panel()
 
     def on_payload_file_loaded(self, file_path):
         """Handle payload file loaded from drag and drop or browse"""
@@ -1341,6 +1918,7 @@ class StegaEncodeWindow(QMainWindow):
         # Update machine with payload file
         if self.machine.set_payload_file(file_path):
             print(f"✅ Payload file loaded: {os.path.basename(file_path)}")
+            self.update_capacity_panel()
         else:
             print("❌ Error loading payload file")
 
@@ -1351,19 +1929,34 @@ class StegaEncodeWindow(QMainWindow):
 
     def choose_output_path(self):
         """Choose output path"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Steganographic Image", "",
-            "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)"
-        )
+        if self.media_type == 'audio':
+            title = "Save Steganographic Audio"
+            filt = "WAV Files (*.wav);;All Files (*)"
+            default_name = "stego_output.wav"
+        elif self.media_type == 'video':
+            title = "Save Steganographic Video"
+            filt = "AVI Files (*.avi);;All Files (*)"
+            default_name = "stego_output.avi"
+        else:
+            title = "Save Steganographic Image"
+            filt = "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)"
+            default_name = "stego_output.png"
+        file_path, _ = QFileDialog.getSaveFileName(self, title, default_name, filt)
         if file_path:
             self.output_path.setText(file_path)
             self.machine.set_output_path(file_path)
 
     def hide_message(self):
         """Hide message in the cover image"""
+        from PyQt6.QtWidgets import QMessageBox
         # Update machine with current GUI values
         self.machine.set_lsb_bits(self.lsb_slider.value())
         self.machine.set_encryption_key(self.key_input.text())
+
+        # Validate key
+        if not self.key_input.text().strip().isdigit():
+            QMessageBox.warning(self, "Key required", "Please enter a numeric key.")
+            return
 
         # Set payload from text if provided
         if self.message_text.toPlainText().strip():
@@ -1376,13 +1969,467 @@ class StegaEncodeWindow(QMainWindow):
             self.output_path.setText(default_path)
             self.machine.set_output_path(default_path)
 
-        # Perform steganography
-        if self.machine.hide_message():
+        # Route by media type
+        if self.media_type == 'image':
+            if self.start_xy is None:
+                QMessageBox.information(self, "Start required", "Click the image to select a start pixel.")
+                return
+            ok = self.machine.hide_message(start_xy=self.start_xy)
+        elif self.media_type == 'audio':
+            # Ensure payload set from text if any
+            # Default output path
+            if not self.output_path.text().strip():
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                default_path = f"stego_output_{timestamp}.wav"
+                self.output_path.setText(default_path)
+                self.machine.set_output_path(default_path)
+            # derive start_sample
+            start_sample = self.start_sample if self.start_sample is not None else 0
+            try:
+                filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.bin"
+                audio_bytes = self.machine.encode_audio(self.media_drop_widget.media_path, self.machine.payload_data or b"", filename, self.lsb_slider.value(), self.key_input.text(), start_sample=start_sample)
+                # save
+                with open(self.output_path.text(), 'wb') as f:
+                    f.write(audio_bytes)
+                ok = True
+            except Exception as e:
+                print(f"Audio encode failed: {e}")
+                ok = False
+        elif self.media_type == 'video':
+            # Default output for video if none
+            if not self.output_path.text().strip():
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                default_path = f"stego_output_{timestamp}.avi"
+                self.output_path.setText(default_path)
+                self.machine.set_output_path(default_path)
+            try:
+                filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.bin"
+                f, x, y = self.video_start
+                outp = self.machine.encode_video(self.media_drop_widget.media_path, self.machine.payload_data or b"", filename, self.lsb_slider.value(), self.key_input.text(), start_fxy=(f, x, y), out_path=self.output_path.text())
+                ok = True if outp else False
+            except Exception as e:
+                print(f"Video encode failed: {e}")
+                ok = False
+        else:
+            QMessageBox.warning(self, "Unsupported", "Embedding into compressed video is not supported. Please use an image or WAV.")
+            return
+
+        # Post-result handling
+        if ok:
             print("✅ Steganography completed successfully!")
-            # TODO: Show success message in GUI
+            QMessageBox.information(self, "Success", f"Saved: {self.machine.output_path}")
+            # Update proof panel from machine.last_embed_info
+            info = getattr(self.machine, 'last_embed_info', None)
+            if info:
+                self.proof_lsb.setText(f"LSB bits: {info.get('lsb_bits')}")
+                self.proof_start.setText(f"Start bit: {info.get('start_bit')}")
+                perm = info.get('perm', [])
+                self.proof_perm.setText(f"Perm [0:8]: {perm[:8]}")
+                hdr = info.get('header', {})
+                self.proof_header.setText(
+                    f"Header: ver={hdr.get('version')} lsb={hdr.get('lsb_bits')} start={hdr.get('start_bit_offset')} len={hdr.get('payload_len')} fname='{hdr.get('filename')}' crc=0x{hdr.get('crc32'):08X}"
+                )
+                # Draw mini visualization of permutation (first 8 positions)
+                try:
+                    n = min(8, len(perm))
+                    if n > 0:
+                        w, h = 8 * 18, 18
+                        pm = QPixmap(w, h)
+                        pm.fill(Qt.GlobalColor.transparent)
+                        p = QPainter(pm)
+                        for i in range(n):
+                            val = int(perm[i]) if isinstance(perm[i], (int, float)) else 0
+                            # Map val 0-7 to a hue
+                            hue = (val % 8) / 8.0
+                            color = QColor.fromHsvF(hue, 0.7, 0.9)
+                            p.fillRect(i * 18 + 1, 1, 16, 16, color)
+                            p.setPen(QPen(QColor(255, 255, 255)))
+                            p.drawText(i * 18 + 1, 1, 16, 16, Qt.AlignmentFlag.AlignCenter, str(val))
+                        p.end()
+                        self.perm_vis.setPixmap(pm)
+                except Exception:
+                    pass
+            # Enable diff toggle for images when stego exists
+            if self.media_type == 'image' and hasattr(self, 'diff_toggle_btn'):
+                out = self.output_path.text().strip()
+                self.diff_toggle_btn.setEnabled(bool(out and os.path.exists(out)))
+            # Enable stego playback button for audio
+            if self.media_type == 'audio' and hasattr(self, 'play_stego_btn'):
+                self.play_stego_btn.setEnabled(True)
         else:
             print("❌ Steganography failed!")
-            # TODO: Show error message in GUI
+            QMessageBox.critical(self, "Failed", "Steganography failed. See console for details.")
+
+    def on_start_pixel_selected(self, x, y):
+        self.start_xy = (x, y)
+        try:
+            self.update_capacity_panel()
+        except Exception:
+            pass
+
+    def on_lsb_toggle(self, checked: bool):
+        # Only for images/audio with a preview
+        if not hasattr(self, 'media_drop_widget') or not self.media_drop_widget.media_path:
+            return
+        if self.media_type == 'image':
+            if not self.media_drop_widget.preview_widget or not hasattr(self.media_drop_widget.preview_widget, 'pixmap_item'):
+                return
+            if checked:
+                # Show image LSB plane
+                try:
+                    from machine.stega_encode_machine import StegaEncodeMachine
+                    lsb_img = StegaEncodeMachine.lsb_plane_image_from_path(self.media_drop_widget.media_path, 0)
+                    qimg = QImage(lsb_img.tobytes(), lsb_img.size[0], lsb_img.size[1], lsb_img.width * 3, QImage.Format.Format_RGB888)
+                    pm = QPixmap.fromImage(qimg)
+                    self.media_drop_widget.preview_widget.pixmap_item.setPixmap(pm)
+                except Exception as e:
+                    print(f"Failed to show LSB plane: {e}")
+            else:
+                # Restore original image preview
+                try:
+                    pm = QPixmap(self.media_drop_widget.media_path)
+                    self.media_drop_widget.preview_widget.pixmap_item.setPixmap(pm)
+                except Exception as e:
+                    print(f"Failed to restore original preview: {e}")
+        elif self.media_type == 'audio' and checked:
+            # Compute a simple LSB density summary
+            try:
+                import wave, numpy as np
+                with wave.open(self.media_drop_widget.media_path, 'rb') as wf:
+                    frames = wf.readframes(min(wf.getnframes(), 200000))
+                arr = np.frombuffer(frames, dtype=np.uint8)
+                lsb = self.lsb_slider.value()
+                mask = (1 << 1) - 1  # LSB only summary
+                ones = int(((arr & mask) != 0).sum())
+                pct = ones / arr.size * 100 if arr.size else 0
+                self.proof_header.setText(f"Audio LSB density (first chunk): {pct:.2f}% ones")
+            except Exception as e:
+                print(f"Failed to compute audio LSB density: {e}")
+            # Restore original image preview
+            try:
+                pm = QPixmap(self.media_drop_widget.media_path)
+                self.media_drop_widget.preview_widget.pixmap_item.setPixmap(pm)
+            except Exception as e:
+                print(f"Failed to restore original preview: {e}")
+
+    def current_payload_len(self) -> int:
+        if self.machine.payload_data:
+            return len(self.machine.payload_data)
+        txt = self.message_text.toPlainText().encode('utf-8') if self.message_text.toPlainText() else b""
+        return len(txt)
+
+    def update_capacity_panel(self):
+        if self.media_type == 'video' and hasattr(self.media_drop_widget, 'media_path') and self.media_drop_widget.media_path:
+            try:
+                lsb = self.lsb_slider.value()
+                filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.bin"
+                header_meta = HeaderMeta(lsb_bits=lsb, start_bit_offset=0, payload_len=self.current_payload_len(), filename=filename, crc32=0)
+                try:
+                    header_bytes = self.machine.pack_header(header_meta)
+                except Exception:
+                    header_bytes = b""
+                header_bits = len(header_bytes) * 8
+                f, x, y = self.video_start
+                total_bits = self.machine.estimate_capacity_bits(self.media_drop_widget.media_path, 'video', lsb, (f, x, y))
+                max_bytes = total_bits // 8
+                self.available_bytes = max(0, (total_bits - header_bits) // 8)
+                # Compute start bit offset if we know video dimensions
+                if self.video_meta:
+                    w = self.video_meta.get('w', 0)
+                    h = self.video_meta.get('h', 0)
+                    start_bit = ((f * (w * h) + y * w + x) * 3 * max(1, lsb)) if (w and h) else 0
+                    self.cap_startbits.setText(f"Start bit offset: {start_bit}")
+                self.cap_lsb.setText(f"LSB bits: {lsb}")
+                self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
+                self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
+                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                try:
+                    self._update_capacity_visuals(max_bytes, self.available_bytes)
+                except Exception:
+                    pass
+                too_large = self.current_payload_len() > self.available_bytes if header_bytes else False
+                if hasattr(self, 'hide_button'):
+                    self.hide_button.setEnabled(not too_large)
+                # Notify user if payload is too big
+                if too_large:
+                    msg = f"Payload too large. Available: {_human_size(self.available_bytes)}, Need: {_human_size(self.current_payload_len())}"
+                    try:
+                        QToolTip.showText(QCursor.pos(), msg, self)
+                    except Exception:
+                        pass
+                    try:
+                        self.cap_avail.setToolTip(msg)
+                        self.cap_avail.setStyleSheet("color:#e74c3c;")
+                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+                    except Exception:
+                        pass
+                    # Persistent banner
+                    try:
+                        self._set_overflow_banner(msg)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.cap_avail.setToolTip("")
+                        self.cap_avail.setStyleSheet("color:#2c3e50;")
+                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                    except Exception:
+                        pass
+                    try:
+                        self._set_overflow_banner(None)
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"Video capacity update failed: {e}")
+            return
+        # Default reset
+        self.cap_dims.setText("Cover: -")
+        self.cap_lsb.setText(f"LSB bits: {self.lsb_slider.value()}")
+        self.cap_header.setText("Header bytes: -")
+        self.cap_max.setText("Capacity (bytes): -")
+        self.cap_avail.setText("Available bytes: -")
+        try:
+            self._update_capacity_visuals(0, 0)
+        except Exception:
+            pass
+        if hasattr(self, 'hide_button'):
+            self.hide_button.setEnabled(True)
+
+        if self.media_type == 'video':
+            self.cap_dims.setText("Video: N/A (compressed stream)")
+            self.cap_max.setText("Capacity: N/A")
+            if hasattr(self, 'hide_button'):
+                self.hide_button.setEnabled(False)
+            return
+
+        if self.media_type == 'audio' and self.machine.cover_audio_path:
+            # Audio capacity
+            try:
+                info = self.audio_info or {}
+                ch = info.get('channels', '-')
+                sr = info.get('sample_rate', '-')
+                bits = info.get('sampwidth_bits', '-')
+                dur = info.get('duration', 0.0)
+                self.cap_dims.setText(f"WAV: {ch}ch, {sr}Hz, {bits}-bit, {dur:.2f}s")
+                lsb = self.lsb_slider.value()
+                filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.bin"
+                header_meta = HeaderMeta(lsb_bits=lsb, start_bit_offset=0, payload_len=self.current_payload_len(), filename=filename, crc32=0)
+                try:
+                    header_bytes = self.machine.pack_header(header_meta)
+                except Exception:
+                    header_bytes = b""
+                header_bits = len(header_bytes) * 8
+                start_sample = self.start_sample if self.start_sample is not None else 0
+                total_bits = self.machine.estimate_capacity_bits(self.media_drop_widget.media_path, 'audio', lsb, start_sample)
+                max_bytes = total_bits // 8
+                self.available_bytes = max(0, (total_bits - header_bits) // 8)
+                self.cap_lsb.setText(f"LSB bits: {lsb}")
+                self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
+                self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
+                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                try:
+                    self._update_capacity_visuals(max_bytes, self.available_bytes)
+                except Exception:
+                    pass
+                too_large = self.current_payload_len() > self.available_bytes if header_bytes else False
+                if hasattr(self, 'hide_button'):
+                    self.hide_button.setEnabled(not too_large)
+                if too_large:
+                    msg = f"Payload too large. Available: {_human_size(self.available_bytes)}, Need: {_human_size(self.current_payload_len())}"
+                    try:
+                        QToolTip.showText(QCursor.pos(), msg, self)
+                    except Exception:
+                        pass
+                    try:
+                        self.cap_avail.setToolTip(msg)
+                        self.cap_avail.setStyleSheet("color:#e74c3c;")
+                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+                    except Exception:
+                        pass
+                    try:
+                        self._set_overflow_banner(msg)
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        self.cap_avail.setToolTip("")
+                        self.cap_avail.setStyleSheet("color:#2c3e50;")
+                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                    except Exception:
+                        pass
+                    try:
+                        self._set_overflow_banner(None)
+                    except Exception:
+                        pass
+            except Exception as e:
+                print(f"Audio capacity update failed: {e}")
+            return
+
+        if self.media_type != 'image' or not self.machine.cover_image:
+            return
+
+        img = self.machine.cover_image
+        h, w = img.size[1], img.size[0]
+        channels = 3
+        lsb = self.lsb_slider.value()
+        total_bits = w * h * channels * lsb
+
+        # Header size (depends on filename length)
+        filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.txt"
+        header_meta = HeaderMeta(lsb_bits=lsb, start_bit_offset=0, payload_len=self.current_payload_len(), filename=filename, crc32=0)
+        try:
+            header_bytes = self.machine.pack_header(header_meta)
+        except Exception:
+            header_bytes = b""
+        header_bits = len(header_bytes) * 8
+
+        if self.start_xy is not None:
+            x, y = self.start_xy
+            pixel_index = y * w + x
+            start_bit = pixel_index * channels * lsb
+            self.cap_startbits.setText(f"Start bit offset: {start_bit}")
+        else:
+            start_bit = 0
+            self.cap_startbits.setText("Start bit offset: 0")
+
+        usable_bits = max(0, total_bits - start_bit)
+        max_bytes = usable_bits // 8
+        self.available_bytes = max(0, (usable_bits - header_bits) // 8)
+
+        self.cap_dims.setText(f"Cover: {w}x{h}x{channels}")
+        self.cap_lsb.setText(f"LSB bits: {lsb}")
+        self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
+        self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
+        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+        try:
+            self._update_capacity_visuals(max_bytes, self.available_bytes)
+        except Exception:
+            pass
+
+        too_large = self.current_payload_len() > self.available_bytes if header_bytes else False
+        if hasattr(self, 'hide_button'):
+            self.hide_button.setEnabled(not too_large)
+        # Notify on overflow
+        if too_large:
+            msg = f"Payload too large. Available: {_human_size(self.available_bytes)}, Need: {_human_size(self.current_payload_len())}"
+            try:
+                QToolTip.showText(QCursor.pos(), msg, self)
+            except Exception:
+                pass
+            try:
+                self.cap_avail.setToolTip(msg)
+                self.cap_avail.setStyleSheet("color:#e74c3c;")
+                self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+            except Exception:
+                pass
+            try:
+                self._set_overflow_banner(msg)
+            except Exception:
+                pass
+        else:
+            try:
+                self.cap_avail.setToolTip("")
+                self.cap_avail.setStyleSheet("color:#2c3e50;")
+                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+            except Exception:
+                pass
+            try:
+                self._set_overflow_banner(None)
+            except Exception:
+                pass
+
+    def on_diff_toggle(self, checked: bool):
+        # Only for images with a saved stego output
+        if self.media_type != 'image':
+            return
+        out = self.output_path.text().strip()
+        if not (out and os.path.exists(out)):
+            self.diff_toggle_btn.setChecked(False)
+            return
+        # Require an image preview widget
+        if not (self.media_drop_widget.preview_widget and hasattr(self.media_drop_widget.preview_widget, 'pixmap_item')):
+            return
+        try:
+            cover_path = self.media_drop_widget.media_path
+            stego_path = out
+            cov = Image.open(cover_path)
+            stg = Image.open(stego_path)
+            if cov.mode != 'RGB':
+                cov = cov.convert('RGB')
+            if stg.mode != 'RGB':
+                stg = stg.convert('RGB')
+            a = np.array(cov, dtype=np.uint8)
+            b = np.array(stg, dtype=np.uint8)
+            lsb = max(1, self.lsb_slider.value())
+            mask = (1 << lsb) - 1
+            diff = (a ^ b) & mask
+            scale = 255 // mask if mask else 255
+            vis = (diff * scale).astype(np.uint8)
+            qimg = QImage(vis.data, vis.shape[1], vis.shape[0], vis.shape[1]*3, QImage.Format.Format_RGB888)
+            pm = QPixmap.fromImage(qimg)
+            if checked:
+                self.media_drop_widget.preview_widget.pixmap_item.setPixmap(pm)
+            else:
+                # Restore original preview
+                orig = QPixmap(cover_path)
+                self.media_drop_widget.preview_widget.pixmap_item.setPixmap(orig)
+        except Exception as e:
+            print(f"Failed to show diff map: {e}")
+
+    def on_audio_time_selected(self, t: float):
+        # Convert time to start_sample
+        try:
+            if self.audio_info and self.audio_info.get('sample_rate'):
+                sr = int(self.audio_info['sample_rate'])
+                self.start_sample = int(max(0.0, t) * sr)
+            else:
+                self.start_sample = 0
+            self.update_capacity_panel()
+        except Exception:
+            pass
+
+    def play_cover_audio(self):
+        # Open cover WAV in default player
+        try:
+            from PyQt6.QtGui import QDesktopServices
+            if self.media_drop_widget and self.media_drop_widget.media_path:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(self.media_drop_widget.media_path))
+        except Exception as e:
+            print(f"Failed to open cover audio: {e}")
+
+    def play_stego_audio(self):
+        try:
+            from PyQt6.QtGui import QDesktopServices
+            out = self.output_path.text().strip()
+            if out and os.path.exists(out):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(out))
+        except Exception as e:
+            print(f"Failed to open stego audio: {e}")
+
+    def on_video_frame_changed(self, value: int):
+        # Update start frame; TODO: add X,Y from clicks on video preview
+        try:
+            f, x, y = self.video_start
+        except Exception:
+            f, x, y = 0, 0, 0
+        self.video_start = (int(value), x, y)
+        if hasattr(self, 'video_pos_label'):
+            self.video_pos_label.setText(f"Frame: {int(value)}, X: {x}, Y: {y}")
+        try:
+            self.update_capacity_panel()
+        except Exception:
+            pass
+
+    def on_video_xy_selected(self, frame: int, x: int, y: int):
+        # Update start frame and XY from click
+        self.video_start = (int(frame), int(x), int(y))
+        print(f"[Window] video xy selected -> frame={frame}, x={x}, y={y}")
+        if hasattr(self, 'video_pos_label'):
+            self.video_pos_label.setText(f"Frame: {int(frame)}, X: {int(x)}, Y: {int(y)}")
+        try:
+            self.update_capacity_panel()
+        except Exception:
+            pass
 
     def go_back(self):
         """Go back to main window"""
