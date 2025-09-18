@@ -291,17 +291,27 @@ class StegaDecodeMachine:
                 return f"{timestamp}_extracted.bin"
 
             if self.output_path and self.output_path.strip():
-                chosen_dir = os.path.dirname(self.output_path)
-                chosen_base = os.path.basename(self.output_path)
-                name, ext = os.path.splitext(chosen_base)
-                # If no extension, treat as a directory/name base and attach datetime.<suggested>
-                if not ext:
-                    base_dir = chosen_dir if chosen_dir else os.getcwd()
+                # If the provided path is a directory, save inside it
+                if os.path.isdir(self.output_path):
+                    base_dir = self.output_path
                     final_name = build_final_name(suggested_filename)
                     output_path = os.path.join(base_dir, final_name)
                 else:
-                    # Explicit filename with extension provided by user; honor exactly
-                    output_path = self.output_path
+                    chosen_dir = os.path.dirname(self.output_path)
+                    chosen_base = os.path.basename(self.output_path)
+                    name, ext = os.path.splitext(chosen_base)
+                    # If no extension, treat as a directory/name base and attach datetime.<suggested>
+                    if not ext:
+                        # If user typed a folder-like path, prefer saving under that folder name
+                        candidate_dir = os.path.join(chosen_dir, chosen_base) if chosen_dir else chosen_base
+                        base_dir = candidate_dir if candidate_dir else os.getcwd()
+                        if not os.path.exists(base_dir):
+                            os.makedirs(base_dir, exist_ok=True)
+                        final_name = build_final_name(suggested_filename)
+                        output_path = os.path.join(base_dir, final_name)
+                    else:
+                        # Explicit filename with extension provided by user; honor exactly
+                        output_path = self.output_path
             elif suggested_filename:
                 stego_dir = os.path.dirname(self.stego_image_path) or ''
                 final_name = build_final_name(suggested_filename)
