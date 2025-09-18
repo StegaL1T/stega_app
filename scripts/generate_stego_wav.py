@@ -4,10 +4,11 @@ import hashlib
 import random
 import struct
 import zlib
+import wave
+import io
 from typing import Optional
 
 import numpy as np
-from PIL import Image
 
 
 def rng_from_key_and_filename(key: str, filename_bytes: bytes) -> random.Random:
@@ -28,7 +29,7 @@ def build_header_v1(lsb_bits: int, payload: bytes, suggested_filename: Optional[
     return b''.join([magic, version, lsb, start, length, fname_len, fname_bytes, crc32])
 
 
-def write_bits_into_image(flat_bytes: np.ndarray, lsb_bits: int, start_bit: int, bit_order: list[int], bits: bytes) -> None:
+def write_bits_into_bytes(flat_bytes: np.ndarray, lsb_bits: int, start_bit: int, bit_order: list[int], bits: bytes) -> None:
     total_lsb_bits = flat_bytes.size * lsb_bits
 
     def bit_stream():
@@ -50,36 +51,42 @@ def write_bits_into_image(flat_bytes: np.ndarray, lsb_bits: int, start_bit: int,
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate a stego PNG for decoder testing (header v1, with start offset).')
-    parser.add_argument('--cover', required=True, help='Path to cover image (PNG, BMP, etc.).')
+    parser = argparse.ArgumentParser(description='Generate a stego WAV for decoder testing (header v1, with start offset).')
+    parser.add_argument('--cover', required=True, help='Path to cover WAV (PCM, uncompressed).')
     parser.add_argument('--payload', required=True, help='Path to payload file (any binary).')
     parser.add_argument('--key', required=True, help='Numeric key used for PRNG.')
     parser.add_argument('--lsb', type=int, default=1, help='Number of LSBs to use (1-8).')
-    parser.add_argument('--out', required=True, help='Output stego PNG path.')
-    parser.add_argument('--diff', action='store_true', help='Also save a difference map PNG next to output.')
+    parser.add_argument('--out', required=True, help='Output stego WAV path.')
     args = parser.parse_args()
 
     if not (1 <= args.lsb <= 8):
         raise SystemExit('lsb must be between 1 and 8')
 
     if not os.path.exists(args.cover):
-        raise SystemExit(f'Cover image not found: {args.cover}')
+        raise SystemExit(f'Cover WAV not found: {args.cover}')
     if not os.path.exists(args.payload):
         raise SystemExit(f'Payload file not found: {args.payload}')
 
-    # Load inputs
+    # Load payload
     with open(args.payload, 'rb') as f:
         payload = f.read()
     suggested_filename = os.path.basename(args.payload)
 
-    img = Image.open(args.cover)
-    if img.mode != 'RGB':
-        img = img.convert('RGB')
-    arr = np.array(img, dtype=np.uint8)
-    flat = arr.reshape(-1)
+    # Open WAV
+    with wave.open(args.cover, 'rb') as wf:
+        n_channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        framerate = wf.getframerate()
+        n_frames = wf.getnframes()
+        comptype = wf.getcomptype()
+        if comptype not in ('NONE', 'not compressed'):
+            raise SystemExit(f'Unsupported WAV compression: {comptype}')
+        frames = wf.readframes(n_frames)
+        params = wf.getparams()
 
-    # Build header
-    # We need header length to pick start, but header includes start; so we build a placeholder with 0 then recompute
+    flat = np.frombuffer(frames, dtype=np.uint8).copy()
+
+    # Build header placeholder
     tmp_header = build_header_v1(args.lsb, payload, suggested_filename, 0)
     header_bits = len(tmp_header) * 8
 
@@ -91,8 +98,7 @@ def main():
 
     fname_bytes = suggested_filename.encode('utf-8')[:100]
     rng = rng_from_key_and_filename(args.key, fname_bytes)
-    safety_margin = 0
-    start_bit = rng.randrange(0, total_lsb_bits - required_bits - safety_margin)
+    start_bit = rng.randrange(0, total_lsb_bits - required_bits)
 
     # Bit order permutation
     bit_order = list(range(args.lsb))
@@ -100,33 +106,23 @@ def main():
 
     # Embed header then payload
     header = build_header_v1(args.lsb, payload, suggested_filename, start_bit)
-    write_bits_into_image(flat, args.lsb, start_bit, bit_order, header)
-    write_bits_into_image(flat, args.lsb, start_bit + len(header) * 8, bit_order, payload)
+    write_bits_into_bytes(flat, args.lsb, start_bit, bit_order, header)
+    write_bits_into_bytes(flat, args.lsb, start_bit + len(header) * 8, bit_order, payload)
 
-    # Save stego image (PNG)
-    stego = flat.reshape(arr.shape)
-    out_img = Image.fromarray(stego, mode='RGB')
+    # Save WAV
+    out_buf = io.BytesIO()
+    with wave.open(out_buf, 'wb') as ww:
+        ww.setparams(params)
+        ww.writeframes(flat.tobytes())
+    out_bytes = out_buf.getvalue()
     out_dir = os.path.dirname(args.out)
     if out_dir and not os.path.isdir(out_dir):
         os.makedirs(out_dir, exist_ok=True)
-    out_img.save(args.out, format='PNG')
-    print(f'Wrote stego PNG to {args.out}')
+    with open(args.out, 'wb') as f:
+        f.write(out_bytes)
+    print(f'Wrote stego WAV to {args.out}')
     print(f'Header bytes: {len(header)}  Payload bytes: {len(payload)}  Start bit: {start_bit}')
-
-    if args.diff:
-        # Create a visual diff map of changed LSBs
-        stego_arr = np.array(out_img, dtype=np.uint8)
-        diff = (arr ^ stego_arr) & ((1 << max(1, args.lsb)) - 1)
-        # Amplify for visibility
-        scale = 255 // ((1 << max(1, args.lsb)) - 1)
-        diff_vis = (diff * scale).astype(np.uint8)
-        diff_img = Image.fromarray(diff_vis, mode='RGB')
-        diff_path = os.path.splitext(args.out)[0] + '_diff.png'
-        diff_img.save(diff_path)
-        print(f'Saved difference map to {diff_path}')
 
 
 if __name__ == '__main__':
     main()
-
-
