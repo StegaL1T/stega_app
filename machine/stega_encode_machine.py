@@ -730,21 +730,43 @@ class StegaEncodeMachine:
         return frames, float(fps)
 
     @staticmethod
-    def _write_video_rgb24(frames_rgb: List[np.ndarray], fps: float, out_path: str) -> None:
+    def _write_video_rgb24(frames_rgb: List[np.ndarray], fps: float, out_path: str) -> str:
         h, w, _ = frames_rgb[0].shape
         # Try uncompressed AVI via DIB 'DIB '
-        fourcc = cv2.VideoWriter_fourcc('D', 'I', 'B', ' ')
-        writer = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
-        if not writer.isOpened():
+        tried = []
+        def _try_write(fourcc_code: Tuple[str, str, str, str], path: str) -> bool:
+            tried.append(''.join(fourcc_code))
+            fourcc = cv2.VideoWriter_fourcc(*fourcc_code)
+            writer = cv2.VideoWriter(path, fourcc, fps, (w, h))
+            if not writer.isOpened():
+                writer.release()
+                return False
+            for fr in frames_rgb:
+                if fr.shape[0] != h or fr.shape[1] != w:
+                    writer.release()
+                    raise ValidationError("All frames must have identical dimensions")
+                bgr = cv2.cvtColor(fr, cv2.COLOR_RGB2BGR)
+                writer.write(bgr)
             writer.release()
-            raise UnsupportedFormatError("Failed to open video writer for uncompressed AVI. Ensure a lossless RGB24 codec is available or use ffmpeg.")
-        for fr in frames_rgb:
-            if fr.shape[0] != h or fr.shape[1] != w:
-                raise ValidationError("All frames must have identical dimensions")
-            # Convert back to BGR for OpenCV writer
-            bgr = cv2.cvtColor(fr, cv2.COLOR_RGB2BGR)
-            writer.write(bgr)
-        writer.release()
+            return True
+
+        # 1) Uncompressed DIB (RGB)
+        if _try_write(('D', 'I', 'B', ' '), out_path):
+            return out_path
+        # 2) MJPG as a widely available fallback (note: lossy)
+        alt_path = os.path.splitext(out_path)[0] + "_mjpg.avi"
+        if _try_write(('M', 'J', 'P', 'G'), alt_path):
+            return alt_path
+        # 3) As a last resort, export PNG frame sequence for lossless output
+        seq_dir = os.path.splitext(out_path)[0] + "_frames"
+        os.makedirs(seq_dir, exist_ok=True)
+        for i, fr in enumerate(frames_rgb):
+            # Save as PNG in RGB order
+            from PIL import Image
+            Image.fromarray(fr, mode='RGB').save(os.path.join(seq_dir, f"frame_{i:06d}.png"))
+        raise UnsupportedFormatError(
+            f"Failed to write video using FourCCs {tried}. Exported PNG frames to '{seq_dir}'. "
+            "Install a lossless codec (e.g., FFV1 via ffmpeg) or open the PNG sequence in a video editor.")
 
     # ====================
     # Video encoder
@@ -811,7 +833,7 @@ class StegaEncodeMachine:
 
         # Write output
         out_path = out_path or os.path.splitext(cover_video_path)[0] + "_stego.avi"
-        self._write_video_rgb24(new_frames, fps, out_path)
+        actual_out = self._write_video_rgb24(new_frames, fps, out_path)
 
         # Verify header pack/unpack
         parsed = self.unpack_header(header_bytes)
@@ -827,10 +849,10 @@ class StegaEncodeMachine:
             'filename': filename,
             'video_shape': (len(frames_rgb), h, w, c),
             'fps': fps,
-            'output': out_path,
+            'output': actual_out,
         }
 
-        return out_path
+        return actual_out
 
     # Helper for GUI
     def get_audio_info(self, wav_path: str) -> Dict[str, Any]:
