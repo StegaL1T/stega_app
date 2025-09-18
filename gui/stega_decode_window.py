@@ -496,8 +496,20 @@ class StegaDecodeWindow(QMainWindow):
         """)
         self.lsb_slider.valueChanged.connect(self.update_lsb_value)
 
+        # LSB markers 1..8 with highlight for selected value
+        markers_row = QHBoxLayout()
+        markers_row.setSpacing(8)
+        self.lsb_markers = []
+        for i in range(1, 9):
+            lab = QLabel(str(i))
+            lab.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lab.setStyleSheet("color: #7f8c8d;")
+            self.lsb_markers.append(lab)
+            markers_row.addWidget(lab)
+
         lsb_layout.addWidget(self.lsb_value_label)
         lsb_layout.addWidget(self.lsb_slider)
+        lsb_layout.addLayout(markers_row)
 
         # Key input
         key_group = QGroupBox("Decryption Key")
@@ -615,6 +627,14 @@ class StegaDecodeWindow(QMainWindow):
         # Update machine with new LSB value
         self.machine.set_lsb_bits(value)
 
+        # Update marker highlight
+        if hasattr(self, 'lsb_markers'):
+            for i, lab in enumerate(self.lsb_markers, start=1):
+                if i == value:
+                    lab.setStyleSheet("color: #e67e22; font-weight: bold;")
+                else:
+                    lab.setStyleSheet("color: #7f8c8d;")
+
     def on_media_loaded(self, file_path, media_type):
         """Handle media loaded from drag and drop or browse"""
         if not file_path:  # Media was removed
@@ -637,20 +657,22 @@ class StegaDecodeWindow(QMainWindow):
             print(f"✅ {media_type.upper()} loaded: {os.path.basename(file_path)}")
 
     def choose_output_path(self):
-        """Choose output path"""
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Extracted Data", "",
-            "Text Files (*.txt);;All Files (*)"
-        )
-        if file_path:
-            self.output_path.setText(file_path)
-            self.machine.set_output_path(file_path)
+        """Choose output folder; file will be auto-named (datetime.<header_filename>)."""
+        folder = QFileDialog.getExistingDirectory(self, "Select Output Folder", "")
+        if folder:
+            self.output_path.setText(folder)
+            self.machine.set_output_path(folder)
 
     def extract_message(self):
         """Extract message from the steganographic media"""
         # Update machine with current GUI values
         self.machine.set_lsb_bits(self.lsb_slider.value())
         self.machine.set_encryption_key(self.key_input.text())
+
+        # Require non-empty key
+        if not self.key_input.text().strip():
+            self.results_text.setPlainText("Error: A key is required to decode.")
+            return
 
         # Set default output path if none specified
         if not self.output_path.text().strip():
@@ -662,14 +684,57 @@ class StegaDecodeWindow(QMainWindow):
         # Perform steganography extraction
         if self.machine.extract_message():
             print("✅ Steganography extraction completed successfully!")
-            # Display extracted data in results text area
+            # Display extracted data and header info in results text area
             extracted_data = self.machine.get_extracted_data()
-            if extracted_data:
-                self.results_text.setPlainText(extracted_data)
+            header_info = self.machine.get_header_info() or {}
+            out_path = self.machine.output_path or "(unknown)"
+
+            lines = []
+            lines.append("=== Decode Success ===")
+            if header_info:
+                lines.append(f"Version: {header_info.get('version')}")
+                lines.append(f"LSB bits: {header_info.get('lsb_bits')}")
+                if header_info.get('start_offset') is not None:
+                    lines.append(f"Header start offset: {header_info.get('start_offset')}")
+                lines.append(f"Computed start: {header_info.get('computed_start')}")
+                lines.append(f"Payload length: {header_info.get('payload_length')} bytes")
+                if header_info.get('filename'):
+                    lines.append(f"Filename: {header_info.get('filename')}")
+            lines.append(f"Saved to: {out_path}")
+
+            # Always show some message in results pane
+            if extracted_data and isinstance(extracted_data, str):
+                # Limit overly long text previews
+                preview = extracted_data
+                if len(preview) > 5000:
+                    preview = preview[:5000] + "\n...[truncated]"
+                lines.append("")
+                lines.append(preview)
+
+            self.results_text.setPlainText("\n".join(lines))
+
+            # Show success dialog with option to open file
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle("Decode Successful")
+            out_path = self.machine.output_path or "saved file"
+            msg.setText(f"Payload extracted successfully.\nSaved to: {out_path}")
+            open_btn = msg.addButton("Open file", QMessageBox.ButtonRole.AcceptRole)
+            msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+            msg.exec()
+            if msg.clickedButton() == open_btn and self.machine.output_path:
+                from PyQt6.QtGui import QDesktopServices
+                from PyQt6.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.output_path))
         else:
             print("❌ Steganography extraction failed!")
-            self.results_text.setPlainText(
-                "Extraction failed. Please check your settings and try again.")
+            error_msg = self.machine.get_last_error() or "Extraction failed. Please check your settings and try again."
+            self.results_text.setPlainText(error_msg)
+
+            # Show error popup
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Decode Failed", error_msg)
 
     def go_back(self):
         """Go back to main window"""

@@ -2,6 +2,7 @@
 import sys
 import logging
 from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
 from gui.main_window import MainWindow
 
 # Configure logging
@@ -16,6 +17,12 @@ logging.basicConfig(
 
 def main():
     logging.info("Starting StegoLab application...")
+    # Enable High DPI scaling for sharper UI
+    try:
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    except Exception:
+        pass
     app = QApplication(sys.argv)
     w = MainWindow()
     w.show()
