@@ -309,8 +309,7 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        # Add shadow effect
-        card.setGraphicsEffect(self.create_shadow_effect())
+        # No shadow effect - clean purple border only
 
         layout = QVBoxLayout(card)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -354,8 +353,7 @@ class MainWindow(QMainWindow):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setWordWrap(True)
         title_label.setStyleSheet("""
-            color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                stop:0 #45edf2, stop:0.5 #45edf2, stop:0.6 #7B2CBF, stop:1 #7B2CBF);
+            color: #45edf2;
             margin: 4px 0;
             padding: 2px 0;
             border: none;
@@ -391,8 +389,7 @@ class MainWindow(QMainWindow):
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         button.setStyleSheet(f"""
             QPushButton {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(69,237,242,0.1), stop:1 rgba(69,237,242,0.05));
+                background: rgba(69,237,242,0.1);
                 color: {button_color};
                 border: 2px solid rgba(69,237,242,0.6);
                 padding: 10px 20px;
@@ -402,13 +399,11 @@ class MainWindow(QMainWindow):
                 font-weight: bold;
             }}
             QPushButton:hover {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(69,237,242,0.3), stop:1 rgba(73,41,154,0.15));
+                background: rgba(69,237,242,0.3);
                 border: 3px solid rgba(69,237,242,1.0);
             }}
             QPushButton:pressed {{
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(69,237,242,0.3), stop:1 rgba(73,41,154,0.2));
+                background: rgba(69,237,242,0.3);
             }}
         """)
 

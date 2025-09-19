@@ -22,8 +22,7 @@ class SteganalysisWindow(QMainWindow):
         # Set gradient background
         self.setStyleSheet("""
             QMainWindow {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #e3f2fd, stop:1 #ffffff);
+                background: #e3f2fd;
             }
         """)
 
