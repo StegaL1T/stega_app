@@ -12,9 +12,9 @@ import cv2
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar, QApplication,
-                             QStackedWidget, QHBoxLayout, QSizePolicy)
+                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget)
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QTabWidgetS
+from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen
 import numpy as np
 import cv2
 
@@ -83,11 +83,6 @@ class SteganalysisWindow(QMainWindow):
         # Title section
         self.create_title_section(main_layout)
 
-        # Page navigation section
-        self.create_page_navigation(main_layout)
-
-        # Main content area with stacked pages
-        self.create_stacked_content_area(main_layout)
         # Main content area (tabs)
         self.create_tabs(main_layout)
 
@@ -131,122 +126,17 @@ class SteganalysisWindow(QMainWindow):
 
         layout.addLayout(title_layout)
 
-    def create_page_navigation(self, layout):
-        """Create page navigation with arrow buttons and page indicators"""
-        nav_layout = QHBoxLayout()
-        nav_layout.setSpacing(20)
-        
-        # Left arrow button
-        self.prev_button = QPushButton("← Image Analysis")
-        self.prev_button.setStyleSheet("""
-            QPushButton {
-                background-color: #9b59b6;
-                color: white;
-                border: none;
-                padding: 12px 20px;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #8e44ad;
-            }
-            QPushButton:disabled {
-                background-color: #bdc3c7;
-                color: #7f8c8d;
-            }
-        """)
-        self.prev_button.clicked.connect(self.go_to_previous_page)
-        self.prev_button.setEnabled(False)  # Start on first page
-        
-        # Page indicator
-        self.page_indicator = QLabel("Page 1 of 3")
-        self.page_indicator.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.page_indicator.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                font-weight: bold;
-                color: #2c3e50;
-                padding: 10px;
-            }
-        """)
-        
-        # Right arrow button
-        self.next_button = QPushButton("Next →")
-        self.next_button.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                padding: 12px 20px;
-                border-radius: 8px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:disabled {
-                background-color: #bdc3c7;
-                color: #7f8c8d;
-            }
-        """)
-        self.next_button.clicked.connect(self.go_to_next_page)
-        
-        nav_layout.addWidget(self.prev_button)
-        nav_layout.addStretch()
-        nav_layout.addWidget(self.page_indicator)
-        nav_layout.addStretch()
-        nav_layout.addWidget(self.next_button)
-        
-        layout.addLayout(nav_layout)
 
-    def create_stacked_content_area(self, layout):
-        """Create the main content area with stacked pages"""
-        # Create stacked widget for pages
-        self.stacked_widget = QStackedWidget()
-        
-        # Create image analysis page
-        image_page = self.create_image_analysis_page()
-        self.stacked_widget.addWidget(image_page)
-        
-        # Create audio analysis page
-        audio_page = self.create_audio_analysis_page()
-        self.stacked_widget.addWidget(audio_page)
-        
-        # Create video analysis page
-        video_page = self.create_video_analysis_page()
-        self.stacked_widget.addWidget(video_page)
-        
-        # Start on first page (image analysis)
-        self.current_page = 0
-        self.stacked_widget.setCurrentIndex(0)
-        
-        layout.addWidget(self.stacked_widget)
 
-    def create_image_analysis_page(self):
-        """Create the image analysis page"""
-        page = QWidget()
-        layout = QHBoxLayout(page)
-        layout.setSpacing(30)
-
-        # Left panel - Image Input
-        input_panel = self.create_image_input_panel()
-        layout.addWidget(input_panel)
-
-        # Right panel - Results
-        results_panel = self.create_results_panel()
-        layout.addWidget(results_panel)
-
-        return page
     def create_tabs(self, layout):
-        """Create Image/Audio steganalysis tabs"""
+        """Create Image/Audio/Video steganalysis tabs"""
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
         tabs.setTabPosition(QTabWidget.TabPosition.North)
 
         image_tab = QWidget()
         audio_tab = QWidget()
+        video_tab = QWidget()
 
         # Build image tab
         img_split = QHBoxLayout(image_tab)
@@ -266,8 +156,18 @@ class SteganalysisWindow(QMainWindow):
         aud_split.addWidget(aud_controls)
         aud_split.addWidget(aud_results)
 
+        # Build video tab
+        vid_split = QHBoxLayout(video_tab)
+        vid_split.setSpacing(30)
+
+        vid_controls = self._build_video_controls()
+        vid_results = self._build_video_results()
+        vid_split.addWidget(vid_controls)
+        vid_split.addWidget(vid_results)
+
         tabs.addTab(image_tab, "Image Steganalysis")
         tabs.addTab(audio_tab, "Audio Steganalysis")
+        tabs.addTab(video_tab, "Video Steganalysis")
 
         layout.addWidget(tabs)
 
@@ -313,6 +213,7 @@ class SteganalysisWindow(QMainWindow):
             QComboBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
             QComboBox:focus { border-color: #9b59b6; }
         """)
+        self.method_combo.currentTextChanged.connect(self.on_image_method_changed)
         method_layout.addWidget(self.method_combo)
 
         self.img_analyze_btn = QPushButton("Analyze Image")
@@ -322,10 +223,27 @@ class SteganalysisWindow(QMainWindow):
         """)
         self.img_analyze_btn.clicked.connect(self.analyze_image)
 
+        # Method description
+        self.image_method_description = QLabel()
+        self.image_method_description.setWordWrap(True)
+        self.image_method_description.setStyleSheet("""
+            QLabel {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 5px;
+                padding: 10px;
+                font-size: 12px;
+                color: #495057;
+                min-height: 60px;
+            }
+        """)
+        self.image_method_description.setText("Select an analysis method to see its description...")
+
         layout.addWidget(title)
         layout.addWidget(image_group)
         layout.addWidget(method_group)
         layout.addWidget(self.img_analyze_btn)
+        layout.addWidget(self.image_method_description)
         layout.addStretch()
         return panel
 
@@ -424,6 +342,7 @@ class SteganalysisWindow(QMainWindow):
             QComboBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
             QComboBox:focus { border-color: #3498db; }
         """)
+        self.audio_method_combo.currentTextChanged.connect(self.on_audio_method_changed)
         audio_method_layout.addWidget(self.audio_method_combo)
 
         self.aud_analyze_btn = QPushButton("Analyze Audio")
@@ -433,10 +352,27 @@ class SteganalysisWindow(QMainWindow):
         """)
         self.aud_analyze_btn.clicked.connect(self.analyze_audio)
 
+        # Method description
+        self.audio_method_description = QLabel()
+        self.audio_method_description.setWordWrap(True)
+        self.audio_method_description.setStyleSheet("""
+            QLabel {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 5px;
+                padding: 10px;
+                font-size: 12px;
+                color: #495057;
+                min-height: 60px;
+            }
+        """)
+        self.audio_method_description.setText("Select an analysis method to see its description...")
+
         layout.addWidget(title)
         layout.addWidget(audio_group)
         layout.addWidget(audio_method_group)
         layout.addWidget(self.aud_analyze_btn)
+        layout.addWidget(self.audio_method_description)
         layout.addStretch()
         return panel
 
@@ -496,368 +432,30 @@ class SteganalysisWindow(QMainWindow):
         layout.addStretch()
         return panel
 
-    def create_audio_analysis_page(self):
-        """Create the audio analysis page"""
-        page = QWidget()
-        layout = QHBoxLayout(page)
-        layout.setSpacing(30)
-
-        # Left panel - Audio Input
-        input_panel = self.create_audio_input_panel()
-        layout.addWidget(input_panel)
-
-        # Right panel - Results (shared)
-        results_panel = self.create_results_panel()
-        layout.addWidget(results_panel)
-
-        return page
-
-    def create_video_analysis_page(self):
-        """Create the video analysis page"""
-        page = QWidget()
-        layout = QHBoxLayout(page)
-        layout.setSpacing(30)
-
-        # Left panel - Video Input
-        input_panel = self.create_video_input_panel()
-        layout.addWidget(input_panel)
-
-        # Right panel - Results (shared)
-        results_panel = self.create_results_panel()
-        layout.addWidget(results_panel)
-
-        return page
-
-    def create_image_input_panel(self):
-        """Create the image input panel"""
-        panel = QFrame()
-        panel.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 15px;
-                border: none;
-            }
-        """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
-
+    def _build_video_controls(self) -> QWidget:
+        panel = self._styled_panel()
         layout = QVBoxLayout(panel)
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        # Panel title
-        title = QLabel("Image Analysis")
-        title_font = QFont()
-        title_font.setPointSize(20)
-        title_font.setBold(True)
-        title.setFont(title_font)
+        title = QLabel("Video Analysis Input")
+        f = QFont(); f.setPointSize(20); f.setBold(True)
+        title.setFont(f)
         title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
 
-        # Image selection
-        image_group = QGroupBox("Suspicious Image")
-        image_layout = QVBoxLayout(image_group)
-
-        self.image_path = QLineEdit()
-        self.image_path.setPlaceholderText("Select image to analyze...")
-        self.image_path.setReadOnly(True)
-
-        browse_button = QPushButton("Browse Image")
-        browse_button.setStyleSheet("""
-            QPushButton {
-                background-color: #9b59b6;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #8e44ad;
-            }
-        """)
-        browse_button.clicked.connect(self.browse_image)
-
-        image_layout.addWidget(self.image_path)
-        image_layout.addWidget(browse_button)
-
-        # Image preview
-        self.image_preview = QLabel()
-        self.image_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_preview.setStyleSheet("""
-            QLabel {
-                border: 2px solid #bdc3c7;
-                border-radius: 8px;
-                background-color: #f8f9fa;
-                min-height: 150px;
-                max-height: 200px;
-            }
-        """)
-        self.image_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.image_preview.setText("No image selected")
-        self.image_preview.setScaledContents(False)  # Don't stretch to fill
-        image_layout.addWidget(self.image_preview)
-
-        # Analysis method selection
-        method_group = QGroupBox("Analysis Method")
-        method_layout = QVBoxLayout(method_group)
-
-        self.method_combo = QComboBox()
-        self.method_combo.addItems([
-            "LSB Analysis",
-            "Chi-Square Test",
-            "RS Analysis",
-            "Sample Pairs Analysis",
-            "DCT Analysis",
-            "Wavelet Analysis",
-            "Histogram Analysis",
-            "Comprehensive Analysis",
-            "Advanced Comprehensive"
-        ])
-        self.method_combo.setStyleSheet("""
-            QComboBox {
-                padding: 8px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                background-color: white;
-            }
-            QComboBox:focus {
-                border-color: #9b59b6;
-            }
-        """)
-        self.method_combo.currentTextChanged.connect(self.on_image_method_changed)
-
-        method_layout.addWidget(self.method_combo)
-
-        # Analyze button
-        analyze_button = QPushButton("Analyze Image")
-        analyze_button.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 5px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
-        analyze_button.clicked.connect(self.analyze_image)
-
-        # Method description
-        self.image_method_description = QLabel()
-        self.image_method_description.setWordWrap(True)
-        self.image_method_description.setStyleSheet("""
-            QLabel {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 5px;
-                padding: 10px;
-                font-size: 12px;
-                color: #495057;
-                min-height: 60px;
-            }
-        """)
-        self.image_method_description.setText("Select an analysis method to see its description...")
-
-        layout.addWidget(title)
-        layout.addWidget(image_group)
-        layout.addWidget(method_group)
-        layout.addWidget(analyze_button)
-        layout.addWidget(self.image_method_description)
-        layout.addStretch()
-
-        return panel
-
-    def create_audio_input_panel(self):
-        """Create the audio input panel"""
-        panel = QFrame()
-        panel.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 15px;
-                border: none;
-            }
-        """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
-
-        layout = QVBoxLayout(panel)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
-
-        # Panel title
-        title = QLabel("Audio Analysis")
-        title_font = QFont()
-        title_font.setPointSize(20)
-        title_font.setBold(True)
-        title.setFont(title_font)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
-
-        # Audio selection
-        audio_group = QGroupBox("Suspicious Audio")
-        audio_layout = QVBoxLayout(audio_group)
-
-        self.audio_path = QLineEdit()
-        self.audio_path.setPlaceholderText("Select WAV audio to analyze...")
-        self.audio_path.setReadOnly(True)
-
-        browse_audio_button = QPushButton("Browse Audio")
-        browse_audio_button.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        browse_audio_button.clicked.connect(self.browse_audio)
-
-        audio_layout.addWidget(self.audio_path)
-        audio_layout.addWidget(browse_audio_button)
-
-        # Audio preview (waveform)
-        self.audio_preview = QLabel()
-        self.audio_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.audio_preview.setStyleSheet("""
-            QLabel {
-                border: 2px solid #bdc3c7;
-                border-radius: 8px;
-                background-color: #f8f9fa;
-                min-height: 100px;
-                max-height: 150px;
-            }
-        """)
-        self.audio_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.audio_preview.setText("No audio selected")
-        audio_layout.addWidget(self.audio_preview)
-
-        # Audio method selection
-        audio_method_group = QGroupBox("Analysis Method")
-        audio_method_layout = QVBoxLayout(audio_method_group)
-
-        self.audio_method_combo = QComboBox()
-        self.audio_method_combo.addItems([
-            "Audio LSB Analysis",
-            "Audio Chi-Square Test",
-            "Audio Spectral Analysis",
-            "Audio Autocorrelation Analysis",
-            "Audio Entropy Analysis",
-            "Audio Comprehensive Analysis",
-            "Audio Advanced Comprehensive"
-        ])
-        self.audio_method_combo.setStyleSheet("""
-            QComboBox {
-                padding: 8px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                background-color: white;
-            }
-            QComboBox:focus {
-                border-color: #3498db;
-            }
-        """)
-        self.audio_method_combo.currentTextChanged.connect(self.on_audio_method_changed)
-
-        audio_method_layout.addWidget(self.audio_method_combo)
-
-        # Analyze audio button
-        analyze_audio_button = QPushButton("Analyze Audio")
-        analyze_audio_button.setStyleSheet("""
-            QPushButton {
-                background-color: #16a085;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 5px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #138d75;
-            }
-        """)
-        analyze_audio_button.clicked.connect(self.analyze_audio)
-
-        # Method description
-        self.audio_method_description = QLabel()
-        self.audio_method_description.setWordWrap(True)
-        self.audio_method_description.setStyleSheet("""
-            QLabel {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 5px;
-                padding: 10px;
-                font-size: 12px;
-                color: #495057;
-                min-height: 60px;
-            }
-        """)
-        self.audio_method_description.setText("Select an analysis method to see its description...")
-
-        layout.addWidget(title)
-        layout.addWidget(audio_group)
-        layout.addWidget(audio_method_group)
-        layout.addWidget(analyze_audio_button)
-        layout.addWidget(self.audio_method_description)
-        layout.addStretch()
-
-        return panel
-
-    def create_video_input_panel(self):
-        """Create the video input panel"""
-        panel = QFrame()
-        panel.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 15px;
-                border: none;
-            }
-        """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
-
-        layout = QVBoxLayout(panel)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
-
-        # Panel title
-        title = QLabel("Video Analysis")
-        title_font = QFont()
-        title_font.setPointSize(20)
-        title_font.setBold(True)
-        title.setFont(title_font)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
-
-        # Video selection
         video_group = QGroupBox("Suspicious Video")
         video_layout = QVBoxLayout(video_group)
-
-        self.video_path = QLineEdit()
-        self.video_path.setPlaceholderText("Select video to analyze...")
-        self.video_path.setReadOnly(True)
-
+        self.video_path = QLineEdit(); self.video_path.setPlaceholderText("Select video to analyze..."); self.video_path.setReadOnly(True)
         browse_video_button = QPushButton("Browse Video")
         browse_video_button.setStyleSheet("""
-            QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #d35400;
-            }
+            QPushButton { background-color: #e67e22; color: white; border: none; padding: 8px 16px; border-radius: 5px; }
+            QPushButton:hover { background-color: #d35400; }
         """)
         browse_video_button.clicked.connect(self.browse_video)
-
         video_layout.addWidget(self.video_path)
         video_layout.addWidget(browse_video_button)
 
-        # Video preview (frame)
+        # Video preview
         self.video_preview = QLabel()
         self.video_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_preview.setStyleSheet("""
@@ -871,53 +469,22 @@ class SteganalysisWindow(QMainWindow):
         """)
         self.video_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.video_preview.setText("No video selected")
-        self.video_preview.setScaledContents(False)  # Don't stretch to fill
+        self.video_preview.setScaledContents(False)
         video_layout.addWidget(self.video_preview)
 
-        # Video method selection
-        video_method_group = QGroupBox("Analysis Method")
+        video_method_group = QGroupBox("Video Analysis Method")
         video_method_layout = QVBoxLayout(video_method_group)
-
         self.video_method_combo = QComboBox()
         self.video_method_combo.addItems([
-            "Video LSB Analysis",
-            "Video Frame Analysis",
-            "Video Motion Analysis",
-            "Video Comprehensive Analysis",
-            "Video Advanced Comprehensive"
+            "Video LSB Analysis","Video Frame Analysis","Video Motion Analysis",
+            "Video Comprehensive Analysis","Video Advanced Comprehensive"
         ])
         self.video_method_combo.setStyleSheet("""
-            QComboBox {
-                padding: 8px;
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                background-color: white;
-            }
-            QComboBox:focus {
-                border-color: #e67e22;
-            }
+            QComboBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
+            QComboBox:focus { border-color: #e67e22; }
         """)
         self.video_method_combo.currentTextChanged.connect(self.on_video_method_changed)
-
         video_method_layout.addWidget(self.video_method_combo)
-
-        # Analyze video button
-        analyze_video_button = QPushButton("Analyze Video")
-        analyze_video_button.setStyleSheet("""
-            QPushButton {
-                background-color: #8e44ad;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 5px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #7d3c98;
-            }
-        """)
-        analyze_video_button.clicked.connect(self.analyze_video)
 
         # Method description
         self.video_method_description = QLabel()
@@ -935,129 +502,84 @@ class SteganalysisWindow(QMainWindow):
         """)
         self.video_method_description.setText("Select an analysis method to see its description...")
 
+        self.vid_analyze_btn = QPushButton("Analyze Video")
+        self.vid_analyze_btn.setStyleSheet("""
+            QPushButton { background-color: #8e44ad; color: white; border: none; padding: 12px 24px; border-radius: 5px; font-size: 16px; font-weight: bold; }
+            QPushButton:hover { background-color: #7d3c98; }
+        """)
+        self.vid_analyze_btn.clicked.connect(self.analyze_video)
+
         layout.addWidget(title)
         layout.addWidget(video_group)
         layout.addWidget(video_method_group)
-        layout.addWidget(analyze_video_button)
         layout.addWidget(self.video_method_description)
+        layout.addWidget(self.vid_analyze_btn)
         layout.addStretch()
-
         return panel
 
-    def create_results_panel(self):
-        """Create the results panel"""
-        panel = QFrame()
-        panel.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border-radius: 15px;
-                border: none;
-            }
-        """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
-
+    def _build_video_results(self) -> QWidget:
+        panel = self._styled_panel()
         layout = QVBoxLayout(panel)
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        # Panel title
-        title = QLabel("Analysis Results")
-        title_font = QFont()
-        title_font.setPointSize(20)
-        title_font.setBold(True)
-        title.setFont(title_font)
+        title = QLabel("Video Analysis Results")
+        f = QFont(); f.setPointSize(20); f.setBold(True)
+        title.setFont(f)
         title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
 
-        # Progress bar
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #bdc3c7;
-                border-radius: 5px;
-                text-align: center;
-                background-color: #ecf0f1;
-            }
-            QProgressBar::chunk {
-                background-color: #9b59b6;
-                border-radius: 3px;
-            }
+        self.vid_progress_bar = QProgressBar(); self.vid_progress_bar.setVisible(False)
+        self.vid_progress_bar.setStyleSheet("""
+            QProgressBar { border: 2px solid #bdc3c7; border-radius: 5px; text-align: center; background-color: #ecf0f1; }
+            QProgressBar::chunk { background-color: #8e44ad; border-radius: 3px; }
         """)
 
-        # Results display
-        results_group = QGroupBox("Detection Results")
-        results_layout = QVBoxLayout(results_group)
+        vid_results_group = QGroupBox("Detection Results")
+        vid_results_layout = QVBoxLayout(vid_results_group)
+        self.vid_results_text = QTextEdit(); self.vid_results_text.setReadOnly(True)
+        self.vid_results_text.setPlaceholderText("Analysis results will appear here...")
+        vid_results_layout.addWidget(self.vid_results_text)
 
-        self.results_text = QTextEdit()
-        self.results_text.setPlaceholderText(
-            "Analysis results will appear here...")
-        self.results_text.setReadOnly(True)
+        # Video charts
+        video_charts_group = QGroupBox("Video Charts")
+        video_charts_layout = QGridLayout(video_charts_group)
+        self.vid_canvas_frame = FigureCanvas(Figure(figsize=(4, 3), dpi=100))
+        self.vid_canvas_motion = FigureCanvas(Figure(figsize=(4, 3), dpi=100))
+        self.vid_canvas_lsb = FigureCanvas(Figure(figsize=(8, 3), dpi=100))
+        self.vid_canvas_frame.setMinimumSize(400, 300)
+        self.vid_canvas_motion.setMinimumSize(400, 300)
+        self.vid_canvas_lsb.setMinimumHeight(300)
+        video_charts_layout.addWidget(self.vid_canvas_frame, 0, 0)
+        video_charts_layout.addWidget(self.vid_canvas_motion, 0, 1)
+        video_charts_layout.addWidget(self.vid_canvas_lsb, 1, 0, 1, 2)
 
-        results_layout.addWidget(self.results_text)
+        vid_stats_group = QGroupBox("Statistics")
+        vid_stats_layout = QVBoxLayout(vid_stats_group)
+        self.vid_stats_text = QTextEdit(); self.vid_stats_text.setReadOnly(True); self.vid_stats_text.setMaximumHeight(150)
+        self.vid_stats_text.setPlaceholderText("Video statistics will appear here...")
+        vid_stats_layout.addWidget(self.vid_stats_text)
 
-        # Image charts
-        image_charts_group = QGroupBox("Image Charts")
-        image_charts_layout = QGridLayout(image_charts_group)
-
-        self.img_canvas_lsb = FigureCanvas(Figure(figsize=(3, 2)))
-        self.img_canvas_diff = FigureCanvas(Figure(figsize=(3, 2)))
-        self.img_canvas_hist = FigureCanvas(Figure(figsize=(3, 2)))
-
-        image_charts_layout.addWidget(self.img_canvas_lsb, 0, 0)
-        image_charts_layout.addWidget(self.img_canvas_diff, 0, 1)
-        image_charts_layout.addWidget(self.img_canvas_hist, 1, 0, 1, 2)
-
-        # Audio charts
-        audio_charts_group = QGroupBox("Audio Charts")
-        audio_charts_layout = QGridLayout(audio_charts_group)
-
-        self.aud_canvas_wave = FigureCanvas(Figure(figsize=(3, 2)))
-        self.aud_canvas_spec = FigureCanvas(Figure(figsize=(3, 2)))
-        self.aud_canvas_entropy = FigureCanvas(Figure(figsize=(3, 2)))
-
-        audio_charts_layout.addWidget(self.aud_canvas_wave, 0, 0)
-        audio_charts_layout.addWidget(self.aud_canvas_spec, 0, 1)
-        audio_charts_layout.addWidget(self.aud_canvas_entropy, 1, 0, 1, 2)
-
-        # Statistics display
-        stats_group = QGroupBox("Statistics")
-        stats_layout = QVBoxLayout(stats_group)
-
-        self.stats_text = QTextEdit()
-        self.stats_text.setPlaceholderText(
-            "Statistical analysis will appear here...")
-        self.stats_text.setMaximumHeight(150)
-        self.stats_text.setReadOnly(True)
-
-        stats_layout.addWidget(self.stats_text)
-
-        # Export button
-        export_button = QPushButton("Export Report")
-        export_button.setStyleSheet("""
-            QPushButton {
-                background-color: #f39c12;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 5px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #e67e22;
-            }
+        # Export charts to PDF button
+        export_vid_pdf_btn = QPushButton("Export Charts to PDF")
+        export_vid_pdf_btn.setStyleSheet("""
+            QPushButton { background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
+            QPushButton:hover { background-color: #27ae60; }
         """)
-        export_button.clicked.connect(self.export_report)
+        export_vid_pdf_btn.clicked.connect(self.export_charts_pdf)
 
         layout.addWidget(title)
-        layout.addWidget(self.progress_bar)
-        layout.addWidget(results_group)
-        layout.addWidget(image_charts_group)
-        layout.addWidget(audio_charts_group)
-        layout.addWidget(stats_group)
-        layout.addWidget(export_button)
+        layout.addWidget(self.vid_progress_bar)
+        layout.addWidget(vid_results_group)
+        layout.addWidget(video_charts_group)
+        layout.addWidget(vid_stats_group)
+        layout.addWidget(export_vid_pdf_btn)
         layout.addStretch()
-
         return panel
+
+
+
+
+
 
     def create_shadow_effect(self):
         """Create a shadow effect for panels"""
@@ -1068,6 +590,21 @@ class SteganalysisWindow(QMainWindow):
         shadow.setYOffset(5)
         shadow.setColor(QColor(0, 0, 0, 30))
         return shadow
+
+    def on_image_method_changed(self):
+        """Handle image method dropdown change"""
+        method = self.method_combo.currentText()
+        self.update_method_description(method, self.image_method_description)
+
+    def on_audio_method_changed(self):
+        """Handle audio method dropdown change"""
+        method = self.audio_method_combo.currentText()
+        self.update_method_description(method, self.audio_method_description)
+
+    def on_video_method_changed(self):
+        """Handle video method dropdown change"""
+        method = self.video_method_combo.currentText()
+        self.update_method_description(method, self.video_method_description)
 
     def update_method_description(self, method_name: str, description_widget: QLabel):
         """Update the method description based on selected method"""
@@ -1231,43 +768,6 @@ class SteganalysisWindow(QMainWindow):
         except Exception as e:
             self.video_preview.setText(f"Error loading video preview: {str(e)}")
 
-    def go_to_previous_page(self):
-        """Navigate to the previous page"""
-        if self.current_page > 0:
-            self.current_page -= 1
-            self.stacked_widget.setCurrentIndex(self.current_page)
-            self.update_navigation_buttons()
-
-    def go_to_next_page(self):
-        """Navigate to the next page"""
-        if self.current_page < self.stacked_widget.count() - 1:
-            self.current_page += 1
-            self.stacked_widget.setCurrentIndex(self.current_page)
-            self.update_navigation_buttons()
-
-    def update_navigation_buttons(self):
-        """Update navigation button states and page indicator"""
-        total_pages = self.stacked_widget.count()
-        
-        # Update button states
-        self.prev_button.setEnabled(self.current_page > 0)
-        self.next_button.setEnabled(self.current_page < total_pages - 1)
-        
-        # Update page indicator
-        page_names = ["Image Analysis", "Audio Analysis", "Video Analysis"]
-        current_page_name = page_names[self.current_page] if self.current_page < len(page_names) else f"Page {self.current_page + 1}"
-        self.page_indicator.setText(f"{current_page_name} ({self.current_page + 1} of {total_pages})")
-        
-        # Update button text
-        if self.current_page == 0:
-            self.prev_button.setText("← Image Analysis")
-            self.next_button.setText("Next →")
-        elif self.current_page == 1:
-            self.prev_button.setText("← Previous")
-            self.next_button.setText("Next →")
-        else:
-            self.prev_button.setText("← Previous")
-            self.next_button.setText("Video Analysis →")
 
     def browse_image(self):
         """Browse for image to analyze"""
@@ -1279,7 +779,6 @@ class SteganalysisWindow(QMainWindow):
             self.image_path.setText(file_path)
             # Load into machine
             if self.machine.set_image(file_path):
-                self.results_text.append(f"Image selected: {file_path}")
                 # Create preview
                 self.create_image_preview(file_path)
                 if hasattr(self, 'img_results_text'):
@@ -1297,7 +796,6 @@ class SteganalysisWindow(QMainWindow):
         if file_path:
             self.audio_path.setText(file_path)
             if self.machine.set_audio(file_path):
-                self.results_text.append(f"Audio selected: {file_path}")
                 # Create preview
                 self.create_audio_preview(file_path)
                 if hasattr(self, 'aud_results_text'):
@@ -1315,11 +813,13 @@ class SteganalysisWindow(QMainWindow):
         if file_path:
             self.video_path.setText(file_path)
             if self.machine.set_video(file_path):
-                self.results_text.append(f"Video selected: {file_path}")
                 # Create preview
                 self.create_video_preview(file_path)
+                if hasattr(self, 'vid_results_text'):
+                    self.vid_results_text.append(f"Video selected: {file_path}")
             else:
-                self.results_text.append(f"Error loading video: {file_path}")
+                if hasattr(self, 'vid_results_text'):
+                    self.vid_results_text.append(f"Error loading video: {file_path}")
 
     def analyze_image(self):
         """Analyze the selected image"""
@@ -1436,33 +936,75 @@ class SteganalysisWindow(QMainWindow):
     def analyze_video(self):
         """Analyze the selected video"""
         if not self.video_path.text():
-            self.results_text.append("Error: Please select a video file to analyze")
+            self.vid_results_text.append("Error: Please select a video file to analyze")
             return
 
+        # Clear old outputs
+        self.vid_results_text.clear()
+        self.vid_stats_text.clear()
+
+        # Show progress bar
+        self.vid_progress_bar.setVisible(True)
+        self.vid_progress_bar.setValue(0)
+        QApplication.processEvents()
+
+        # Load video into the machine
+        success = self.machine.set_video(self.video_path.text())
+        if not success:
+            self.vid_results_text.append("Error: Failed to load video for analysis")
+            self.vid_progress_bar.setVisible(False)
+            return
+
+        # Set selected analysis method
         method = self.video_method_combo.currentText()
-        ok = self.machine.analyze_video(method)
+        
+        # Run analysis
+        if self.machine.analyze_video(method):
+            results = self.machine.get_results()
+            stats = self.machine.get_video_statistics()
+            confidence = self.machine.get_confidence_level()
 
-        self.results_text.append("\n=== VIDEO ANALYSIS ===")
-        if not ok:
-            self.results_text.append("Error during video analysis.")
-            return
+            # === Results section ===
+            self.vid_results_text.append("\n=== VIDEO ANALYSIS COMPLETE ===")
+            self.vid_results_text.append(f"Method: {results.get('method')}")
+            self.vid_results_text.append(f"Suspicious: {results.get('suspicious')}")
+            self.vid_results_text.append(f"Confidence level: {confidence:.2%}\n")
 
-        results = self.machine.get_results()
-        confidence = self.machine.get_confidence_level()
-        stats = self.machine.get_video_statistics()
+            # Helper function to pretty print nested dicts
+            def print_dict(d: dict, indent: int = 0):
+                for key, value in d.items():
+                    if isinstance(value, dict):
+                        self.vid_results_text.append(" " * indent + f"{key}:")
+                        print_dict(value, indent + 4)
+                    else:
+                        self.vid_results_text.append(" " * indent + f"- {key}: {value}")
 
-        self.results_text.append(f"Method: {results.get('method', method)}")
-        self.results_text.append(f"Suspicious: {results.get('suspicious', False)}")
-        for k, v in results.items():
-            if k in ("method", "suspicious"):
-                continue
-            self.results_text.append(f"{k}: {v}")
+            # Print details (skip redundant top-level keys)
+            for key, value in results.items():
+                if key in ['method', 'suspicious']:
+                    continue
+                if isinstance(value, dict):
+                    self.vid_results_text.append(f"{key}:")
+                    print_dict(value, 4)
+                else:
+                    self.vid_results_text.append(f"{key}: {value}")
 
-        self.results_text.append(f"Confidence level: {confidence*100:.2f}%")
+            # === Stats section ===
+            self.vid_stats_text.append("Video Statistics:")
+            for key, value in stats.items():
+                self.vid_stats_text.append(f"- {key}: {value}")
 
-        self.stats_text.append("Video Statistics:")
-        for k, v in stats.items():
-            self.stats_text.append(f"- {k}: {v}")
+            # === Charts ===
+            try:
+                self._plot_video_charts()
+            except Exception as e:
+                self.vid_results_text.append(f"Chart error: {e}")
+
+        else:
+            self.vid_results_text.append("Error: Analysis failed")
+
+        # Hide progress bar
+        self.vid_progress_bar.setVisible(False)
 
     def export_report(self):
         """Export analysis report"""
@@ -1477,9 +1019,11 @@ class SteganalysisWindow(QMainWindow):
         if file_path:
             success = self.machine.export_report(file_path)
             if success:
-                self.results_text.append(f"Report exported to: {file_path}")
+                # Report exported successfully - could show message in appropriate tab
+                pass
             else:
-                self.results_text.append("Error: Could not export report.")
+                # Export failed - could show error message in appropriate tab
+                pass
 
     def go_back(self):
         """Go back to main window"""
@@ -1614,6 +1158,98 @@ class SteganalysisWindow(QMainWindow):
         ax_ent.set_ylabel('Entropy (bits)')
         ax_ent.grid(True, alpha=0.2)
         self.aud_canvas_entropy.draw()
+
+    def _plot_video_charts(self):
+        """Render Frame Analysis, Motion Analysis, and LSB Analysis for the current video."""
+        frames = self.machine.video_frames
+        if frames is None or len(frames) == 0:
+            return
+
+        # Sample frames for analysis (max 20 frames)
+        sample_frames = frames[::max(1, len(frames)//20)]
+        
+        # Frame Analysis Chart
+        ax_frame = self.vid_canvas_frame.figure.subplots(1, 1)
+        self.vid_canvas_frame.figure.tight_layout()
+        ax_frame.clear()
+        
+        # Calculate frame statistics
+        frame_stats = []
+        for i, frame in enumerate(sample_frames):
+            if frame.ndim == 3:
+                gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+            else:
+                gray = frame
+            mean_val = np.mean(gray)
+            std_val = np.std(gray)
+            frame_stats.append((i, mean_val, std_val))
+        
+        frame_nums, means, stds = zip(*frame_stats)
+        ax_frame.plot(frame_nums, means, 'b-', label='Mean', linewidth=2)
+        ax_frame.plot(frame_nums, stds, 'r-', label='Std Dev', linewidth=2)
+        ax_frame.set_title('Frame Statistics', fontsize=12)
+        ax_frame.set_xlabel('Frame Number')
+        ax_frame.set_ylabel('Pixel Value')
+        ax_frame.legend()
+        ax_frame.grid(True, alpha=0.2)
+        self.vid_canvas_frame.draw()
+
+        # Motion Analysis Chart
+        ax_motion = self.vid_canvas_motion.figure.subplots(1, 1)
+        self.vid_canvas_motion.figure.tight_layout()
+        ax_motion.clear()
+        
+        # Calculate motion between consecutive frames
+        motion_values = []
+        for i in range(1, len(sample_frames)):
+            prev_frame = sample_frames[i-1]
+            curr_frame = sample_frames[i]
+            
+            if prev_frame.ndim == 3:
+                prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_RGB2GRAY)
+                curr_gray = cv2.cvtColor(curr_frame, cv2.COLOR_RGB2GRAY)
+            else:
+                prev_gray = prev_frame
+                curr_gray = curr_frame
+            
+            # Calculate frame difference
+            diff = cv2.absdiff(prev_gray, curr_gray)
+            motion = np.mean(diff)
+            motion_values.append(motion)
+        
+        ax_motion.plot(range(1, len(sample_frames)), motion_values, 'g-', linewidth=2)
+        ax_motion.set_title('Motion Analysis', fontsize=12)
+        ax_motion.set_xlabel('Frame Number')
+        ax_motion.set_ylabel('Motion Intensity')
+        ax_motion.grid(True, alpha=0.2)
+        self.vid_canvas_motion.draw()
+
+        # LSB Analysis Chart
+        ax_lsb = self.vid_canvas_lsb.figure.subplots(1, 1)
+        self.vid_canvas_lsb.figure.tight_layout()
+        ax_lsb.clear()
+        
+        # Calculate LSB ratios for each frame
+        lsb_ratios = []
+        for i, frame in enumerate(sample_frames):
+            if frame.ndim == 3:
+                # Use red channel for LSB analysis
+                r_channel = frame[:, :, 0]
+            else:
+                r_channel = frame
+            
+            lsb_ratio = np.mean(r_channel & 1)
+            lsb_ratios.append(lsb_ratio)
+        
+        ax_lsb.plot(range(len(sample_frames)), lsb_ratios, 'purple', linewidth=2, marker='o', markersize=4)
+        ax_lsb.axhline(y=0.5, color='red', linestyle='--', alpha=0.7, label='Expected (0.5)')
+        ax_lsb.set_title('LSB Analysis Across Frames', fontsize=12)
+        ax_lsb.set_xlabel('Frame Number')
+        ax_lsb.set_ylabel('LSB Ratio')
+        ax_lsb.set_ylim(0, 1)
+        ax_lsb.legend()
+        ax_lsb.grid(True, alpha=0.2)
+        self.vid_canvas_lsb.draw()
 
     # ======== Export charts to PDF ========
     def export_charts_pdf(self):
