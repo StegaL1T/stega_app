@@ -173,7 +173,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Steganography Tool")
-        self.setMinimumSize(1000, 700)
+        
+        # Get screen dimensions and calculate responsive sizing
+        self.setup_responsive_sizing()
 
         # Cybersecurity theme: fonts & background
         # Colors:
@@ -205,8 +207,8 @@ class MainWindow(QMainWindow):
         # Main layout with gradient background - centered with equal margins
         main_layout = QVBoxLayout(central_widget)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.setSpacing(50)  # Increased spacing for better balance
-        main_layout.setContentsMargins(80, 80, 80, 80)  # Equal margins on all sides
+        main_layout.setSpacing(self.spacing)  # Responsive spacing
+        main_layout.setContentsMargins(self.margins, self.margins, self.margins, self.margins)  # Responsive margins
 
         # Title section
         self.create_title_section(main_layout)
@@ -214,11 +216,67 @@ class MainWindow(QMainWindow):
         # Cards section
         self.create_cards_section(main_layout)
 
-        # Make the window fullscreen
-        self.showMaximized()
+        # Set window size and position
+        self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
+        self.show()
         
         # Initialize background widget size
         self.background_widget.setGeometry(0, 0, self.width(), self.height())
+    
+    def setup_responsive_sizing(self):
+        """Setup responsive sizing based on screen dimensions"""
+        # Get screen dimensions using modern PyQt6 approach
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication([])
+        screen = app.primaryScreen().geometry()
+        screen_width = screen.width()
+        screen_height = screen.height()
+        
+        # Define responsive scaling factors
+        # For screens between 1200x1080 and 1920x1200
+        if screen_width <= 1366:  # Smaller laptops
+            scale_factor = 0.8
+        elif screen_width <= 1600:  # Medium laptops
+            scale_factor = 0.9
+        else:  # Larger screens
+            scale_factor = 1.0
+        
+        # Calculate window dimensions (leave some margin from screen edges)
+        margin_percent = 0.05  # 5% margin from screen edges
+        self.window_width = int(screen_width * (1 - 2 * margin_percent))
+        self.window_height = int(screen_height * (1 - 2 * margin_percent))
+        
+        # Center the window
+        self.window_x = int(screen_width * margin_percent)
+        self.window_y = int(screen_height * margin_percent)
+        
+        # Set minimum size to ensure usability on smaller screens
+        min_width = 1000
+        min_height = 700
+        self.window_width = max(self.window_width, min_width)
+        self.window_height = max(self.window_height, min_height)
+        
+        # Responsive layout parameters
+        self.margins = int(40 * scale_factor)  # Responsive margins
+        self.spacing = int(30 * scale_factor)  # Responsive spacing
+        
+        # Responsive font sizes
+        self.title_font_size = int(28 * scale_factor)
+        self.subtitle_font_size = int(14 * scale_factor)
+        self.card_title_font_size = int(18 * scale_factor)
+        self.card_desc_font_size = int(10 * scale_factor)
+        self.button_font_size = int(12 * scale_factor)
+        
+        # Responsive card dimensions
+        self.card_min_width = int(280 * scale_factor)
+        self.card_max_width = int(350 * scale_factor)
+        self.card_min_height = int(320 * scale_factor)
+        self.card_max_height = int(400 * scale_factor)
+        self.card_spacing = int(30 * scale_factor)
+        
+        # Responsive icon size
+        self.icon_size = int(80 * scale_factor)
         
     def resizeEvent(self, event):
         """Handle window resize to update background"""
@@ -231,20 +289,20 @@ class MainWindow(QMainWindow):
         # Main title with gradient effect using custom painting
         title_label = GradientLabel("LSB Steganography & Steganalysis Tool")
         title_font = QFont()
-        title_font.setPointSize(38)  # Slightly larger for better hierarchy
+        title_font.setPointSize(self.title_font_size)  # Responsive font size
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("margin-top: 40px; margin-bottom: 20px;")  # Added top spacing to push down
+        title_label.setStyleSheet(f"margin-top: {int(20 * (self.title_font_size / 28))}px; margin-bottom: {int(10 * (self.title_font_size / 28))}px;")  # Responsive spacing
 
         subtitle_label = QLabel(
             "Advanced steganography and steganalysis platform for secure data hiding and detection.")
         subtitle_font = QFont()
-        subtitle_font.setPointSize(17)  # Slightly larger for better readability
+        subtitle_font.setPointSize(self.subtitle_font_size)  # Responsive font size
         subtitle_font.setWeight(QFont.Weight.Light)  # Lighter font weight
         subtitle_label.setFont(subtitle_font)
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_label.setStyleSheet("color: #D9D9D9; margin-bottom: 40px; line-height: 1.4;")  # More spacing before cards
+        subtitle_label.setStyleSheet(f"color: #D9D9D9; margin-bottom: {int(20 * (self.subtitle_font_size / 14))}px; line-height: 1.4;")  # Responsive spacing
 
         layout.addWidget(title_label)
         layout.addWidget(subtitle_label)
@@ -252,7 +310,7 @@ class MainWindow(QMainWindow):
     def create_cards_section(self, layout):
         """Create the three main cards with enhanced spacing"""
         cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(50)  # Increased spacing between cards for better visual balance
+        cards_layout.setSpacing(self.card_spacing)  # Responsive spacing between cards
         cards_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cards_layout.setContentsMargins(0, 0, 0, 0)  # No extra margins on cards container
 
@@ -297,8 +355,8 @@ class MainWindow(QMainWindow):
     def create_card(self, title, description, button_text, button_color, icon):
         """Create an enhanced responsive card widget with better UX"""
         card = QFrame()
-        card.setMinimumSize(360, 400)  # Slightly larger for better breathing room
-        card.setMaximumSize(440, 480)  # Increased maximum size
+        card.setMinimumSize(self.card_min_width, self.card_min_height)  # Responsive minimum size
+        card.setMaximumSize(self.card_max_width, self.card_max_height)  # Responsive maximum size
         card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         card.setStyleSheet("""
             QFrame {
@@ -313,12 +371,13 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout(card)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(6)  # Reduced spacing for tighter layout
-        layout.setContentsMargins(20, 20, 20, 20)  # More breathing room
+        layout.setSpacing(int(6 * (self.card_min_width / 280)))  # Responsive spacing
+        layout.setContentsMargins(int(15 * (self.card_min_width / 280)), int(15 * (self.card_min_width / 280)), 
+                                 int(15 * (self.card_min_width / 280)), int(15 * (self.card_min_width / 280)))  # Responsive margins
 
         # Icon with proper centering - no borders
         icon_container = QWidget()
-        icon_container.setFixedHeight(120)  # Bigger icons for better visibility
+        icon_container.setFixedHeight(self.icon_size + 20)  # Responsive icon container height
         icon_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         icon_container.setStyleSheet("""
             QWidget {
@@ -333,7 +392,7 @@ class MainWindow(QMainWindow):
         icon_label = QLabel()
         icon_label.setPixmap(icon)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_label.setFixedSize(120, 120)  # Bigger icon size
+        icon_label.setFixedSize(self.icon_size, self.icon_size)  # Responsive icon size
         # Remove icon border styling - explicitly no borders
         icon_label.setStyleSheet("""
             QLabel {
@@ -347,7 +406,7 @@ class MainWindow(QMainWindow):
         # Title with gradient effect
         title_label = QLabel(title)
         title_font = QFont()
-        title_font.setPointSize(22)  # Larger for better hierarchy
+        title_font.setPointSize(self.card_title_font_size)  # Responsive font size
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -364,7 +423,7 @@ class MainWindow(QMainWindow):
         # Description with improved readability
         desc_label = QLabel(description)
         desc_font = QFont()
-        desc_font.setPointSize(12)  # Larger for better readability
+        desc_font.setPointSize(self.card_desc_font_size)  # Responsive font size
         desc_font.setWeight(QFont.Weight.Normal)
         desc_label.setFont(desc_font)
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center-align for consistency
@@ -382,10 +441,10 @@ class MainWindow(QMainWindow):
         # Enhanced button with gradient and hover effects
         button = QPushButton(button_text)
         button_font = QFont()
-        button_font.setPointSize(14)  # Slightly larger
+        button_font.setPointSize(self.button_font_size)  # Responsive font size
         button_font.setBold(True)
         button.setFont(button_font)
-        button.setMinimumHeight(45)  # Taller for better touch targets
+        button.setMinimumHeight(int(35 * (self.card_min_width / 280)))  # Responsive button height
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         button.setStyleSheet(f"""
             QPushButton {{
@@ -425,12 +484,12 @@ class MainWindow(QMainWindow):
         return card
 
     def load_icon(self, icon_path):
-        """Load an icon from a PNG file and resize it to 120x120"""
+        """Load an icon from a PNG file and resize it responsively"""
         try:
             pixmap = QPixmap(icon_path)
             if not pixmap.isNull():
-                # Scale the icon to 120x120 while maintaining aspect ratio
-                scaled_pixmap = pixmap.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                # Scale the icon responsively while maintaining aspect ratio
+                scaled_pixmap = pixmap.scaled(self.icon_size, self.icon_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                 return scaled_pixmap
             else:
                 print(f"Warning: Could not load icon from {icon_path}")
@@ -442,13 +501,15 @@ class MainWindow(QMainWindow):
 
     def create_default_icon(self):
         """Create a simple default icon if PNG loading fails"""
-        pixmap = QPixmap(80, 80)
+        icon_size = self.icon_size
+        pixmap = QPixmap(icon_size, icon_size)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setBrush(QColor("#45edf2"))
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(10, 10, 60, 60)
+        margin = int(icon_size * 0.125)  # 12.5% margin
+        painter.drawEllipse(margin, margin, icon_size - 2*margin, icon_size - 2*margin)
         painter.end()
         return pixmap
 
