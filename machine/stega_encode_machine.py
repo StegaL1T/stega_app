@@ -1,50 +1,63 @@
-"""
-StegaEncodeMachine (Encoder core)
+"""StegaEncodeMachine (Encoder core)
 =================================
 
 Shared encoder/decoder contract (LOCKED):
  - Header layout (big-endian):
    Magic: 4 bytes = b"STGA"
-   Version: 1 byte = 0x01
-   LSB bits used: 1 byte = 1–8
-   Start bit offset: 8 bytes (uint64) — index into the flattened LSB stream of the cover
+   Version: 1 byte = 0x02
+   Flags: 1 byte (bit 0 = payload encrypted)
+   LSB bits used: 1 byte in range 1..8
+   Start bit offset: 8 bytes (uint64) identifying the LSB bit index within the flattened cover stream
    Payload length: 4 bytes (uint32)
-   Filename length: 1 byte (0–100), then Filename bytes (UTF-8)
-   CRC32 of payload: 4 bytes (uint32)
+   Nonce length: 1 byte (0..32), then nonce bytes (used when encryption flag is set)
+   Header bits occupy the leading portion of the flattened LSB stream; payload start offsets are always >= header size.
+   Filename length: 1 byte (0..100), then filename bytes (UTF-8)
+   CRC32 of plaintext payload: 4 bytes (uint32)
 
 PRNG & seeding rules:
  - User key must be numeric (string of digits in GUI). Encoder/decoder derive the same seed:
-   seed = int.from_bytes(SHA256(str(key).encode('utf-8') + filename_bytes).digest()[:8], 'big')
+   seed = int.from_bytes(SHA256(str(key).encode('utf-8')).digest()[:8], 'big')
  - PRNG = Python random.Random(seed)
- - Start offset is chosen as rng.randrange(0, total_lsb_bits - required_bits) and written to the header
- - Per-byte bit order permutation is generated via Fisher–Yates on [0..(lsb_bits-1)] using the same PRNG
+ - Start offset is chosen deterministically via rng.randrange(0, total_lsb_bits - required_bits + 1) when not user-selected
+ - Per-byte bit order permutation is generated via Fisher-Yates on [0..(lsb_bits-1)] using the same PRNG
+ - Encryption derives an independent XOR keystream using the filename and nonce for context
 
 Traversal and flattening choices (decoder must mirror):
  - Images: convert to 24-bit RGB if not already. Flatten bytes row-major with per-pixel channel order RGB.
- - Audio (future): interleaved frames as stored; sample width 8/16/24/32 supported; only LSBs touched.
+ - Audio: interleaved frames as stored; sample width 8/16/24/32 supported; only LSBs touched.
+ - Video: decoded to RGB24 frames; flattened in frame order.
 
 Capacity math:
  - capacity_bits_image = width * height * channels * lsb_bits (channels=3 for RGB)
  - available_payload_bytes = floor((capacity_bits - header_bits_from_start)/8)
    Note: when embedding from a start offset, only bits from start..end are usable.
-
-This file focuses on image encoding to meet the acceptance goal quickly; audio helpers are stubbed with
-clear exceptions and can be wired similarly.
 """
 
 # machine/stega_encode_machine.py
 import os
-import struct
-import zlib
-import hashlib
-import random
-import wave
 import io
-import cv2
-from dataclasses import dataclass
+import wave
 from typing import Optional, Tuple, List, Dict, Any
+
+try:
+    import cv2
+except ImportError:  # pragma: no cover - optional dependency for video handling
+    cv2 = None
 from PIL import Image
 import numpy as np
+
+from machine.stega_spec import (
+    FLAG_PAYLOAD_ENCRYPTED,
+    HeaderMeta,
+    MAX_FILENAME_LEN,
+    crc32,
+    encrypt_payload,
+    generate_nonce,
+    pack_header,
+    perm_for_lsb_bits,
+    rng_from_key_and_filename,
+    unpack_header,
+)
 
 
 # Typed exceptions for GUI to catch
@@ -64,13 +77,10 @@ class UnsupportedFormatError(StegaError):
     pass
 
 
-@dataclass
-class HeaderMeta:
-    lsb_bits: int
-    start_bit_offset: int
-    payload_len: int
-    filename: str
-    crc32: int
+
+
+
+
 
 
 class StegaEncodeMachine:
@@ -89,12 +99,14 @@ class StegaEncodeMachine:
         self.lsb_bits = 1
         # Numeric key (string of digits enforced at GUI); stored as string
         self.encryption_key = None
+        self.encrypt_payload = True
         self.output_path = None
 
         # Internal state
         self.cover_image = None
         self.image_array = None
         self.last_embed_info: Optional[Dict[str, Any]] = None
+        self.last_error: Optional[str] = None
 
         print("StegaEncodeMachine initialized")
 
@@ -240,6 +252,12 @@ class StegaEncodeMachine:
         else:
             print("Key cleared or invalid (numeric required)")
 
+    def set_encrypt_payload(self, enabled: bool) -> None:
+        """Toggle payload encryption (innovation feature)."""
+        self.encrypt_payload = bool(enabled)
+        state = 'enabled' if self.encrypt_payload else 'disabled'
+        print(f"Payload encryption {state}")
+
     def set_output_path(self, output_path: str) -> bool:
         """
         Set the output path for the steganographic image
@@ -311,6 +329,7 @@ class StegaEncodeMachine:
             print(f"Validation failed: {error_msg}")
             return False
 
+        self.last_error = None
         try:
             if not self.encryption_key:
                 raise ValidationError("Numeric key is required")
@@ -335,9 +354,11 @@ class StegaEncodeMachine:
             return True
 
         except StegaError as e:
+            self.last_error = str(e)
             print(f"Error during steganography encoding: {e}")
             return False
         except Exception as e:
+            self.last_error = str(e)
             print(f"Unexpected error during encoding: {e}")
             return False
 
@@ -360,87 +381,15 @@ class StegaEncodeMachine:
             'max_capacity_bytes': (self.image_array.size * self.lsb_bits) // 8
         }
 
+    def get_last_error(self) -> Optional[str]:
+        return self.last_error
+
     def cleanup(self):
         """Clean up resources when machine is destroyed"""
         self.cover_image = None
         self.image_array = None
+        self.last_error = None
         print("StegaEncodeMachine cleaned up")
-
-    # ====================
-    # Spec helpers
-    # ====================
-
-    @staticmethod
-    def _crc32(data: bytes) -> int:
-        return zlib.crc32(data) & 0xFFFFFFFF
-
-    @staticmethod
-    def _rng_from_key_and_filename(key: str, filename_bytes: bytes) -> random.Random:
-        digest = hashlib.sha256(key.encode('utf-8') + filename_bytes).digest()
-        seed_int = int.from_bytes(digest[:8], 'big')
-        return random.Random(seed_int)
-
-    @staticmethod
-    def _perm_for_lsb_bits(rng: random.Random, lsb_bits: int) -> List[int]:
-        perm = list(range(lsb_bits))
-        # Fisher–Yates shuffle
-        for i in range(lsb_bits - 1, 0, -1):
-            j = rng.randrange(0, i + 1)
-            perm[i], perm[j] = perm[j], perm[i]
-        return perm
-
-    # ====================
-    # Header pack/unpack
-    # ====================
-
-    @staticmethod
-    def pack_header(meta: HeaderMeta) -> bytes:
-        if not (1 <= meta.lsb_bits <= 8):
-            raise ValidationError(f"LSB bits must be 1..8, got {meta.lsb_bits}")
-        fname_bytes = meta.filename.encode('utf-8')[:100]
-        if len(fname_bytes) > 100:
-            raise ValidationError("Filename too long after UTF-8 encoding")
-        magic = b'STGA'
-        version = 1
-        header = [
-            magic,
-            struct.pack('>B', version),
-            struct.pack('>B', meta.lsb_bits),
-            struct.pack('>Q', meta.start_bit_offset),
-            struct.pack('>I', meta.payload_len),
-            struct.pack('>B', len(fname_bytes)),
-            fname_bytes,
-            struct.pack('>I', meta.crc32),
-        ]
-        return b''.join(header)
-
-    @staticmethod
-    def unpack_header(b: bytes) -> Dict[str, Any]:
-        if len(b) < 4 + 1 + 1 + 8 + 4 + 1 + 4:
-            raise ValidationError("Header too short")
-        off = 0
-        magic = b[off:off+4]; off += 4
-        if magic != b'STGA':
-            raise ValidationError("Invalid magic")
-        version = b[off]; off += 1
-        if version != 1:
-            raise ValidationError(f"Unsupported version {version}")
-        lsb_bits = b[off]; off += 1
-        start_bit_offset = struct.unpack('>Q', b[off:off+8])[0]; off += 8
-        payload_len = struct.unpack('>I', b[off:off+4])[0]; off += 4
-        fname_len = b[off]; off += 1
-        if fname_len > 100:
-            raise ValidationError("Filename length invalid")
-        fname = b[off:off+fname_len].decode('utf-8', errors='replace'); off += fname_len
-        crc32_val = struct.unpack('>I', b[off:off+4])[0]
-        return {
-            'version': version,
-            'lsb_bits': lsb_bits,
-            'start_bit_offset': start_bit_offset,
-            'payload_len': payload_len,
-            'filename': fname,
-            'crc32': crc32_val,
-        }
 
     # ====================
     # Flatteners & capacity
@@ -495,6 +444,8 @@ class StegaEncodeMachine:
                 start_byte = min(start_sample * bytes_per_frame, total_bytes)
                 return max(0, total_bits - start_byte * lsb_bits)
         elif cover_type == 'video':
+            if cv2 is None:
+                raise UnsupportedFormatError("OpenCV is required for video support")
             cap = cv2.VideoCapture(cover_path)
             if not cap.isOpened():
                 raise UnsupportedFormatError(f"Cannot open video: {cover_path}")
@@ -551,6 +502,7 @@ class StegaEncodeMachine:
     # Encoders
     # ====================
 
+
     def encode_image(self, cover_image_path: str, payload_bytes: bytes, filename: str, lsb_bits: int, key: str, start_xy: Optional[Tuple[int, int]] = None) -> Tuple[Image.Image, Dict[str, Any]]:
         if not (1 <= lsb_bits <= 8):
             raise ValidationError(f"LSB bits must be 1..8, got {lsb_bits}")
@@ -563,51 +515,71 @@ class StegaEncodeMachine:
         flat, (h, w, c) = self._flatten_image_bytes(img)
         total_lsb_bits = flat.size * lsb_bits
 
-        fname_bytes = filename.encode('utf-8')[:100]
-        rng = self._rng_from_key_and_filename(key, fname_bytes)
-        perm = self._perm_for_lsb_bits(rng, lsb_bits)
+        fname_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
+        rng = rng_from_key_and_filename(key, b'')
+        perm = perm_for_lsb_bits(rng, lsb_bits)
 
-        # Build header to know size, but start_bit_offset to be filled after choosing
-        crc = self._crc32(payload_bytes)
-        header_placeholder = HeaderMeta(lsb_bits=lsb_bits, start_bit_offset=0, payload_len=len(payload_bytes), filename=filename, crc32=crc)
-        header_bytes = self.pack_header(header_placeholder)
+        flags = 0
+        nonce = b''
+        payload_for_embed = payload_bytes
+        if self.encrypt_payload:
+            nonce = generate_nonce()
+            payload_for_embed = encrypt_payload(key, nonce, payload_bytes, fname_bytes)
+            flags |= FLAG_PAYLOAD_ENCRYPTED
+
+        payload_crc = crc32(payload_bytes)
+        header_placeholder = HeaderMeta(
+            lsb_bits=lsb_bits,
+            start_bit_offset=0,
+            payload_len=len(payload_bytes),
+            filename=filename,
+            crc32=payload_crc,
+            flags=flags,
+            nonce=nonce,
+        )
+        header_bytes = pack_header(header_placeholder)
         header_bits = len(header_bytes) * 8
-        required_bits = header_bits + len(payload_bytes) * 8
+        payload_bits = len(payload_for_embed) * 8
+        required_bits = header_bits + payload_bits
         if required_bits > total_lsb_bits:
             raise CapacityError(f"Not enough capacity: need {required_bits} bits, have {total_lsb_bits} bits")
 
-        # Compute start offset
         if start_xy is not None:
             x, y = start_xy
             if not (0 <= x < w and 0 <= y < h):
                 raise ValidationError(f"Start (x,y) out of bounds: ({x},{y}) for image {w}x{h}")
             pixel_index = y * w + x
             start_bit = pixel_index * c * lsb_bits
-            if start_bit + required_bits > total_lsb_bits:
-                raise CapacityError("Selected start position too late for payload+header")
+            if start_bit < header_bits:
+                raise CapacityError("Selected start position overlaps header region")
+            if start_bit + payload_bits > total_lsb_bits:
+                raise CapacityError("Selected start position too late for payload")
         else:
-            # Choose via PRNG ensuring room from start to end
-            start_bit = rng.randrange(0, total_lsb_bits - required_bits)
+            start_bit = rng.randrange(header_bits, total_lsb_bits - payload_bits + 1)
 
-        # Rebuild header with actual start_bit_offset
-        header = HeaderMeta(lsb_bits=lsb_bits, start_bit_offset=start_bit, payload_len=len(payload_bytes), filename=filename, crc32=crc)
-        header_bytes = self.pack_header(header)
+        header_actual = HeaderMeta(
+            lsb_bits=lsb_bits,
+            start_bit_offset=start_bit,
+            payload_len=len(payload_bytes),
+            filename=filename,
+            crc32=payload_crc,
+            flags=flags,
+            nonce=nonce,
+        )
+        header_bytes = pack_header(header_actual)
         assert len(header_bytes) * 8 == header_bits, "Header size changed unexpectedly"
 
-        # Embed: header then payload
-        next_bit = self._embed_bits(flat, lsb_bits, start_bit, perm, header_bytes)
-        self._embed_bits(flat, lsb_bits, next_bit, perm, payload_bytes)
+        identity_order = list(range(lsb_bits))
+        self._embed_bits(flat, lsb_bits, 0, identity_order, header_bytes)
+        self._embed_bits(flat, lsb_bits, start_bit, perm, payload_for_embed)
 
-        # Reassemble image
         stego_arr = flat.reshape((h, w, c))
         stego_img = Image.fromarray(stego_arr, mode='RGB')
 
-        # Quick header round-trip check
-        parsed = self.unpack_header(header_bytes)
-        if parsed['crc32'] != crc:
+        parsed = unpack_header(header_bytes)
+        if parsed['crc32'] != payload_crc:
             raise StegaError("Header CRC mismatch after pack/unpack")
 
-        # Store last embed info for GUI proof panel
         self.last_embed_info = {
             'perm': perm,
             'start_bit': start_bit,
@@ -615,12 +587,18 @@ class StegaEncodeMachine:
             'lsb_bits': lsb_bits,
             'filename': filename,
             'image_shape': (h, w, c),
+            'flags': flags,
+            'nonce': nonce.hex() if nonce else '',
+            'encrypted': bool(flags & FLAG_PAYLOAD_ENCRYPTED),
+            'crc32': payload_crc,
         }
 
         return stego_img, parsed
 
+
+
+
     def encode_audio(self, cover_wav_path: str, payload_bytes: bytes, filename: str, lsb_bits: int, key: str, start_sample: Optional[int] = None) -> bytes:
-        # Validate
         if not (1 <= lsb_bits <= 8):
             raise ValidationError(f"LSB bits must be 1..8, got {lsb_bits}")
         if not key or not key.isdigit():
@@ -628,10 +606,9 @@ class StegaEncodeMachine:
         if not os.path.exists(cover_wav_path):
             raise ValidationError(f"Cover WAV not found: {cover_wav_path}")
 
-        # Read WAV
         with wave.open(cover_wav_path, 'rb') as wf:
             n_channels = wf.getnchannels()
-            sampwidth = wf.getsampwidth()  # bytes per sample: 1,2,3,4
+            sampwidth = wf.getsampwidth()
             framerate = wf.getframerate()
             n_frames = wf.getnframes()
             comptype = wf.getcomptype()
@@ -643,22 +620,38 @@ class StegaEncodeMachine:
             frames = wf.readframes(n_frames)
             params = wf.getparams()
 
-        flat = np.frombuffer(frames, dtype=np.uint8).copy()  # mutable
+        flat = np.frombuffer(frames, dtype=np.uint8).copy()
         total_lsb_bits = flat.size * lsb_bits
 
-        # Build header placeholder for size
-        fname_bytes = filename.encode('utf-8')[:100]
-        rng = self._rng_from_key_and_filename(key, fname_bytes)
-        perm = self._perm_for_lsb_bits(rng, lsb_bits)
-        crc = self._crc32(payload_bytes)
-        header_placeholder = HeaderMeta(lsb_bits=lsb_bits, start_bit_offset=0, payload_len=len(payload_bytes), filename=filename, crc32=crc)
-        header_bytes = self.pack_header(header_placeholder)
+        fname_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
+        rng = rng_from_key_and_filename(key, b'')
+        perm = perm_for_lsb_bits(rng, lsb_bits)
+
+        flags = 0
+        nonce = b''
+        payload_for_embed = payload_bytes
+        if self.encrypt_payload:
+            nonce = generate_nonce()
+            payload_for_embed = encrypt_payload(key, nonce, payload_bytes, fname_bytes)
+            flags |= FLAG_PAYLOAD_ENCRYPTED
+
+        payload_crc = crc32(payload_bytes)
+        header_placeholder = HeaderMeta(
+            lsb_bits=lsb_bits,
+            start_bit_offset=0,
+            payload_len=len(payload_bytes),
+            filename=filename,
+            crc32=payload_crc,
+            flags=flags,
+            nonce=nonce,
+        )
+        header_bytes = pack_header(header_placeholder)
         header_bits = len(header_bytes) * 8
-        required_bits = header_bits + len(payload_bytes) * 8
+        payload_bits = len(payload_for_embed) * 8
+        required_bits = header_bits + payload_bits
         if required_bits > total_lsb_bits:
             raise CapacityError(f"Not enough capacity: need {required_bits} bits, have {total_lsb_bits} bits")
 
-        # Compute start offset
         bytes_per_frame = n_channels * sampwidth
         if start_sample is not None:
             if start_sample < 0:
@@ -667,33 +660,39 @@ class StegaEncodeMachine:
             if start_byte >= flat.size:
                 raise CapacityError("Selected start sample beyond audio length")
             start_bit = start_byte * lsb_bits
-            if start_bit + required_bits > total_lsb_bits:
-                raise CapacityError("Selected start position too late for payload+header")
+            if start_bit < header_bits:
+                raise CapacityError("Selected start sample overlaps header region")
+            if start_bit + payload_bits > total_lsb_bits:
+                raise CapacityError("Selected start position too late for payload")
         else:
-            # Choose via PRNG ensuring room from start to end
-            start_bit = rng.randrange(0, total_lsb_bits - required_bits)
+            start_bit = rng.randrange(header_bits, total_lsb_bits - payload_bits + 1)
 
-        # Rebuild header with actual start
-        header = HeaderMeta(lsb_bits=lsb_bits, start_bit_offset=start_bit, payload_len=len(payload_bytes), filename=filename, crc32=crc)
-        header_bytes = self.pack_header(header)
+        header_actual = HeaderMeta(
+            lsb_bits=lsb_bits,
+            start_bit_offset=start_bit,
+            payload_len=len(payload_bytes),
+            filename=filename,
+            crc32=payload_crc,
+            flags=flags,
+            nonce=nonce,
+        )
+        header_bytes = pack_header(header_actual)
         assert len(header_bytes) * 8 == header_bits, "Header size changed unexpectedly"
 
-        # Embed header then payload into flat uint8 bytes
-        next_bit = self._embed_bits(flat, lsb_bits, start_bit, perm, header_bytes)
-        self._embed_bits(flat, lsb_bits, next_bit, perm, payload_bytes)
+        identity_order = list(range(lsb_bits))
+        self._embed_bits(flat, lsb_bits, 0, identity_order, header_bytes)
+        self._embed_bits(flat, lsb_bits, start_bit, perm, payload_for_embed)
 
-        # Write a new WAV to bytes
         buf = io.BytesIO()
         with wave.open(buf, 'wb') as ww:
             ww.setparams(params)
             ww.writeframes(flat.tobytes())
         audio_bytes = buf.getvalue()
 
-        # Store last embed info
         self.last_embed_info = {
             'perm': perm,
             'start_bit': start_bit,
-            'header': self.unpack_header(header_bytes),
+            'header': unpack_header(header_bytes),
             'lsb_bits': lsb_bits,
             'filename': filename,
             'audio_info': {
@@ -702,9 +701,15 @@ class StegaEncodeMachine:
                 'sampwidth_bytes': sampwidth,
                 'frames': n_frames,
             },
+            'flags': flags,
+            'nonce': nonce.hex() if nonce else '',
+            'encrypted': bool(flags & FLAG_PAYLOAD_ENCRYPTED),
+            'crc32': payload_crc,
         }
 
         return audio_bytes
+
+
 
     # ====================
     # Video helpers
@@ -712,6 +717,8 @@ class StegaEncodeMachine:
 
     @staticmethod
     def _iter_video_frames_rgb24(path: str) -> Tuple[List[np.ndarray], float]:
+        if cv2 is None:
+            raise UnsupportedFormatError("OpenCV is required for video support")
         cap = cv2.VideoCapture(path)
         if not cap.isOpened():
             raise UnsupportedFormatError(f"Cannot open video: {path}")
@@ -731,6 +738,8 @@ class StegaEncodeMachine:
 
     @staticmethod
     def _write_video_rgb24(frames_rgb: List[np.ndarray], fps: float, out_path: str) -> str:
+        if cv2 is None:
+            raise UnsupportedFormatError("OpenCV is required for video support")
         h, w, _ = frames_rgb[0].shape
         # Try uncompressed AVI via DIB 'DIB '
         tried = []
@@ -772,6 +781,9 @@ class StegaEncodeMachine:
     # Video encoder
     # ====================
 
+
+
+
     def encode_video(self, cover_video_path: str, payload_bytes: bytes, filename: str, lsb_bits: int, key: str, start_fxy: Optional[Tuple[int, int, int]] = None, out_path: Optional[str] = None) -> str:
         if not (1 <= lsb_bits <= 8):
             raise ValidationError(f"LSB bits must be 1..8, got {lsb_bits}")
@@ -785,62 +797,83 @@ class StegaEncodeMachine:
         if c != 3:
             raise UnsupportedFormatError("Expected RGB24 frames (3 channels)")
 
-        # Flatten frames to 1D
         stacked = np.concatenate([fr.reshape(-1) for fr in frames_rgb], axis=0)
         total_lsb_bits = stacked.size * lsb_bits
 
-        # PRNG/perm
-        fname_bytes = filename.encode('utf-8')[:100]
-        rng = self._rng_from_key_and_filename(key, fname_bytes)
-        perm = self._perm_for_lsb_bits(rng, lsb_bits)
+        fname_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
+        rng = rng_from_key_and_filename(key, b'')
+        perm = perm_for_lsb_bits(rng, lsb_bits)
 
-        # Header placeholder
-        crc = self._crc32(payload_bytes)
-        header_placeholder = HeaderMeta(lsb_bits=lsb_bits, start_bit_offset=0, payload_len=len(payload_bytes), filename=filename, crc32=crc)
-        header_bytes = self.pack_header(header_placeholder)
+        flags = 0
+        nonce = b''
+        payload_for_embed = payload_bytes
+        if self.encrypt_payload:
+            nonce = generate_nonce()
+            payload_for_embed = encrypt_payload(key, nonce, payload_bytes, fname_bytes)
+            flags |= FLAG_PAYLOAD_ENCRYPTED
+
+        payload_crc = crc32(payload_bytes)
+        header_placeholder = HeaderMeta(
+            lsb_bits=lsb_bits,
+            start_bit_offset=0,
+            payload_len=len(payload_bytes),
+            filename=filename,
+            crc32=payload_crc,
+            flags=flags,
+            nonce=nonce,
+        )
+        header_bytes = pack_header(header_placeholder)
         header_bits = len(header_bytes) * 8
-        required_bits = header_bits + len(payload_bytes) * 8
+        payload_bits = len(payload_for_embed) * 8
+        required_bits = header_bits + payload_bits
         if required_bits > total_lsb_bits:
             raise CapacityError(f"Not enough capacity: need {required_bits} bits, have {total_lsb_bits} bits")
 
-        # Start offset
+        if cv2 is None:
+            raise UnsupportedFormatError("OpenCV is required for video support")
+
         if start_fxy is not None:
             f, x, y = start_fxy
             if not (0 <= x < w and 0 <= y < h and 0 <= f < len(frames_rgb)):
                 raise ValidationError(f"Start (frame,x,y) out of bounds: ({f},{x},{y})")
             pixel_index_across = f * (w * h) + y * w + x
             start_bit = pixel_index_across * c * lsb_bits
-            if start_bit + required_bits > total_lsb_bits:
-                raise CapacityError("Selected start position too late for payload+header")
+            if start_bit < header_bits:
+                raise CapacityError("Selected start position overlaps header region")
+            if start_bit + payload_bits > total_lsb_bits:
+                raise CapacityError("Selected start position too late for payload")
         else:
-            start_bit = rng.randrange(0, total_lsb_bits - required_bits)
+            start_bit = rng.randrange(header_bits, total_lsb_bits - payload_bits + 1)
 
-        # Header with actual start
-        header = HeaderMeta(lsb_bits=lsb_bits, start_bit_offset=start_bit, payload_len=len(payload_bytes), filename=filename, crc32=crc)
-        header_bytes = self.pack_header(header)
+        header_actual = HeaderMeta(
+            lsb_bits=lsb_bits,
+            start_bit_offset=start_bit,
+            payload_len=len(payload_bytes),
+            filename=filename,
+            crc32=payload_crc,
+            flags=flags,
+            nonce=nonce,
+        )
+        header_bytes = pack_header(header_actual)
         assert len(header_bytes) * 8 == header_bits, "Header size changed unexpectedly"
 
-        # Embed into stacked bytes
-        next_bit = self._embed_bits(stacked, lsb_bits, start_bit, perm, header_bytes)
-        self._embed_bits(stacked, lsb_bits, next_bit, perm, payload_bytes)
+        identity_order = list(range(lsb_bits))
+        self._embed_bits(stacked, lsb_bits, 0, identity_order, header_bytes)
+        self._embed_bits(stacked, lsb_bits, start_bit, perm, payload_for_embed)
 
-        # Unstack back to frames
         frame_pixels = w * h * c
         new_frames = []
         for i in range(len(frames_rgb)):
             seg = stacked[i * frame_pixels:(i + 1) * frame_pixels]
             new_frames.append(seg.reshape((h, w, c)))
 
-        # Write output
         out_path = out_path or os.path.splitext(cover_video_path)[0] + "_stego.avi"
         actual_out = self._write_video_rgb24(new_frames, fps, out_path)
 
-        # Verify header pack/unpack
-        parsed = self.unpack_header(header_bytes)
-        if parsed['crc32'] != crc:
+        parsed = unpack_header(header_bytes)
+        if parsed['crc32'] != payload_crc:
             raise StegaError("Header CRC mismatch after pack/unpack")
 
-        # Store last embed info
         self.last_embed_info = {
             'perm': perm,
             'start_bit': start_bit,
@@ -850,9 +883,15 @@ class StegaEncodeMachine:
             'video_shape': (len(frames_rgb), h, w, c),
             'fps': fps,
             'output': actual_out,
+            'flags': flags,
+            'nonce': nonce.hex() if nonce else '',
+            'encrypted': bool(flags & FLAG_PAYLOAD_ENCRYPTED),
+            'crc32': payload_crc,
         }
 
         return actual_out
+
+
 
     # Helper for GUI
     def get_audio_info(self, wav_path: str) -> Dict[str, Any]:
