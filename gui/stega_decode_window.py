@@ -224,8 +224,7 @@ class StegaDecodeWindow(QMainWindow):
         # Set gradient background
         self.setStyleSheet("""
             QMainWindow {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #fdf2e9, stop:1 #ffffff);
+                background: #fdf2e9;
             }
         """)
 
