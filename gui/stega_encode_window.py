@@ -1,9 +1,10 @@
-# gui/stega_encode_window.py
+﻿# gui/stega_encode_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
                              QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-                             QScrollArea, QSlider as QTimeSlider, QToolTip, QProgressBar)
+                             QScrollArea, QSlider as QTimeSlider, QToolTip, QProgressBar,
+                             QCheckBox)
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal, QRegularExpression
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QIntValidator, QRegularExpressionValidator, QCursor
 import os
@@ -12,7 +13,7 @@ from PIL import Image
 import soundfile as sf
 import cv2
 from datetime import datetime
-from machine.stega_encode_machine import HeaderMeta
+from machine.stega_spec import HeaderMeta, FLAG_PAYLOAD_ENCRYPTED, pack_header
 
 
 def _human_size(num: int) -> str:
@@ -31,7 +32,7 @@ class NotificationBanner(QFrame):
     def __init__(self, message: str, severity: str = 'info', parent: QWidget | None = None):
         super().__init__(parent)
         self._message_label = QLabel()
-        self._close_btn = QPushButton("×")
+        self._close_btn = QPushButton("Ã—")
         self._close_btn.setFixedWidth(24)
         self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._close_btn.clicked.connect(self._on_close)
@@ -115,6 +116,7 @@ class MediaDropWidget(QFrame):
             }
         """)
         self.drop_zone.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.drop_zone.setToolTip('Step 1: Add a cover file. Drag & drop or click browse to pick an image, WAV, or video container.')
         self.drop_zone.setText(
             "Drag & Drop Media Here\n\nSupported: Images, Audio, Video")
 
@@ -669,7 +671,7 @@ class VideoPreviewWidget(QWidget):
         # Control buttons
         button_layout = QHBoxLayout()
 
-        self.prev_frame_btn = QPushButton("◀")
+        self.prev_frame_btn = QPushButton("â—€")
         self.prev_frame_btn.setStyleSheet("""
             QPushButton {
                 background-color: #95a5a6;
@@ -681,7 +683,7 @@ class VideoPreviewWidget(QWidget):
         """)
         self.prev_frame_btn.clicked.connect(self.prev_frame)
 
-        self.next_frame_btn = QPushButton("▶")
+        self.next_frame_btn = QPushButton("â–¶")
         self.next_frame_btn.setStyleSheet("""
             QPushButton {
                 background-color: #95a5a6;
@@ -1079,6 +1081,10 @@ class StegaEncodeWindow(QMainWindow):
         # Initialize the steganography machine
         from machine.stega_encode_machine import StegaEncodeMachine
         self.machine = StegaEncodeMachine()
+        try:
+            self.machine.set_encrypt_payload(True)
+        except Exception:
+            pass
         self.media_type = None
         self.start_xy = None  # (x,y) for image start
         self.start_sample = None  # for audio
@@ -1112,6 +1118,13 @@ class StegaEncodeWindow(QMainWindow):
         main_layout.addLayout(self.notice_container)
         # Track overflow banner to avoid duplicates
         self._overflow_banner = None
+        self.step_boxes = []
+        self.helper_hint_label = None
+        self.status_label = None
+        self.current_step = 1
+
+        # Quick-start guidance row
+        self.create_quickstart_panel(main_layout)
 
         # Title section
         self.create_title_section(main_layout)
@@ -1122,11 +1135,183 @@ class StegaEncodeWindow(QMainWindow):
         # Make the window fullscreen
         self.showMaximized()
 
-    def create_info_button(self, tooltip_text):
-        """Create a blue info button with tooltip"""
-        info_btn = QPushButton("ℹ")
-        info_btn.setFixedSize(25, 25)
-        info_btn.setStyleSheet("""
+    def create_quickstart_panel(self, layout):
+        """Create the top quick-start guidance panel."""
+        frame = QFrame()
+        frame.setObjectName("quickStartFrame")
+        frame.setStyleSheet("""
+            QFrame#quickStartFrame {
+                background-color: rgba(255, 255, 255, 0.9);
+                border-radius: 18px;
+                border: 1px solid #d6e4f3;
+                padding: 12px 18px;
+            }
+            QFrame[class="stepCard"] {
+                background-color: #f4f9ff;
+                border: 1px dashed #c9d6eb;
+                border-radius: 14px;
+            }
+            QFrame[class="stepCard"][active="true"] {
+                border: 2px solid #3498db;
+                background-color: #e6f2ff;
+            }
+            QLabel[class="stepNumber"] {
+                color: #3498db;
+                font-size: 13px;
+                font-weight: bold;
+                letter-spacing: 1px;
+            }
+            QLabel[class="stepTitle"] {
+                color: #2c3e50;
+                font-size: 15px;
+                font-weight: 600;
+            }
+            QLabel[class="stepDetail"] {
+                color: #5d6d7e;
+                font-size: 12px;
+            }
+        """)
+
+        wrapper_layout = QVBoxLayout(frame)
+        wrapper_layout.setContentsMargins(8, 8, 8, 8)
+        wrapper_layout.setSpacing(10)
+
+        steps_layout = QHBoxLayout()
+        steps_layout.setSpacing(12)
+
+        steps = [
+            ("Select Cover", "Drag & drop or browse for the image / audio / video cover.", "Pick the carrier file that will hide your payload."),
+            ("Add Payload", "Type a secret message or attach any file to embed.", "You can embed text, documents, executables or other binaries."),
+            ("Secure with Key", "Enter the numeric key and choose whether to encrypt.", "This key drives the PRNG, start offset and optional payload cipher."),
+            ("Tune Settings", "Set LSB bits and choose the start location for embedding.", "Higher LSB count increases capacity; pick a start pixel/sample."),
+            ("Review & Encode", "Check capacity + proof, then hide the payload.", "Use visual tools to compare cover vs stego before sharing.")
+        ]
+
+        self.step_boxes = []
+        for idx, (title, detail, tip) in enumerate(steps, start=1):
+            card = QFrame()
+            card.setProperty("class", "stepCard")
+            card.setProperty("active", idx == 1)
+            card.setToolTip(tip)
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 10, 12, 10)
+            card_layout.setSpacing(4)
+
+            number_lbl = QLabel(f"Step {idx}")
+            number_lbl.setProperty("class", "stepNumber")
+            title_lbl = QLabel(title)
+            title_lbl.setProperty("class", "stepTitle")
+            title_lbl.setWordWrap(True)
+            detail_lbl = QLabel(detail)
+            detail_lbl.setProperty("class", "stepDetail")
+            detail_lbl.setWordWrap(True)
+
+            card_layout.addWidget(number_lbl)
+            card_layout.addWidget(title_lbl)
+            card_layout.addWidget(detail_lbl)
+            card_layout.addStretch()
+
+            steps_layout.addWidget(card)
+            self.step_boxes.append(card)
+
+        wrapper_layout.addLayout(steps_layout)
+
+        helper_layout = QHBoxLayout()
+        helper_layout.setContentsMargins(4, 0, 4, 0)
+        helper_layout.setSpacing(12)
+
+        self.helper_hint_label = QLabel("Step 1: Start by selecting a cover file.")
+        self.helper_hint_label.setStyleSheet("color:#2c3e50;font-weight:600;")
+        self.helper_hint_label.setWordWrap(True)
+
+        tour_btn = QPushButton("Show Guided Tour")
+        tour_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        tour_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                padding: 6px 16px;
+                border-radius: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1f8a4c;
+            }
+        """)
+        tour_btn.setToolTip("Walk through the encoding workflow and learn where each feature lives.")
+        tour_btn.clicked.connect(self.show_onboarding_tour)
+
+        helper_layout.addWidget(self.helper_hint_label)
+        helper_layout.addStretch()
+        helper_layout.addWidget(tour_btn)
+        wrapper_layout.addLayout(helper_layout)
+
+        layout.addWidget(frame)
+        self.reset_workflow_steps()
+
+    def reset_workflow_steps(self):
+        """Reset workflow guidance to the first step."""
+        self.update_helper_step(1, "Step 1: Start by selecting a cover file.")
+        self.set_status('Waiting for cover selection.', 'info')
+
+    def update_helper_step(self, step_index: int, hint: str | None = None):
+        """Highlight the active workflow step and update helper text."""
+        self.current_step = max(1, min(step_index, len(self.step_boxes) or 1))
+        if self.step_boxes:
+            for idx, card in enumerate(self.step_boxes, start=1):
+                active = idx == self.current_step
+                card.setProperty("active", active)
+                card.style().unpolish(card)
+                card.style().polish(card)
+        if hint and self.helper_hint_label:
+            self.helper_hint_label.setText(hint)
+
+    def show_step_hint(self, message: str):
+        """Convenience helper to refresh the helper hint label."""
+        if self.helper_hint_label:
+            self.helper_hint_label.setText(message)
+
+    def set_status(self, message: str, severity: str = 'info'):
+        """Update the inline status label with colour coding."""
+        if not self.status_label:
+            return
+        colours = {
+            'info': ('#2980b9', '#e8f4ff'),
+            'success': ('#1e8449', '#e6f8ed'),
+            'warning': ('#b9770e', '#fff6e0'),
+            'error': ('#c0392b', '#fdecea')
+        }
+        fg, bg = colours.get(severity, colours['info'])
+        self.status_label.setText(f"Status: {message}")
+        self.status_label.setStyleSheet(
+            f"QLabel {{ color:{fg}; background-color:{bg}; border:1px solid {fg}; "
+            "border-radius:10px; padding:8px 16px; font-weight:600; }}"
+        )
+
+    def show_onboarding_tour(self):
+        """Display a guided tour banner with workflow tips."""
+        tour_text = (
+            "1. Select your cover image/audio/video.\n"
+            "2. Add a payload (type a message or attach a file).\n"
+            "3. Enter a numeric key and pick encryption preferences.\n"
+            "4. Adjust LSB bits and choose a start location.\n"
+            "5. Press 'Hide Message' and review the proof panel/visual tools."
+        )
+        banner = NotificationBanner(f"Guided tour\n{tour_text}", 'info', self)
+        self.notice_container.addWidget(banner)
+        banner.show()
+        self.set_status("Guided tour: follow the numbered steps above.", 'info')
+        self.show_step_hint("Start at Step 1 and work your way across.")
+
+    def create_info_button(self, tooltip_text: str) -> QPushButton:
+        """Create a styled info button with tooltip text."""
+        btn = QPushButton('i')
+        btn.setFixedSize(24, 24)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setToolTip(tooltip_text)
+        btn.setStyleSheet(
+            """
             QPushButton {
                 background-color: #3498db;
                 color: white;
@@ -1138,16 +1323,18 @@ class StegaEncodeWindow(QMainWindow):
             QPushButton:hover {
                 background-color: #2980b9;
             }
-        """)
-        info_btn.setToolTip(tooltip_text)
-        return info_btn
+            """
+        )
+        return btn
+
+
 
     def create_title_section(self, layout):
         """Create the title and back button section"""
         title_layout = QHBoxLayout()
 
         # Back button
-        back_button = QPushButton("← Back to Main")
+        back_button = QPushButton("â† Back to Main")
         back_button.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
@@ -1262,6 +1449,15 @@ class StegaEncodeWindow(QMainWindow):
 
         layout.addWidget(button_container)
 
+        # Inline status banner
+        if not self.status_label:
+            self.status_label = QLabel('Status: Waiting for inputs.')
+            self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.status_label.setWordWrap(True)
+            self.status_label.setStyleSheet("QLabel { color:#2980b9; background-color:#e8f4ff; border:1px solid #2980b9; border-radius:10px; padding:8px 16px; font-weight:600; }")
+        layout.addWidget(self.status_label)
+        self.set_status('Waiting for inputs.', 'info')
+
     def create_cover_panel(self):
         """Create the cover item panel (left column)"""
         panel = QFrame()
@@ -1292,9 +1488,9 @@ class StegaEncodeWindow(QMainWindow):
         # Info button
         info_btn = self.create_info_button(
             "For Cover Item, we support:\n"
-            "• Image (.png, .bmp, .gif, .jpg)\n"
-            "• Audio (.wav, .mp3)\n"
-            "• Video (.mov, .mp4)")
+            "â€¢ Image (.png, .bmp, .gif, .jpg)\n"
+            "â€¢ Audio (.wav, .mp3)\n"
+            "â€¢ Video (.mov, .mp4)")
 
         header_layout.addWidget(title)
         header_layout.addStretch()
@@ -1345,12 +1541,12 @@ class StegaEncodeWindow(QMainWindow):
         # Info button
         info_btn = self.create_info_button(
             "For payload, we support:\n"
-            "• Text Input\n"
-            "• Text File (.txt)\n"
-            "• .pdf\n"
-            "• .exe\n"
-            "• Audio (.wav, .mp3)\n"
-            "• Video (.mov, .mp4)")
+            "â€¢ Text Input\n"
+            "â€¢ Text File (.txt)\n"
+            "â€¢ .pdf\n"
+            "â€¢ .exe\n"
+            "â€¢ Audio (.wav, .mp3)\n"
+            "â€¢ Video (.mov, .mp4)")
 
         header_layout.addWidget(title)
         header_layout.addStretch()
@@ -1360,6 +1556,7 @@ class StegaEncodeWindow(QMainWindow):
         self.message_text = QTextEdit()
         self.message_text.setPlaceholderText(
             "Enter your secret message here...")
+        self.message_text.setToolTip('Step 2: Type a short secret message to embed (optional).')
         self.message_text.setMaximumHeight(80)
         self.message_text.setStyleSheet("""
             QTextEdit {
@@ -1380,6 +1577,7 @@ class StegaEncodeWindow(QMainWindow):
                 background-color: #e3f2fd;
             }
         """)
+        self.message_text.textChanged.connect(self.on_payload_text_changed)
 
         # Or separator
         or_separator = QLabel("------- or -------")
@@ -1395,6 +1593,7 @@ class StegaEncodeWindow(QMainWindow):
 
         # File drop widget (similar to cover item)
         self.payload_drop_widget = PayloadDropWidget()
+        self.payload_drop_widget.setToolTip('Upload a payload file (any binary). Drag & drop or browse to continue Step 2.')
         self.payload_drop_widget.file_loaded.connect(self.on_payload_file_loaded)
         try:
             self.payload_drop_widget.notify.connect(self.show_persistent_notice)
@@ -1439,9 +1638,9 @@ class StegaEncodeWindow(QMainWindow):
         # Info button
         info_btn = self.create_info_button(
             "For Controls:\n"
-            "• LSB: Higher -> more capacity, lower quality\n"
-            "• Key: Numeric, required for reproducibility\n"
-            "• Output Path: Default to datetime")
+            "â€¢ LSB: Higher -> more capacity, lower quality\n"
+            "â€¢ Key: Numeric, required for reproducibility\n"
+            "â€¢ Output Path: Default to datetime")
 
         header_layout.addWidget(title)
         header_layout.addStretch()
@@ -1472,6 +1671,7 @@ class StegaEncodeWindow(QMainWindow):
         self.lsb_slider.setMinimum(1)
         self.lsb_slider.setMaximum(8)
         self.lsb_slider.setValue(1)
+        self.lsb_slider.setToolTip('Step 4: Choose how many least-significant bits to use for embedding. Higher values increase capacity but change more data.')
         self.lsb_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.lsb_slider.setTickInterval(1)
         self.lsb_slider.setStyleSheet("""
@@ -1503,6 +1703,7 @@ class StegaEncodeWindow(QMainWindow):
 
         self.key_input = QLineEdit()
         self.key_input.setPlaceholderText("Enter numeric key, e.g. 123456")
+        self.key_input.setToolTip('Step 3: This numeric key is required for both encoding and decoding.')
         self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
         # Use regex validator to allow long numeric keys without 32-bit limits
         self.key_input.setValidator(QRegularExpressionValidator(QRegularExpression(r"^\d{1,32}$")))
@@ -1526,7 +1727,14 @@ class StegaEncodeWindow(QMainWindow):
             }
         """)
 
+        self.key_input.textChanged.connect(self.on_key_changed)
         key_layout.addWidget(self.key_input)
+
+        self.encrypt_checkbox = QCheckBox("Encrypt payload before embedding (recommended)")
+        self.encrypt_checkbox.setToolTip('Use the numeric key to derive an XOR keystream before embedding the payload.')
+        self.encrypt_checkbox.setChecked(True)
+        self.encrypt_checkbox.toggled.connect(self.on_encrypt_toggle)
+        key_layout.addWidget(self.encrypt_checkbox)
 
         # Capacity group
         capacity_group = QGroupBox("Capacity")
@@ -1608,20 +1816,28 @@ class StegaEncodeWindow(QMainWindow):
         self.proof_start = QLabel("Start bit: -")
         self.proof_perm = QLabel("Perm [0:8]: -")
         self.proof_header = QLabel("Header: -")
-        for lbl in [self.proof_lsb, self.proof_start, self.proof_perm, self.proof_header]:
+        self.proof_stats = QLabel("LSB stats: -")
+        for lbl in [self.proof_lsb, self.proof_start, self.proof_perm, self.proof_header, self.proof_stats]:
             lbl.setStyleSheet("color:#2c3e50;")
             lbl.setWordWrap(True)
             proof_layout.addWidget(lbl)
         # Mini visualization for permutation (8-wide max)
         self.perm_vis = QLabel()
         self.perm_vis.setFixedHeight(20)
+        self.perm_vis.setToolTip('Permutation visual: colours map the bit positions (0-7) in the embedding order.')
         self.perm_vis.setStyleSheet("QLabel{background:#f8f9fa;border:1px dashed #bdc3c7;border-radius:8px;}")
         proof_layout.addWidget(self.perm_vis)
+
+        legend = QLabel('Legend: coloured squares show the per-byte LSB permutation order; LSB stats compare the percentage of ones in cover vs stego for each bit.')
+        legend.setStyleSheet('color:#5d6d7e;font-size:12px;')
+        legend.setWordWrap(True)
+        proof_layout.addWidget(legend)
 
         # Visualization toggles
         vis_group = QGroupBox("Visualization")
         vis_layout = QVBoxLayout(vis_group)
         self.lsb_toggle_btn = QPushButton("Show LSB plane")
+        self.lsb_toggle_btn.setToolTip('Visualise the least significant bit plane of the cover image/audio preview.')
         self.lsb_toggle_btn.setCheckable(True)
         self.lsb_toggle_btn.setStyleSheet("""
             QPushButton { background-color: #95a5a6; color: white; border: none; padding: 8px 12px; border-radius: 5px; }
@@ -1631,6 +1847,7 @@ class StegaEncodeWindow(QMainWindow):
         vis_layout.addWidget(self.lsb_toggle_btn)
         # Diff map toggle (enabled after stego exists)
         self.diff_toggle_btn = QPushButton("Show Difference Map")
+        self.diff_toggle_btn.setToolTip('Toggle to highlight which pixels changed between cover and stego outputs.')
         self.diff_toggle_btn.setCheckable(True)
         self.diff_toggle_btn.setEnabled(False)
         self.diff_toggle_btn.setStyleSheet("""
@@ -1780,12 +1997,19 @@ class StegaEncodeWindow(QMainWindow):
 
     def on_media_loaded(self, file_path, media_type):
         """Handle media loaded from drag and drop or browse"""
+        if hasattr(self, 'reset_lsb_stats'):
+            self.reset_lsb_stats()
         if not file_path:  # Media was removed
+            self.set_status('Cover cleared. Select a cover to begin.', 'info')
+            self.reset_workflow_steps()
+            self.media_type = None
             return
 
         print(f"Media loaded: {file_path} ({media_type})")
         self.media_type = media_type
         self.start_xy = None
+        self.update_helper_step(2, 'Step 2: Add a payload (type a message or attach a file).')
+        self.set_status(f'Cover ready: {os.path.basename(file_path)}', 'success')
 
         # Update machine with media
         if media_type == 'image':
@@ -1827,7 +2051,7 @@ class StegaEncodeWindow(QMainWindow):
 
             if self.machine.set_cover_image(file_path):
                 info = self.machine.get_image_info()
-                print(f"✅ Image loaded: {os.path.basename(file_path)}")
+                print(f"âœ… Image loaded: {os.path.basename(file_path)}")
                 print(f"Size: {info.get('dimensions', 'Unknown')}")
                 print(f"Capacity: {info.get('max_capacity_bytes', 0)} bytes")
                 # connect to pixel selection if available
@@ -1844,13 +2068,13 @@ class StegaEncodeWindow(QMainWindow):
                     self.diff_toggle_btn.setChecked(False)
                     self.diff_toggle_btn.setEnabled(False)
             else:
-                print("❌ Error loading image")
+                print("âŒ Error loading image")
         elif media_type == 'audio':
             # WAV PCM
             if self.machine.set_cover_audio(file_path):
                 try:
                     self.audio_info = self.machine.get_audio_info(file_path)
-                    print(f"✅ WAV loaded: {os.path.basename(file_path)}  {self.audio_info}")
+                    print(f"âœ… WAV loaded: {os.path.basename(file_path)}  {self.audio_info}")
                 except Exception as e:
                     print(f"Error reading audio info: {e}")
                     self.audio_info = None
@@ -1865,7 +2089,7 @@ class StegaEncodeWindow(QMainWindow):
                     self.play_cover_btn.setEnabled(True)
                 self.update_capacity_panel()
             else:
-                print("❌ Error loading audio")
+                print("âŒ Error loading audio")
         elif media_type == 'video':
             # Probe metadata and enable lossless embed path
             try:
@@ -1903,24 +2127,54 @@ class StegaEncodeWindow(QMainWindow):
                     self.hide_button.setEnabled(True)
             except Exception as e:
                 print(f"Video probe failed: {e}")
+                self.set_status('Could not read video metadata. Try a different file.', 'error')
+                self.reset_workflow_steps()
                 if hasattr(self, 'hide_button'):
                     self.hide_button.setEnabled(False)
             self.update_capacity_panel()
 
+    def on_payload_text_changed(self):
+        text_value = self.message_text.toPlainText() if hasattr(self, 'message_text') else ''
+        has_text = bool(text_value.strip())
+        if has_text and not self.machine.payload_file_path:
+            self.update_helper_step(3, "Step 3: Enter your numeric key to secure the payload.")
+            self.set_status('Payload text ready. Enter your numeric key next.', 'success')
+        elif not has_text and not self.machine.payload_file_path:
+            self.update_helper_step(2, "Step 2: Add a payload file or type a message.")
+            self.set_status('Add a payload file or type a secret message.', 'info')
+
+    def on_key_changed(self, value: str):
+        if value and value.strip().isdigit():
+            self.update_helper_step(4, "Step 4: Adjust LSB bits and choose the start location.")
+            self.set_status('Key ready. Adjust LSB bits and pick a start location.', 'success')
+            self.show_step_hint('Tweak the embedding settings and mark a start location on the cover.')
+        else:
+            if not value.strip():
+                self.update_helper_step(3, "Step 3: Enter your numeric key to secure the payload.")
+                self.set_status('Enter your numeric key to continue.', 'info')
+
     def on_payload_file_loaded(self, file_path):
         """Handle payload file loaded from drag and drop or browse"""
+        if hasattr(self, 'reset_lsb_stats'):
+            self.reset_lsb_stats()
         if not file_path:  # File was removed
             print("Payload file removed")
+            if not (hasattr(self, 'message_text') and self.message_text.toPlainText().strip()):
+                self.update_helper_step(2, 'Step 2: Add a payload file or type a message.')
+            self.set_status('Payload removed. Add a new payload to continue.', 'info')
             return
 
         print(f"Payload file loaded: {file_path}")
 
         # Update machine with payload file
         if self.machine.set_payload_file(file_path):
-            print(f"✅ Payload file loaded: {os.path.basename(file_path)}")
+            print(f"�o. Payload file loaded: {os.path.basename(file_path)}")
+            self.update_helper_step(3, 'Step 3: Enter your numeric key to secure the payload.')
+            self.set_status(f'Payload ready: {os.path.basename(file_path)}', 'success')
             self.update_capacity_panel()
         else:
-            print("❌ Error loading payload file")
+            print("Error loading payload file")
+            self.set_status('Could not load the selected payload.', 'error')
 
     def browse_cover_image(self):
         """Browse for cover image (legacy method - now handled by media drop widget)"""
@@ -1948,55 +2202,71 @@ class StegaEncodeWindow(QMainWindow):
 
     def hide_message(self):
         """Hide message in the cover image"""
-        from PyQt6.QtWidgets import QMessageBox
-        # Update machine with current GUI values
+        self.set_status("Validating inputs...", 'info')
         self.machine.set_lsb_bits(self.lsb_slider.value())
         self.machine.set_encryption_key(self.key_input.text())
+        if hasattr(self, 'encrypt_checkbox'):
+            try:
+                self.machine.set_encrypt_payload(self.encrypt_checkbox.isChecked())
+            except Exception as exc:
+                print(f"Failed to sync encryption toggle: {exc}")
 
-        # Validate key
-        if not self.key_input.text().strip().isdigit():
-            QMessageBox.warning(self, "Key required", "Please enter a numeric key.")
+        key_value = self.key_input.text().strip()
+        if not key_value.isdigit():
+            self.set_status("Numeric key required before encoding.", 'warning')
+            self.update_helper_step(3, "Step 3: Enter your numeric key to secure the payload.")
+            self.show_step_hint("Enter a numeric key to continue.")
             return
 
-        # Set payload from text if provided
+        if hasattr(self, 'reset_lsb_stats'):
+            self.reset_lsb_stats("LSB stats: computing...")
+
         if self.message_text.toPlainText().strip():
             self.machine.set_payload_text(self.message_text.toPlainText())
 
-        # Set default output path if none specified
         if not self.output_path.text().strip():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             default_path = f"stego_output_{timestamp}.png"
+            if self.media_type == 'audio':
+                default_path = f"stego_output_{timestamp}.wav"
+            elif self.media_type == 'video':
+                default_path = f"stego_output_{timestamp}.avi"
             self.output_path.setText(default_path)
             self.machine.set_output_path(default_path)
 
-        # Route by media type
+        ok = False
         if self.media_type == 'image':
             if self.start_xy is None:
-                QMessageBox.information(self, "Start required", "Click the image to select a start pixel.")
+                self.set_status("Pick a start pixel on the cover image before encoding.", 'warning')
+                self.update_helper_step(4, "Step 4: Click the cover preview to choose a start location.")
+                self.show_step_hint("Click on the cover preview to set the embed start pixel.")
                 return
             ok = self.machine.hide_message(start_xy=self.start_xy)
         elif self.media_type == 'audio':
-            # Ensure payload set from text if any
-            # Default output path
             if not self.output_path.text().strip():
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 default_path = f"stego_output_{timestamp}.wav"
                 self.output_path.setText(default_path)
                 self.machine.set_output_path(default_path)
-            # derive start_sample
             start_sample = self.start_sample if self.start_sample is not None else 0
             try:
                 filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.bin"
-                audio_bytes = self.machine.encode_audio(self.media_drop_widget.media_path, self.machine.payload_data or b"", filename, self.lsb_slider.value(), self.key_input.text(), start_sample=start_sample)
-                # save
-                with open(self.output_path.text(), 'wb') as f:
-                    f.write(audio_bytes)
+                audio_bytes = self.machine.encode_audio(
+                    self.media_drop_widget.media_path,
+                    self.machine.payload_data or b"",
+                    filename,
+                    self.lsb_slider.value(),
+                    self.key_input.text(),
+                    start_sample=start_sample,
+                )
+                with open(self.output_path.text(), 'wb') as handle:
+                    handle.write(audio_bytes)
                 ok = True
-            except Exception as e:
-                print(f"Audio encode failed: {e}")
+            except Exception as exc:
+                self.machine.last_error = str(exc)
+                print(f"Audio encode failed: {exc}")
                 ok = False
         elif self.media_type == 'video':
-            # Default output for video if none
             if not self.output_path.text().strip():
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 default_path = f"stego_output_{timestamp}.avi"
@@ -2005,67 +2275,104 @@ class StegaEncodeWindow(QMainWindow):
             try:
                 filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.bin"
                 f, x, y = self.video_start
-                outp = self.machine.encode_video(self.media_drop_widget.media_path, self.machine.payload_data or b"", filename, self.lsb_slider.value(), self.key_input.text(), start_fxy=(f, x, y), out_path=self.output_path.text())
-                ok = True if outp else False
-            except Exception as e:
-                print(f"Video encode failed: {e}")
+                outp = self.machine.encode_video(
+                    self.media_drop_widget.media_path,
+                    self.machine.payload_data or b"",
+                    filename,
+                    self.lsb_slider.value(),
+                    self.key_input.text(),
+                    start_fxy=(f, x, y),
+                    out_path=self.output_path.text(),
+                )
+                ok = bool(outp)
+            except Exception as exc:
+                self.machine.last_error = str(exc)
+                print(f"Video encode failed: {exc}")
                 ok = False
         else:
-            QMessageBox.warning(self, "Unsupported", "Embedding into compressed video is not supported. Please use an image or WAV.")
+            self.set_status('Embedding into this media type is not supported. Use an image, WAV, or RGB video cover.', 'warning')
             return
 
-        # Post-result handling
         if ok:
-            print("✅ Steganography completed successfully!")
-            QMessageBox.information(self, "Success", f"Saved: {self.machine.output_path}")
-            # Update proof panel from machine.last_embed_info
+            print("Steganography completed successfully!")
+            self.set_status(f"Stego saved: {self.machine.output_path}", 'success')
+            self.update_helper_step(5, "Step 5: Review the proof panel and visualisations.")
             info = getattr(self.machine, 'last_embed_info', None)
             if info:
-                self.proof_lsb.setText(f"LSB bits: {info.get('lsb_bits')}")
+                encrypted_flag = info.get('encrypted')
+                self.proof_lsb.setText(f"LSB bits: {info.get('lsb_bits')} | encrypted: {'yes' if encrypted_flag else 'no'}")
                 self.proof_start.setText(f"Start bit: {info.get('start_bit')}")
                 perm = info.get('perm', [])
                 self.proof_perm.setText(f"Perm [0:8]: {perm[:8]}")
                 hdr = info.get('header', {})
+                flags = hdr.get('flags', 0)
+                nonce_bytes = hdr.get('nonce') if isinstance(hdr.get('nonce'), (bytes, bytearray)) else b''
+                nonce_hex = nonce_bytes.hex() if nonce_bytes else '-'
+                enc_status = 'yes' if flags & FLAG_PAYLOAD_ENCRYPTED else 'no'
                 self.proof_header.setText(
-                    f"Header: ver={hdr.get('version')} lsb={hdr.get('lsb_bits')} start={hdr.get('start_bit_offset')} len={hdr.get('payload_len')} fname='{hdr.get('filename')}' crc=0x{hdr.get('crc32'):08X}"
+                    f"Header: ver={hdr.get('version')} lsb={hdr.get('lsb_bits')} start={hdr.get('start_bit_offset')} len={hdr.get('payload_len')} flags=0x{flags:02X} enc={enc_status} fname='{hdr.get('filename')}' crc=0x{hdr.get('crc32'):08X} nonce={nonce_hex}"
                 )
-                # Draw mini visualization of permutation (first 8 positions)
                 try:
                     n = min(8, len(perm))
                     if n > 0:
                         w, h = 8 * 18, 18
                         pm = QPixmap(w, h)
                         pm.fill(Qt.GlobalColor.transparent)
-                        p = QPainter(pm)
+                        painter = QPainter(pm)
                         for i in range(n):
                             val = int(perm[i]) if isinstance(perm[i], (int, float)) else 0
-                            # Map val 0-7 to a hue
                             hue = (val % 8) / 8.0
                             color = QColor.fromHsvF(hue, 0.7, 0.9)
-                            p.fillRect(i * 18 + 1, 1, 16, 16, color)
-                            p.setPen(QPen(QColor(255, 255, 255)))
-                            p.drawText(i * 18 + 1, 1, 16, 16, Qt.AlignmentFlag.AlignCenter, str(val))
-                        p.end()
+                            painter.fillRect(i * 18 + 1, 1, 16, 16, color)
+                            painter.setPen(QPen(QColor(255, 255, 255)))
+                            painter.drawText(i * 18 + 1, 1, 16, 16, Qt.AlignmentFlag.AlignCenter, str(val))
+                        painter.end()
                         self.perm_vis.setPixmap(pm)
                 except Exception:
                     pass
-            # Enable diff toggle for images when stego exists
+            else:
+                if hasattr(self, 'reset_lsb_stats'):
+                    self.reset_lsb_stats()
+            if self.media_type == 'image':
+                out_path = self.output_path.text().strip()
+                if out_path and os.path.exists(out_path):
+                    self.update_lsb_stats_image(self.media_drop_widget.media_path, out_path, self.lsb_slider.value())
+            elif self.media_type == 'audio':
+                out_path = self.output_path.text().strip()
+                if out_path and os.path.exists(out_path):
+                    self.update_lsb_stats_audio(self.media_drop_widget.media_path, out_path, self.lsb_slider.value())
+            else:
+                if hasattr(self, 'reset_lsb_stats'):
+                    self.reset_lsb_stats('LSB stats: (video analysis coming soon)')
             if self.media_type == 'image' and hasattr(self, 'diff_toggle_btn'):
                 out = self.output_path.text().strip()
                 self.diff_toggle_btn.setEnabled(bool(out and os.path.exists(out)))
-            # Enable stego playback button for audio
             if self.media_type == 'audio' and hasattr(self, 'play_stego_btn'):
                 self.play_stego_btn.setEnabled(True)
+            self.show_step_hint('Encoding complete. Review the proof panel or share the stego file.')
         else:
-            print("❌ Steganography failed!")
-            QMessageBox.critical(self, "Failed", "Steganography failed. See console for details.")
+            print("Steganography failed!")
+            detail = getattr(self.machine, 'last_error', 'Steganography failed. See console for details.')
+            self.set_status(detail, 'error')
+            self.show_step_hint("Resolve the issue above, then try encoding again.")
+            if hasattr(self, 'reset_lsb_stats'):
+                self.reset_lsb_stats()
+
 
     def on_start_pixel_selected(self, x, y):
         self.start_xy = (x, y)
+        self.update_helper_step(5, 'Step 5: Press Hide Message to embed and review the proof panel.')
+        self.show_step_hint('Start location locked. Ready to encode when you are.')
         try:
             self.update_capacity_panel()
         except Exception:
             pass
+
+    def on_encrypt_toggle(self, checked: bool):
+        try:
+            self.machine.set_encrypt_payload(bool(checked))
+        except Exception as e:
+            print(f"Failed to toggle encryption: {e}")
 
     def on_lsb_toggle(self, checked: bool):
         # Only for images/audio with a preview
@@ -2125,20 +2432,25 @@ class StegaEncodeWindow(QMainWindow):
                 filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.bin"
                 header_meta = HeaderMeta(lsb_bits=lsb, start_bit_offset=0, payload_len=self.current_payload_len(), filename=filename, crc32=0)
                 try:
-                    header_bytes = self.machine.pack_header(header_meta)
+                    header_bytes = pack_header(header_meta)
                 except Exception:
                     header_bytes = b""
                 header_bits = len(header_bytes) * 8
                 f, x, y = self.video_start
                 total_bits = self.machine.estimate_capacity_bits(self.media_drop_widget.media_path, 'video', lsb, (f, x, y))
                 max_bytes = total_bits // 8
-                self.available_bytes = max(0, (total_bits - header_bits) // 8)
+                zero_start = (f == 0 and x == 0 and y == 0)
+                available_bits = max(0, total_bits - header_bits) if zero_start else max(0, total_bits)
+                self.available_bytes = available_bits // 8
                 # Compute start bit offset if we know video dimensions
                 if self.video_meta:
                     w = self.video_meta.get('w', 0)
                     h = self.video_meta.get('h', 0)
                     start_bit = ((f * (w * h) + y * w + x) * 3 * max(1, lsb)) if (w and h) else 0
-                    self.cap_startbits.setText(f"Start bit offset: {start_bit}")
+                    if f == 0 and x == 0 and y == 0 and header_bits:
+                        self.cap_startbits.setText(f"Start bit offset: {header_bits} (header reserved)")
+                    else:
+                        self.cap_startbits.setText(f"Start bit offset: {start_bit}")
                 self.cap_lsb.setText(f"LSB bits: {lsb}")
                 self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
                 self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
@@ -2215,14 +2527,25 @@ class StegaEncodeWindow(QMainWindow):
                 filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.bin"
                 header_meta = HeaderMeta(lsb_bits=lsb, start_bit_offset=0, payload_len=self.current_payload_len(), filename=filename, crc32=0)
                 try:
-                    header_bytes = self.machine.pack_header(header_meta)
+                    header_bytes = pack_header(header_meta)
                 except Exception:
                     header_bytes = b""
                 header_bits = len(header_bytes) * 8
                 start_sample = self.start_sample if self.start_sample is not None else 0
+                channels = info.get('channels', 1)
+                channels = int(channels) if isinstance(channels, (int, float)) else 1
+                samp_bits = info.get('sampwidth_bits', 8)
+                samp_bits = int(samp_bits) if isinstance(samp_bits, (int, float)) else 8
+                bytes_per_frame = max(1, channels * max(1, samp_bits // 8))
+                start_bit_offset = start_sample * bytes_per_frame * max(1, lsb)
+                if start_sample == 0 and header_bits:
+                    self.cap_startbits.setText(f"Start bit offset: {header_bits} (header reserved)")
+                else:
+                    self.cap_startbits.setText(f"Start bit offset: {start_bit_offset}")
                 total_bits = self.machine.estimate_capacity_bits(self.media_drop_widget.media_path, 'audio', lsb, start_sample)
                 max_bytes = total_bits // 8
-                self.available_bytes = max(0, (total_bits - header_bits) // 8)
+                available_bits = max(0, total_bits - header_bits) if start_sample == 0 else max(0, total_bits)
+                self.available_bytes = available_bits // 8
                 self.cap_lsb.setText(f"LSB bits: {lsb}")
                 self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
                 self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
@@ -2278,7 +2601,7 @@ class StegaEncodeWindow(QMainWindow):
         filename = os.path.basename(self.machine.payload_file_path) if self.machine.payload_file_path else "payload.txt"
         header_meta = HeaderMeta(lsb_bits=lsb, start_bit_offset=0, payload_len=self.current_payload_len(), filename=filename, crc32=0)
         try:
-            header_bytes = self.machine.pack_header(header_meta)
+            header_bytes = pack_header(header_meta)
         except Exception:
             header_bytes = b""
         header_bits = len(header_bytes) * 8
@@ -2287,14 +2610,18 @@ class StegaEncodeWindow(QMainWindow):
             x, y = self.start_xy
             pixel_index = y * w + x
             start_bit = pixel_index * channels * lsb
-            self.cap_startbits.setText(f"Start bit offset: {start_bit}")
+            if header_bits and start_bit < header_bits:
+                self.cap_startbits.setText(f"Start bit offset: {start_bit} (overlaps header)")
+            else:
+                self.cap_startbits.setText(f"Start bit offset: {start_bit}")
         else:
-            start_bit = 0
-            self.cap_startbits.setText("Start bit offset: 0")
+            start_bit = header_bits
+            self.cap_startbits.setText(f"Start bit offset: {header_bits}")
 
-        usable_bits = max(0, total_bits - start_bit)
+        payload_start = max(start_bit, header_bits)
+        usable_bits = max(0, total_bits - payload_start)
         max_bytes = usable_bits // 8
-        self.available_bytes = max(0, (usable_bits - header_bits) // 8)
+        self.available_bytes = max_bytes
 
         self.cap_dims.setText(f"Cover: {w}x{h}x{channels}")
         self.cap_lsb.setText(f"LSB bits: {lsb}")
@@ -2376,6 +2703,56 @@ class StegaEncodeWindow(QMainWindow):
         except Exception as e:
             print(f"Failed to show diff map: {e}")
 
+    def update_lsb_stats_image(self, cover_path: str, stego_path: str, lsb_bits: int) -> None:
+        if not hasattr(self, 'proof_stats'):
+            return
+        try:
+            with Image.open(cover_path) as cover_im:
+                cover = cover_im.convert('RGB') if cover_im.mode != 'RGB' else cover_im.copy()
+            with Image.open(stego_path) as stego_im:
+                stego = stego_im.convert('RGB') if stego_im.mode != 'RGB' else stego_im.copy()
+            cov_arr = np.array(cover, dtype=np.uint8)
+            stg_arr = np.array(stego, dtype=np.uint8)
+            stats = []
+            for bit in range(max(1, lsb_bits)):
+                mask = 1 << bit
+                cov_ratio = float(((cov_arr & mask) != 0).mean() * 100.0)
+                stg_ratio = float(((stg_arr & mask) != 0).mean() * 100.0)
+                stats.append(f"bit{bit}: cover {cov_ratio:.2f}% / stego {stg_ratio:.2f}% ones")
+            self.proof_stats.setText("\n".join(stats))
+        except Exception as e:
+            self.proof_stats.setText(f"LSB stats unavailable: {e}")
+
+    def update_lsb_stats_audio(self, cover_path: str, stego_path: str, lsb_bits: int) -> None:
+        if not hasattr(self, 'proof_stats'):
+            return
+        try:
+            import wave
+            with wave.open(cover_path, 'rb') as wf_cover:
+                cover_bytes = wf_cover.readframes(wf_cover.getnframes())
+            with wave.open(stego_path, 'rb') as wf_stego:
+                stego_bytes = wf_stego.readframes(wf_stego.getnframes())
+            cov_arr = np.frombuffer(cover_bytes, dtype=np.uint8)
+            stg_arr = np.frombuffer(stego_bytes, dtype=np.uint8)
+            length = min(cov_arr.size, stg_arr.size)
+            if length == 0:
+                raise ValueError('empty buffers')
+            cov_arr = cov_arr[:length]
+            stg_arr = stg_arr[:length]
+            stats = []
+            for bit in range(max(1, lsb_bits)):
+                mask = 1 << bit
+                cov_ratio = float(((cov_arr & mask) != 0).mean() * 100.0)
+                stg_ratio = float(((stg_arr & mask) != 0).mean() * 100.0)
+                stats.append(f"bit{bit}: cover {cov_ratio:.2f}% / stego {stg_ratio:.2f}% ones")
+            self.proof_stats.setText("\n".join(stats))
+        except Exception as e:
+            self.proof_stats.setText(f"LSB stats unavailable: {e}")
+
+    def reset_lsb_stats(self, message: str = "LSB stats: -") -> None:
+        if hasattr(self, 'proof_stats'):
+            self.proof_stats.setText(message)
+
     def on_audio_time_selected(self, t: float):
         # Convert time to start_sample
         try:
@@ -2384,6 +2761,8 @@ class StegaEncodeWindow(QMainWindow):
                 self.start_sample = int(max(0.0, t) * sr)
             else:
                 self.start_sample = 0
+            self.update_helper_step(5, 'Step 5: Press Hide Message to embed and review the proof panel.')
+            self.show_step_hint('Start sample selected. You can encode when ready.')
             self.update_capacity_panel()
         except Exception:
             pass
@@ -2423,6 +2802,8 @@ class StegaEncodeWindow(QMainWindow):
     def on_video_xy_selected(self, frame: int, x: int, y: int):
         # Update start frame and XY from click
         self.video_start = (int(frame), int(x), int(y))
+        self.update_helper_step(5, 'Step 5: Press Hide Message to embed and review the proof panel.')
+        self.show_step_hint('Start frame selected. Ready to encode when you are.')
         print(f"[Window] video xy selected -> frame={frame}, x={x}, y={y}")
         if hasattr(self, 'video_pos_label'):
             self.video_pos_label.setText(f"Frame: {int(frame)}, X: {int(x)}, Y: {int(y)}")
@@ -2440,3 +2821,8 @@ class StegaEncodeWindow(QMainWindow):
         self.main_window = MainWindow()
         self.main_window.show()
         self.close()
+
+
+
+
+
