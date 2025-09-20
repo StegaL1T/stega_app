@@ -202,6 +202,23 @@ class SteganalysisWindow(QMainWindow):
         image_layout.addWidget(self.image_path)
         image_layout.addWidget(browse_button)
 
+        # Image preview
+        self.image_preview = QLabel()
+        self.image_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid #bdc3c7;
+                border-radius: 8px;
+                background-color: #f8f9fa;
+                min-height: 150px;
+                max-height: 200px;
+            }
+        """)
+        self.image_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.image_preview.setText("No image selected")
+        self.image_preview.setScaledContents(False)
+        image_layout.addWidget(self.image_preview)
+
         method_group = QGroupBox("Image Analysis Method")
         method_layout = QVBoxLayout(method_group)
         self.method_combo = QComboBox()
@@ -330,6 +347,22 @@ class SteganalysisWindow(QMainWindow):
         browse_audio_button.clicked.connect(self.browse_audio)
         audio_layout.addWidget(self.audio_path)
         audio_layout.addWidget(browse_audio_button)
+
+        # Audio preview (waveform)
+        self.audio_preview = QLabel()
+        self.audio_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.audio_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid #bdc3c7;
+                border-radius: 8px;
+                background-color: #f8f9fa;
+                min-height: 100px;
+                max-height: 150px;
+            }
+        """)
+        self.audio_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.audio_preview.setText("No audio selected")
+        audio_layout.addWidget(self.audio_preview)
 
         audio_method_group = QGroupBox("Audio Analysis Method")
         audio_method_layout = QVBoxLayout(audio_method_group)
@@ -610,21 +643,6 @@ class SteganalysisWindow(QMainWindow):
         """Update the method description based on selected method"""
         description = self.method_descriptions.get(method_name, "No description available for this method.")
         description_widget.setText(description)
-
-    def on_image_method_changed(self):
-        """Handle image method dropdown change"""
-        method = self.method_combo.currentText()
-        self.update_method_description(method, self.image_method_description)
-
-    def on_audio_method_changed(self):
-        """Handle audio method dropdown change"""
-        method = self.audio_method_combo.currentText()
-        self.update_method_description(method, self.audio_method_description)
-
-    def on_video_method_changed(self):
-        """Handle video method dropdown change"""
-        method = self.video_method_combo.currentText()
-        self.update_method_description(method, self.video_method_description)
 
     def create_image_preview(self, image_path: str):
         """Create a preview of the selected image"""

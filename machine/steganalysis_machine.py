@@ -926,66 +926,6 @@ class SteganalysisMachine:
             'suspicious': suspicious_flag
         }
 
-
-    def _perform_rs_analysis(self):
-        """Perform RS (Regular-Singular) analysis across all color channels"""
-        print("Performing RS analysis...")
-
-        results_per_channel = {}
-        suspicious_flag = False
-
-        # Go through R, G, B channels
-        for idx, color in enumerate(['R', 'G', 'B']):
-            channel = self.image_array[:, :, idx].astype(np.int32)
-
-            # Helper: flip LSBs
-            def flip_lsb(block):
-                return block ^ 1
-
-            # Helper: discriminant (smoothness measure)
-            def discriminant(block):
-                return np.sum(np.abs(np.diff(block)))
-
-            regular, singular = 0, 0
-
-            # Iterate over rows in 2-pixel groups
-            for row in channel:
-                for i in range(0, len(row) - 1, 2):
-                    block = row[i:i+2]
-                    if len(block) < 2:
-                        continue
-
-                    d_original = discriminant(block)
-                    block_flipped = flip_lsb(block)
-                    d_flipped = discriminant(block_flipped)
-
-                    if d_flipped > d_original:
-                        regular += 1
-                    elif d_flipped < d_original:
-                        singular += 1
-
-            total = max(regular + singular, 1)
-            rs_ratio = regular / total
-
-            # Store channel results
-            results_per_channel[color] = {
-                'regular_groups': regular,
-                'singular_groups': singular,
-                'rs_ratio': rs_ratio
-            }
-
-            # If RS ratio deviates from ~0.5, flag as suspicious
-            if abs(rs_ratio - 0.5) > 0.05:
-                suspicious_flag = True
-
-        # Save combined results
-        self.results = {
-            'method': 'RS Analysis',
-            'channels': results_per_channel,
-            'suspicious': suspicious_flag
-        }
-
-
     def _perform_comprehensive_analysis(self):
         """Perform comprehensive analysis using multiple methods"""
         print("Performing comprehensive analysis...")
