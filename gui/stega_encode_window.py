@@ -1,10 +1,10 @@
-﻿# gui/stega_encode_window.py
+# gui/stega_encode_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
                              QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
                              QScrollArea, QSlider as QTimeSlider, QToolTip, QProgressBar,
-                             QCheckBox)
+                             QCheckBox, QToolButton)
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal, QRegularExpression
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QIntValidator, QRegularExpressionValidator, QCursor
 import os
@@ -13,7 +13,7 @@ from PIL import Image
 import soundfile as sf
 import cv2
 from datetime import datetime
-from machine.stega_spec import HeaderMeta, FLAG_PAYLOAD_ENCRYPTED, pack_header
+from machine.stega_spec import (HeaderMeta, FLAG_PAYLOAD_ENCRYPTED, pack_header, HEADER_MAGIC, HEADER_VERSION)
 
 
 def _human_size(num: int) -> str:
@@ -75,6 +75,65 @@ class NotificationBanner(QFrame):
         self.hide()
         self.deleteLater()
 
+
+
+class CollapsibleSection(QFrame):
+    "Collapsible container with a disclosure arrow to hide or show content."
+
+    def __init__(self, title: str, parent: QWidget | None = None, *, start_collapsed: bool = False):
+        super().__init__(parent)
+        self.setObjectName('collapsibleSection')
+
+        self._toggle = QToolButton()
+        self._toggle.setObjectName('collapsibleToggle')
+        self._toggle.setCheckable(True)
+        self._toggle.setChecked(not start_collapsed)
+        self._toggle.setArrowType(Qt.ArrowType.DownArrow if not start_collapsed else Qt.ArrowType.RightArrow)
+        self._toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self._toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._toggle.setStyleSheet('QToolButton#collapsibleToggle { border: none; }')
+
+        self._title = QLabel(title)
+        self._title.setStyleSheet('color:#2c3e50;font-weight:600;')
+
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(6)
+        header_layout.addWidget(self._toggle)
+        header_layout.addWidget(self._title)
+        header_layout.addStretch()
+
+        self._content_area = QFrame()
+        self._content_area.setFrameShape(QFrame.Shape.NoFrame)
+        self._content_layout = QVBoxLayout(self._content_area)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(12)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(8)
+        main_layout.addLayout(header_layout)
+        main_layout.addWidget(self._content_area)
+
+        self._toggle.toggled.connect(self._on_toggled)
+        self._on_toggled(not start_collapsed)
+
+    def _on_toggled(self, checked: bool) -> None:
+        self._content_area.setVisible(checked)
+        self._toggle.setArrowType(Qt.ArrowType.DownArrow if checked else Qt.ArrowType.RightArrow)
+
+    def addWidget(self, widget: QWidget) -> None:
+        self._content_layout.addWidget(widget)
+
+    def addLayout(self, layout: QVBoxLayout | QHBoxLayout | QGridLayout) -> None:
+        self._content_layout.addLayout(layout)
+
+    def clear(self) -> None:
+        while self._content_layout.count():
+            item = self._content_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.setParent(None)
 
 class MediaDropWidget(QFrame):
     """Custom widget for drag and drop media upload with interactive previews"""
@@ -1214,8 +1273,6 @@ class StegaEncodeWindow(QMainWindow):
             steps_layout.addWidget(card)
             self.step_boxes.append(card)
 
-        wrapper_layout.addLayout(steps_layout)
-
         helper_layout = QHBoxLayout()
         helper_layout.setContentsMargins(4, 0, 4, 0)
         helper_layout.setSpacing(12)
@@ -1245,7 +1302,18 @@ class StegaEncodeWindow(QMainWindow):
         helper_layout.addWidget(self.helper_hint_label)
         helper_layout.addStretch()
         helper_layout.addWidget(tour_btn)
-        wrapper_layout.addLayout(helper_layout)
+
+        steps_container = QWidget()
+        steps_container_layout = QVBoxLayout(steps_container)
+        steps_container_layout.setContentsMargins(0, 0, 0, 0)
+        steps_container_layout.setSpacing(12)
+        steps_container_layout.addLayout(steps_layout)
+        steps_container_layout.addLayout(helper_layout)
+
+        steps_section = CollapsibleSection("Workflow overview", start_collapsed=True)
+        steps_section.addWidget(steps_container)
+
+        wrapper_layout.addWidget(steps_section)
 
         layout.addWidget(frame)
         self.reset_workflow_steps()
@@ -1833,6 +1901,96 @@ class StegaEncodeWindow(QMainWindow):
         legend.setWordWrap(True)
         proof_layout.addWidget(legend)
 
+        # Header diagnostics panel
+        header_group = QGroupBox("Header Details")
+        header_layout = QGridLayout(header_group)
+        header_layout.setHorizontalSpacing(12)
+        header_layout.setVerticalSpacing(6)
+        header_fields = [
+            ("Magic", "magic"),
+            ("Version", "version"),
+            ("Flags", "flags"),
+            ("LSB bits", "lsb_bits"),
+            ("Start offset", "start_offset"),
+            ("Payload bytes", "payload_bytes"),
+            ("Filename", "filename"),
+            ("CRC32", "crc32"),
+            ("Nonce length", "nonce_len"),
+        ]
+        self.header_detail_labels = {}
+        for row, (label, key) in enumerate(header_fields):
+            lbl = QLabel(f"{label}:")
+            lbl.setStyleSheet("color:#5d6d7e;font-weight:600;")
+            value_lbl = QLabel("-")
+            value_lbl.setStyleSheet("color:#2c3e50;")
+            value_lbl.setWordWrap(True)
+            header_layout.addWidget(lbl, row, 0, Qt.AlignmentFlag.AlignTop)
+            header_layout.addWidget(value_lbl, row, 1)
+            self.header_detail_labels[key] = value_lbl
+        self.header_warning_label = QLabel("")
+        self.header_warning_label.setStyleSheet("color:#c0392b;font-weight:bold;")
+        self.header_warning_label.setWordWrap(True)
+        self.header_warning_label.hide()
+        header_layout.addWidget(self.header_warning_label, len(header_fields), 0, 1, 2)
+
+        # Encryption diagnostics panel
+        encryption_group = QGroupBox("Encryption Diagnostics")
+        encryption_layout = QVBoxLayout(encryption_group)
+        self.enc_detail_labels = {
+            "status": QLabel("Encrypted: -"),
+            "nonce": QLabel("Nonce: -"),
+            "crc": QLabel("CRC32 match: -"),
+            "note": QLabel("Payload storage: -"),
+        }
+        for lbl in self.enc_detail_labels.values():
+            lbl.setStyleSheet("color:#2c3e50;")
+            lbl.setWordWrap(True)
+            encryption_layout.addWidget(lbl)
+
+        # Post-encode capacity summary
+        summary_group = QGroupBox("Post-Encode Capacity Summary")
+        summary_layout = QVBoxLayout(summary_group)
+        summary_grid = QGridLayout()
+        summary_grid.setHorizontalSpacing(12)
+        summary_grid.setVerticalSpacing(6)
+        self.cap_summary_labels = {}
+        summary_fields = [
+            ("Total cover bits", "cover_bits"),
+            ("Header bits", "header_bits"),
+            ("Payload bits", "payload_bits"),
+            ("Payload start", "payload_start"),
+            ("Gap bits", "gap_bits"),
+            ("Utilisation", "utilisation"),
+        ]
+        for row, (label, key) in enumerate(summary_fields):
+            lbl = QLabel(f"{label}:")
+            lbl.setStyleSheet("color:#5d6d7e;font-weight:600;")
+            value_lbl = QLabel("-")
+            value_lbl.setStyleSheet("color:#2c3e50;")
+            value_lbl.setWordWrap(True)
+            summary_grid.addWidget(lbl, row, 0, Qt.AlignmentFlag.AlignTop)
+            summary_grid.addWidget(value_lbl, row, 1)
+            self.cap_summary_labels[key] = value_lbl
+        summary_layout.addLayout(summary_grid)
+        self.result_util_bar = QProgressBar()
+        self.result_util_bar.setRange(0, 100)
+        self.result_util_bar.setValue(0)
+        self.result_util_bar.setFormat("No encode yet")
+        self.result_util_bar.setStyleSheet(
+            "QProgressBar{border:1px solid #bdc3c7;border-radius:6px;background:#f2f4f6;text-align:center;}"
+            "QProgressBar::chunk{background-color:#8e44ad;border-radius:6px;}"
+        )
+        summary_layout.addWidget(self.result_util_bar)
+
+        diagnostics_section = CollapsibleSection("Proof & diagnostics", start_collapsed=True)
+        diagnostics_section.addWidget(proof_group)
+        diagnostics_section.addWidget(header_group)
+        diagnostics_section.addWidget(encryption_group)
+        diagnostics_section.addWidget(summary_group)
+        layout.addWidget(diagnostics_section)
+
+
+
         # Visualization toggles
         vis_group = QGroupBox("Visualization")
         vis_layout = QVBoxLayout(vis_group)
@@ -1870,7 +2028,6 @@ class StegaEncodeWindow(QMainWindow):
         video_vlayout.addWidget(self.video_frame_slider)
         video_vlayout.addWidget(self.video_pos_label)
         layout.addWidget(video_group)
-        layout.addWidget(proof_group)
         layout.addWidget(vis_group)
 
         # Audio playback controls (enabled only for audio)
@@ -1888,6 +2045,7 @@ class StegaEncodeWindow(QMainWindow):
         layout.addWidget(audio_play_group)
         layout.addStretch()
 
+        self.reset_post_encode_panels()
         return panel
 
     def _update_capacity_visuals(self, max_bytes: int, available_bytes: int):
@@ -1999,6 +2157,7 @@ class StegaEncodeWindow(QMainWindow):
         """Handle media loaded from drag and drop or browse"""
         if hasattr(self, 'reset_lsb_stats'):
             self.reset_lsb_stats()
+        self.reset_post_encode_panels()
         if not file_path:  # Media was removed
             self.set_status('Cover cleared. Select a cover to begin.', 'info')
             self.reset_workflow_steps()
@@ -2304,14 +2463,33 @@ class StegaEncodeWindow(QMainWindow):
                 self.proof_start.setText(f"Start bit: {info.get('start_bit')}")
                 perm = info.get('perm', [])
                 self.proof_perm.setText(f"Perm [0:8]: {perm[:8]}")
-                hdr = info.get('header', {})
-                flags = hdr.get('flags', 0)
-                nonce_bytes = hdr.get('nonce') if isinstance(hdr.get('nonce'), (bytes, bytearray)) else b''
-                nonce_hex = nonce_bytes.hex() if nonce_bytes else '-'
-                enc_status = 'yes' if flags & FLAG_PAYLOAD_ENCRYPTED else 'no'
+                hdr = info.get('header', {}) or {}
+                flags_val = hdr.get('flags', info.get('flags'))
+                try:
+                    flags_display = f"0x{int(flags_val) & 0xFF:02X}" if flags_val is not None else 'n/a'
+                except Exception:
+                    flags_display = str(flags_val)
+                version = hdr.get('version', 'n/a')
+                start_val = info.get('start_bit', hdr.get('start_bit_offset'))
+                if start_val is None:
+                    start_display = 'n/a'
+                else:
+                    try:
+                        start_display = f"{int(start_val):,}"
+                    except Exception:
+                        start_display = str(start_val)
+                payload_len_val = hdr.get('payload_len')
+                if payload_len_val is None:
+                    payload_display = 'n/a'
+                else:
+                    try:
+                        payload_display = f"{int(payload_len_val):,}"
+                    except Exception:
+                        payload_display = str(payload_len_val)
                 self.proof_header.setText(
-                    f"Header: ver={hdr.get('version')} lsb={hdr.get('lsb_bits')} start={hdr.get('start_bit_offset')} len={hdr.get('payload_len')} flags=0x{flags:02X} enc={enc_status} fname='{hdr.get('filename')}' crc=0x{hdr.get('crc32'):08X} nonce={nonce_hex}"
+                    f"Header summary: version={version} start_bit={start_display} payload_len={payload_display} bytes flags={flags_display}"
                 )
+                self.update_post_encode_panels(info)
                 try:
                     n = min(8, len(perm))
                     if n > 0:
@@ -2333,6 +2511,7 @@ class StegaEncodeWindow(QMainWindow):
             else:
                 if hasattr(self, 'reset_lsb_stats'):
                     self.reset_lsb_stats()
+                self.reset_post_encode_panels()
             if self.media_type == 'image':
                 out_path = self.output_path.text().strip()
                 if out_path and os.path.exists(out_path):
@@ -2752,6 +2931,269 @@ class StegaEncodeWindow(QMainWindow):
     def reset_lsb_stats(self, message: str = "LSB stats: -") -> None:
         if hasattr(self, 'proof_stats'):
             self.proof_stats.setText(message)
+
+    def reset_post_encode_panels(self) -> None:
+        if hasattr(self, 'header_detail_labels'):
+            for label in self.header_detail_labels.values():
+                label.setText('-')
+        if hasattr(self, 'header_warning_label'):
+            self.header_warning_label.hide()
+            self.header_warning_label.setText('')
+        if hasattr(self, 'enc_detail_labels'):
+            status_lbl = self.enc_detail_labels.get('status')
+            if status_lbl:
+                status_lbl.setText('Encrypted: -')
+            nonce_lbl = self.enc_detail_labels.get('nonce')
+            if nonce_lbl:
+                nonce_lbl.setText('Nonce: -')
+            crc_lbl = self.enc_detail_labels.get('crc')
+            if crc_lbl:
+                crc_lbl.setText('CRC32 match: -')
+            note_lbl = self.enc_detail_labels.get('note')
+            if note_lbl:
+                note_lbl.setText('Payload storage: -')
+        if hasattr(self, 'cap_summary_labels'):
+            for label in self.cap_summary_labels.values():
+                label.setText('-')
+        if hasattr(self, 'result_util_bar'):
+            try:
+                self.result_util_bar.setValue(0)
+                self.result_util_bar.setFormat('No encode yet')
+            except Exception:
+                pass
+
+    def update_post_encode_panels(self, info: dict) -> None:
+        if not info:
+            self.reset_post_encode_panels()
+            return
+        header = info.get('header') if isinstance(info, dict) else {}
+        if not isinstance(header, dict):
+            header = {}
+        try:
+            expected_magic = HEADER_MAGIC.decode('ascii')
+        except Exception:
+            expected_magic = str(HEADER_MAGIC)
+        magic_value = header.get('magic')
+        if isinstance(magic_value, (bytes, bytearray)):
+            try:
+                magic_value = magic_value.decode('ascii', errors='replace')
+            except Exception:
+                magic_value = magic_value.hex()
+        magic_text = str(magic_value) if magic_value else expected_magic
+        try:
+            header_size_bytes = int(header.get('header_size', 0))
+        except Exception:
+            header_size_bytes = 0
+        header_bits = max(0, header_size_bytes * 8)
+        try:
+            payload_bytes = int(header.get('payload_len', 0))
+        except Exception:
+            payload_bytes = 0
+        payload_bits = max(0, payload_bytes * 8)
+        try:
+            lsb_bits = int(info.get('lsb_bits', header.get('lsb_bits', 1)))
+            if lsb_bits <= 0:
+                lsb_bits = 1
+        except Exception:
+            lsb_bits = 1
+        try:
+            start_bit = int(info.get('start_bit', header.get('start_bit_offset', 0)))
+        except Exception:
+            start_bit = 0
+        total_bits = self._compute_total_bits_from_info(info, lsb_bits)
+        gap_bits = max(0, start_bit - header_bits)
+        utilised_bits = header_bits + payload_bits
+        util_pct = (utilised_bits / total_bits * 100.0) if total_bits else 0.0
+
+        if hasattr(self, 'header_detail_labels'):
+            labels = self.header_detail_labels
+            if 'magic' in labels:
+                labels['magic'].setText(magic_text or '-')
+            version = header.get('version')
+            if 'version' in labels:
+                labels['version'].setText(str(version) if version is not None else '-')
+            flags_val = header.get('flags')
+            if flags_val is None:
+                flags_val = info.get('flags')
+            if 'flags' in labels:
+                if flags_val is None:
+                    labels['flags'].setText('-')
+                else:
+                    try:
+                        labels['flags'].setText(f"0x{int(flags_val) & 0xFF:02X}")
+                    except Exception:
+                        labels['flags'].setText(str(flags_val))
+            if 'lsb_bits' in labels:
+                labels['lsb_bits'].setText(str(header.get('lsb_bits', lsb_bits)))
+            if 'start_offset' in labels:
+                try:
+                    start_display = int(header.get('start_bit_offset', start_bit))
+                except Exception:
+                    start_display = start_bit
+                labels['start_offset'].setText(f"{start_display} bits")
+            if 'payload_bytes' in labels:
+                labels['payload_bytes'].setText(f"{payload_bytes} bytes")
+            if 'filename' in labels:
+                labels['filename'].setText(header.get('filename') or '-')
+            crc_val = header.get('crc32')
+            crc_display = '-'
+            if crc_val is not None:
+                try:
+                    crc_display = f"0x{int(crc_val) & 0xFFFFFFFF:08X}"
+                except Exception:
+                    crc_display = str(crc_val)
+            if 'crc32' in labels:
+                labels['crc32'].setText(crc_display)
+            nonce_bytes = header.get('nonce')
+            nonce_len = len(nonce_bytes) if isinstance(nonce_bytes, (bytes, bytearray)) else 0
+            if 'nonce_len' in labels:
+                labels['nonce_len'].setText(str(nonce_len))
+        warnings = []
+        if not magic_value:
+            if expected_magic:
+                warnings.append(f"Magic missing; expected {expected_magic}")
+        elif expected_magic and magic_text != expected_magic:
+            warnings.append(f"Magic {magic_text} != expected {expected_magic}")
+        version = header.get('version')
+        if version is not None and version != HEADER_VERSION:
+            warnings.append(f"Header version {version} != expected {HEADER_VERSION}")
+        if header_bits == 0:
+            warnings.append('Header length is zero; decoder cannot locate payload.')
+        header_lsb = header.get('lsb_bits')
+        if header_lsb is not None:
+            try:
+                if int(header_lsb) != int(lsb_bits):
+                    warnings.append('Header LSB bits do not match encoder settings.')
+            except Exception:
+                pass
+        header_flags = header.get('flags')
+        info_flags = info.get('flags')
+        if header_flags is not None and info_flags is not None:
+            try:
+                if int(header_flags) != int(info_flags):
+                    warnings.append('Flags differ between header and session metadata.')
+            except Exception:
+                pass
+        if hasattr(self, 'header_warning_label'):
+            if warnings:
+                self.header_warning_label.setText(' | '.join(warnings))
+                self.header_warning_label.show()
+            else:
+                self.header_warning_label.hide()
+                self.header_warning_label.setText('')
+
+        if hasattr(self, 'enc_detail_labels'):
+            labels = self.enc_detail_labels
+            flags_val = header_flags if header_flags is not None else info_flags
+            try:
+                flags_text = f"0x{int(flags_val) & 0xFF:02X}" if flags_val is not None else 'n/a'
+            except Exception:
+                flags_text = str(flags_val)
+            enc_enabled = bool(info.get('encrypted'))
+            try:
+                if flags_val is not None:
+                    enc_enabled = bool(int(flags_val) & FLAG_PAYLOAD_ENCRYPTED)
+            except Exception:
+                pass
+            status_text = f"Encrypted: {'yes' if enc_enabled else 'no'} (flags {flags_text})"
+            if 'status' in labels:
+                labels['status'].setText(status_text)
+            nonce_bytes = header.get('nonce')
+            if isinstance(nonce_bytes, (bytes, bytearray)):
+                nonce_hex = nonce_bytes.hex()
+            else:
+                nonce_hex = info.get('nonce') if isinstance(info.get('nonce'), str) else ''
+            if not nonce_hex:
+                nonce_hex = 'none'
+            if 'nonce' in labels:
+                labels['nonce'].setText(f"Nonce: {nonce_hex}")
+            crc_val_info = info.get('crc32')
+            match_text = 'CRC32 match: -'
+            if header.get('crc32') is not None:
+                try:
+                    header_crc = int(header.get('crc32')) & 0xFFFFFFFF
+                    info_crc = int(crc_val_info) & 0xFFFFFFFF if crc_val_info is not None else None
+                    match_ok = info_crc is None or header_crc == info_crc
+                    match_text = f"CRC32 match: {'ok' if match_ok else 'mismatch'} (0x{header_crc:08X})"
+                except Exception:
+                    match_text = f"CRC32: {header.get('crc32')}"
+            if 'crc' in labels:
+                labels['crc'].setText(match_text)
+            if 'note' in labels:
+                if enc_enabled:
+                    labels['note'].setText('Payload stored as ciphertext; CRC tracked on plaintext bytes.')
+                else:
+                    labels['note'].setText('Payload stored as plaintext; CRC guards integrity.')
+
+        if hasattr(self, 'cap_summary_labels'):
+            labels = self.cap_summary_labels
+            if 'cover_bits' in labels:
+                if total_bits:
+                    labels['cover_bits'].setText(f"{total_bits:,} bits ({total_bits / 8:.1f} bytes)")
+                else:
+                    labels['cover_bits'].setText('-')
+            if 'header_bits' in labels:
+                labels['header_bits'].setText(f"{header_bits:,} bits ({header_bits / 8:.1f} bytes)")
+            if 'payload_bits' in labels:
+                labels['payload_bits'].setText(f"{payload_bits:,} bits ({payload_bytes:,} bytes)")
+            if 'payload_start' in labels:
+                labels['payload_start'].setText(f"{start_bit:,} bits")
+            if 'gap_bits' in labels:
+                labels['gap_bits'].setText(f"{gap_bits:,} bits")
+            if 'utilisation' in labels:
+                if total_bits:
+                    labels['utilisation'].setText(f"{utilised_bits:,} bits ({util_pct:.1f}% of capacity)")
+                else:
+                    labels['utilisation'].setText('Unknown (no capacity metadata)')
+        if hasattr(self, 'result_util_bar'):
+            try:
+                if total_bits:
+                    value = int(min(100, max(0, round(util_pct))))
+                    self.result_util_bar.setValue(value)
+                    self.result_util_bar.setFormat(f"{util_pct:.1f}% utilised")
+                else:
+                    self.result_util_bar.setValue(0)
+                    self.result_util_bar.setFormat('No capacity metadata')
+            except Exception:
+                pass
+
+    def _compute_total_bits_from_info(self, info: dict, lsb_bits: int) -> int:
+        try:
+            lsb_bits = max(1, int(lsb_bits))
+        except Exception:
+            lsb_bits = 1
+        if not isinstance(info, dict):
+            return 0
+        image_shape = info.get('image_shape')
+        if isinstance(image_shape, tuple) and len(image_shape) == 3:
+            h, w, c = image_shape
+            try:
+                return int(h) * int(w) * int(c) * lsb_bits
+            except Exception:
+                return 0
+        audio_info = info.get('audio_info') or {}
+        if isinstance(audio_info, dict) and audio_info:
+            frames = audio_info.get('frames', 0)
+            channels = audio_info.get('channels', 1)
+            sampwidth = audio_info.get('sampwidth_bytes', audio_info.get('sampwidth'))
+            if sampwidth is None:
+                bits = audio_info.get('sampwidth_bits')
+                try:
+                    sampwidth = max(1, int(bits) // 8)
+                except Exception:
+                    sampwidth = 1
+            try:
+                return int(frames) * max(1, int(channels)) * max(1, int(sampwidth)) * lsb_bits
+            except Exception:
+                return 0
+        video_shape = info.get('video_shape')
+        if isinstance(video_shape, tuple) and len(video_shape) == 4:
+            frames, h, w, c = video_shape
+            try:
+                return int(frames) * int(h) * int(w) * int(c) * lsb_bits
+            except Exception:
+                return 0
+        return 0
 
     def on_audio_time_selected(self, t: float):
         # Convert time to start_sample
