@@ -1,22 +1,14 @@
 # machine/stega_decode_machine.py
 import os
 from typing import Optional, Tuple
-from datetime import datetime
-
-import numpy as np
+import hashlib
+import random
+import struct
+import zlib
 from PIL import Image
+from datetime import datetime
 from PyPDF2 import PdfReader
-
-from machine.stega_spec import (
-    FLAG_PAYLOAD_ENCRYPTED,
-    HEADER_MAGIC,
-    MAX_FILENAME_LEN,
-    crc32,
-    decrypt_payload,
-    perm_for_lsb_bits,
-    rng_from_key_and_filename,
-    unpack_header,
-)
+import numpy as np
 
 
 class StegaDecodeMachine:
@@ -51,7 +43,6 @@ class StegaDecodeMachine:
         Returns:
             bool: True if successful, False otherwise
         """
-        self.last_error = None
         try:
             if not os.path.exists(image_path):
                 print(f"Error: Steganographic image not found: {image_path}")
@@ -153,7 +144,6 @@ class StegaDecodeMachine:
 
         return True, "All inputs valid"
 
-
     def extract_message(self) -> bool:
         """
         Perform the steganography decoding operation
@@ -161,139 +151,138 @@ class StegaDecodeMachine:
         Returns:
             bool: True if successful, False otherwise
         """
+        # Validate inputs
         is_valid, error_msg = self.validate_inputs()
         if not is_valid:
             print(f"Validation failed: {error_msg}")
             return False
 
         try:
+            print("Starting steganography decoding process...")
+
             if not self.encryption_key or not self.encryption_key.strip():
                 self.last_error = "Decryption key is required for decoding"
                 print(f"Error: {self.last_error}")
                 return False
 
+            # Prepare flattened byte view of image
             flat_bytes = self.image_array.astype(np.uint8).reshape(-1)
-            if flat_bytes.size == 0:
-                self.last_error = "Stego image is empty"
+            total_bytes = flat_bytes.size
+            lsb_bits = self.lsb_bits
+            total_lsb_bits = total_bytes * lsb_bits
+
+            # Seed PRNG from key
+            rng = self._rng_from_key(self.encryption_key)
+
+            # Choose start offset within LSB bitstream with safety margin
+            safety_margin = 4096  # bits reserved to ensure header fits
+            if total_lsb_bits <= safety_margin:
+                self.last_error = "Cover stego image is too small for header"
+                print(f"Error: {self.last_error}")
+                return False
+            start_bit = rng.randrange(0, total_lsb_bits - safety_margin)
+
+            # Build per-byte LSB permutation using PRNG (length == lsb_bits)
+            bit_order = list(range(lsb_bits))
+            rng.shuffle(bit_order)
+
+            # Helper to yield LSB bits starting from start_bit
+            def lsb_bit_iter():
+                current_bit_index = start_bit
+                while current_bit_index < total_lsb_bits:
+                    byte_index = current_bit_index // lsb_bits
+                    within_byte = current_bit_index % lsb_bits
+                    # Map within-byte position through permutation
+                    bit_pos = bit_order[within_byte]
+                    byte_value = int(flat_bytes[byte_index])
+                    yield (byte_value >> bit_pos) & 1
+                    current_bit_index += 1
+
+            bit_iter = lsb_bit_iter()
+
+            # Utilities to read from bit iterator
+            def read_bits(num_bits: int) -> int:
+                value = 0
+                for _ in range(num_bits):
+                    try:
+                        b = next(bit_iter)
+                    except StopIteration:
+                        raise ValueError("Unexpected end of bitstream while reading bits")
+                    value = (value << 1) | (b & 1)
+                return value
+
+            def read_bytes_exact(num_bytes: int) -> bytes:
+                out = bytearray()
+                for _ in range(num_bytes):
+                    out.append(read_bits(8))
+                return bytes(out)
+
+            # Read and parse header (variable length)
+            # Header: magic(4), ver(1), lsb(1), length(4), fname_len(1), fname(N), crc32(4)
+            # Read fixed portion: magic(4), ver(1), lsb(1)
+            fixed = read_bytes_exact(4 + 1 + 1)
+
+            if fixed[:4] != b'STGA':
+                self.last_error = "Magic bytes mismatch. Wrong key or not a stego image."
                 print(f"Error: {self.last_error}")
                 return False
 
-            key = self.encryption_key.strip()
+            version = fixed[4]
+            header_lsb_bits = fixed[5]
 
-            class BitReader:
-                def __init__(self, data: np.ndarray, lsb_bits: int, start_bit: int, bit_order: list[int]):
-                    self.data = data
-                    self.lsb_bits = lsb_bits
-                    self.total_bits = data.size * lsb_bits
-                    self.index = start_bit
-                    self.order = bit_order
-
-                def read_bit(self) -> int:
-                    if self.index >= self.total_bits:
-                        raise ValueError("Ran out of LSB bits while reading stream")
-                    byte_index = self.index // self.lsb_bits
-                    within_byte = self.index % self.lsb_bits
-                    bit_pos = self.order[within_byte]
-                    byte_value = int(self.data[byte_index])
-                    bit = (byte_value >> bit_pos) & 1
-                    self.index += 1
-                    return bit
-
-                def read_bits(self, count: int) -> int:
-                    value = 0
-                    for _ in range(count):
-                        value = (value << 1) | self.read_bit()
-                    return value
-
-                def read_bytes(self, count: int) -> bytes:
-                    return bytes(self.read_bits(8) for _ in range(count))
-
-                @property
-                def position(self) -> int:
-                    return self.index
-
-            header_bytes = None
-            header_info = None
-            header_bits_consumed = 0
-            for candidate_bits in range(1, 9):
-                identity = list(range(candidate_bits))
-                reader = BitReader(flat_bytes, candidate_bits, 0, identity)
-                buf = bytearray()
-                try:
-                    buf.extend(reader.read_bytes(4))
-                    if bytes(buf[:4]) != HEADER_MAGIC:
-                        continue
-                    buf.append(reader.read_bits(8))
-                    buf.append(reader.read_bits(8))
-                    buf.append(reader.read_bits(8))
-                    buf.extend(reader.read_bytes(8))
-                    buf.extend(reader.read_bytes(4))
-                    nonce_len = reader.read_bits(8)
-                    buf.append(nonce_len)
-                    buf.extend(reader.read_bytes(nonce_len))
-                    fname_len = reader.read_bits(8)
-                    buf.append(fname_len)
-                    buf.extend(reader.read_bytes(fname_len))
-                    buf.extend(reader.read_bytes(4))
-                    candidate_header = unpack_header(bytes(buf))
-                    if candidate_header['lsb_bits'] != candidate_bits:
-                        continue
-                    header_bytes = bytes(buf)
-                    header_info = candidate_header
-                    header_bits_consumed = reader.position
-                    break
-                except ValueError:
-                    continue
-                except Exception:
-                    continue
-
-            if header_info is None or header_bytes is None:
-                self.last_error = "Failed to locate STGA header. Wrong key or unsupported format."
+            if header_lsb_bits != lsb_bits:
+                self.last_error = f"LSB bits mismatch (header {header_lsb_bits} != selected {lsb_bits})"
                 print(f"Error: {self.last_error}")
                 return False
 
-            lsb_bits = header_info['lsb_bits']
-            self.lsb_bits = lsb_bits
-            total_lsb_bits = flat_bytes.size * lsb_bits
-
-            start_bit = header_info['start_bit_offset']
-            payload_length = header_info['payload_len']
-            if start_bit < header_bits_consumed:
-                self.last_error = "Header indicates payload overlaps reserved header region"
-                print(f"Error: {self.last_error}")
-                return False
-            if start_bit + payload_length * 8 > total_lsb_bits:
-                self.last_error = "Payload length exceeds cover capacity"
-                print(f"Error: {self.last_error}")
-                return False
-
-            rng = rng_from_key_and_filename(key, b'')
-            perm = perm_for_lsb_bits(rng, lsb_bits)
-
-            payload_reader = BitReader(flat_bytes, lsb_bits, start_bit, perm)
-            payload_cipher = payload_reader.read_bytes(payload_length)
-
-            filename = header_info.get('filename', '')
-            fname_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
-            flags = header_info.get('flags', 0)
-            nonce = header_info.get('nonce', b'')
-
-            if flags & FLAG_PAYLOAD_ENCRYPTED:
-                if not nonce:
-                    self.last_error = "Encrypted payload missing nonce"
-                    print(f"Error: {self.last_error}")
-                    return False
-                payload_plain = decrypt_payload(key, nonce, payload_cipher, fname_bytes)
+            header_start_offset = None
+            if version == 2:
+                # start_offset(8), length(4), fname_len(1)
+                rest = read_bytes_exact(8 + 4 + 1)
+                header_start_offset = struct.unpack('>Q', rest[:8])[0]
+                payload_length = struct.unpack('>I', rest[8:12])[0]
+                filename_len = rest[12]
+            elif version == 1:
+                # length(4), fname_len(1)
+                rest = read_bytes_exact(4 + 1)
+                payload_length = struct.unpack('>I', rest[:4])[0]
+                filename_len = rest[4]
             else:
-                payload_plain = payload_cipher
+                self.last_error = f"Unsupported header version: {version}"
+                print(f"Error: {self.last_error}")
+                return False
 
-            expected_crc = header_info.get('crc32', 0)
-            actual_crc = crc32(payload_plain)
-            if actual_crc != expected_crc:
+            if filename_len > 100:
+                self.last_error = "Unreasonable filename length in header"
+                print(f"Error: {self.last_error}")
+                return False
+
+            filename_bytes = read_bytes_exact(filename_len) if filename_len else b''
+            try:
+                suggested_filename = filename_bytes.decode('utf-8') if filename_bytes else ''
+            except Exception:
+                suggested_filename = ''
+
+            crc32_bytes = read_bytes_exact(4)
+            expected_crc32 = struct.unpack('>I', crc32_bytes)[0]
+
+            # Now read payload
+            if payload_length > (total_lsb_bits // 8):
+                self.last_error = "Payload length from header exceeds plausible capacity"
+                print(f"Error: {self.last_error}")
+                return False
+
+            payload = read_bytes_exact(payload_length)
+
+            actual_crc32 = zlib.crc32(payload) & 0xFFFFFFFF
+            if actual_crc32 != expected_crc32:
                 self.last_error = "CRC32 mismatch. Wrong key or corrupted stego."
                 print(f"Error: {self.last_error}")
                 return False
 
+            # Decide output path
+            # Prefer the user-provided path exactly; if it's a folder or name without extension,
+            # generate datetime.<suggested_filename>. Otherwise, use suggested name next to stego with datetime prefix.
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
             def build_final_name(suggested: str) -> str:
@@ -301,8 +290,8 @@ class StegaDecodeMachine:
                     return f"{timestamp}.{suggested}"
                 return f"{timestamp}_extracted.bin"
 
-            suggested_filename = filename
             if self.output_path and self.output_path.strip():
+                # If the provided path is a directory, save inside it
                 if os.path.isdir(self.output_path):
                     base_dir = self.output_path
                     final_name = build_final_name(suggested_filename)
@@ -311,7 +300,9 @@ class StegaDecodeMachine:
                     chosen_dir = os.path.dirname(self.output_path)
                     chosen_base = os.path.basename(self.output_path)
                     name, ext = os.path.splitext(chosen_base)
+                    # If no extension, treat as a directory/name base and attach datetime.<suggested>
                     if not ext:
+                        # If user typed a folder-like path, prefer saving under that folder name
                         candidate_dir = os.path.join(chosen_dir, chosen_base) if chosen_dir else chosen_base
                         base_dir = candidate_dir if candidate_dir else os.getcwd()
                         if not os.path.exists(base_dir):
@@ -319,6 +310,7 @@ class StegaDecodeMachine:
                         final_name = build_final_name(suggested_filename)
                         output_path = os.path.join(base_dir, final_name)
                     else:
+                        # Explicit filename with extension provided by user; honor exactly
                         output_path = self.output_path
             elif suggested_filename:
                 stego_dir = os.path.dirname(self.stego_image_path) or ''
@@ -328,13 +320,16 @@ class StegaDecodeMachine:
                 output_path = os.path.join(os.getcwd(), f"{timestamp}_extracted_payload.bin")
 
             with open(output_path, 'wb') as f:
-                f.write(payload_plain)
+                f.write(payload)
 
+            # Persist the actual output path used so the GUI can reference it
             self.output_path = output_path
 
+            # Try to populate extracted_data as text preview if decodable
             try:
-                self.extracted_data = payload_plain.decode('utf-8')
+                self.extracted_data = payload.decode('utf-8')
             except Exception:
+                # Try PDF text extraction if extension indicates a PDF
                 self.extracted_data = None
                 try:
                     if output_path.lower().endswith('.pdf'):
@@ -354,21 +349,19 @@ class StegaDecodeMachine:
                 except Exception:
                     pass
                 if self.extracted_data is None:
-                    self.extracted_data = f"Binary payload extracted ({len(payload_plain)} bytes) -> {output_path}"
+                    self.extracted_data = f"Binary payload extracted ({len(payload)} bytes) -> {output_path}"
 
-            print("Steganography decoding completed successfully!")
+            print(f"Steganography decoding completed successfully!")
             print(f"Extracted data saved to: {output_path}")
+            # Record header info for UI/reporting
             self.header_info = {
-                'version': int(header_info.get('version', 0)),
-                'lsb_bits': int(lsb_bits),
-                'start_offset': int(start_bit),
+                'version': int(version),
+                'lsb_bits': int(header_lsb_bits),
+                'start_offset': int(header_start_offset) if header_start_offset is not None else None,
+                'computed_start': int(start_bit),
                 'payload_length': int(payload_length),
                 'filename': suggested_filename,
-                'crc32_ok': True,
-                'encrypted': bool(flags & FLAG_PAYLOAD_ENCRYPTED),
-                'flags': int(flags),
-                'nonce': nonce.hex() if nonce else '',
-                'header_bits': header_bits_consumed,
+                'crc32_ok': actual_crc32 == expected_crc32
             }
             return True
 
@@ -377,7 +370,12 @@ class StegaDecodeMachine:
             print(f"Error during steganography decoding: {e}")
             return False
 
-
+    def _rng_from_key(self, key: str) -> random.Random:
+        """Create a deterministic RNG from the provided key string."""
+        key_bytes = key.encode('utf-8')
+        digest = hashlib.sha256(key_bytes).digest()
+        seed_int = int.from_bytes(digest[:8], 'big')
+        return random.Random(seed_int)
 
     def get_image_info(self) -> dict:
         """
