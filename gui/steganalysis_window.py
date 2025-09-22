@@ -161,6 +161,10 @@ class SteganalysisWindow(QMainWindow):
         img_results = self._build_image_results()
         img_split.addWidget(img_controls)
         img_split.addWidget(img_results)
+        # Give more space to results (charts) than inputs
+        img_controls.setMaximumWidth(420)
+        img_split.setStretch(0, 1)
+        img_split.setStretch(1, 3)
 
         # Build audio tab
         aud_split = QHBoxLayout(audio_tab)
@@ -197,8 +201,9 @@ class SteganalysisWindow(QMainWindow):
     def _build_image_controls(self) -> QWidget:
         panel = self._styled_panel()
         layout = QVBoxLayout(panel)
-        layout.setSpacing(20)
-        layout.setContentsMargins(30, 30, 30, 30)
+        # Make controls more compact to free space for charts
+        layout.setSpacing(14)
+        layout.setContentsMargins(18, 18, 18, 18)
 
         title = QLabel("Image Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
@@ -225,8 +230,8 @@ class SteganalysisWindow(QMainWindow):
                 border: 2px solid #bdc3c7;
                 border-radius: 8px;
                 background-color: #f8f9fa;
-                min-height: 150px;
-                max-height: 200px;
+                min-height: 120px;
+                max-height: 160px;
             }
         """)
         self.image_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -306,9 +311,9 @@ class SteganalysisWindow(QMainWindow):
         image_charts_group = QGroupBox("Image Charts")
         image_charts_layout = QGridLayout(image_charts_group)
         # Larger canvases for readability
-        self.img_canvas_lsb = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
-        self.img_canvas_diff = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
-        self.img_canvas_hist = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
+        self.img_canvas_lsb = FigureCanvas(Figure(figsize=(4.2, 3.2), dpi=100))
+        self.img_canvas_diff = FigureCanvas(Figure(figsize=(4.2, 3.2), dpi=100))
+        self.img_canvas_hist = FigureCanvas(Figure(figsize=(8.8, 3.2), dpi=100))
         # No minimum size constraints - let charts fit naturally like audio charts
         image_charts_layout.addWidget(self.img_canvas_lsb, 0, 0)
         image_charts_layout.addWidget(self.img_canvas_diff, 0, 1)
