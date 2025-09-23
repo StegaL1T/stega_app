@@ -79,29 +79,18 @@ class StegaDecodeMachine:
             with wave.open(audio_path, 'rb') as audio_file:
                 n_frames = audio_file.getnframes()
                 samp_width = audio_file.getsampwidth()
-                
                 raw_data = audio_file.readframes(n_frames)
-                
-                # Using float32 for wider compatibility with audio samples
-                if samp_width == 1:
-                    dtype = np.uint8
-                elif samp_width == 2:
-                    dtype = np.int16
-                elif samp_width == 4:
-                    dtype = np.int32
-                else:
-                    self.last_error = f"Unsupported sample width: {samp_width} bytes"
-                    print(f"Error: {self.last_error}")
-                    return False
-                    
-                self.audio_data = np.frombuffer(raw_data, dtype=dtype)
+                print(f"[DEBUG] First 32 bytes of raw audio: {raw_data[:32].hex()}")
+                self.audio_data = np.frombuffer(raw_data, dtype=np.uint8)
+                print(f"[DEBUG] np.uint8 audio_data shape: {self.audio_data.shape}, first 32 bytes: {self.audio_data[:32].tolist()}")
                 self.stego_audio_path = audio_path
                 self.last_error = None
-                
+
             print(f"Steganographic audio loaded: {audio_path}")
             print(f"Audio samples: {len(self.audio_data)}")
             return True
 
+            print(f"[DEBUG] Raw header bytes extracted: {list(fixed)}")
         except Exception as e:
             self.last_error = f"Error loading steganographic audio: {e}"
             print(f"Error: {self.last_error}")
@@ -192,22 +181,25 @@ class StegaDecodeMachine:
             lsb_bits = self.lsb_bits
             total_lsb_bits = total_bytes * lsb_bits
 
-            # Seed PRNG from key
-            rng = self._rng_from_key(self.encryption_key)
-
-            # Choose start offset within LSB bitstream with safety margin
-            safety_margin = 4096  # bits reserved to ensure header fits
-            if total_lsb_bits <= safety_margin:
-                self.last_error = "Cover media is too small for header"
-                print(f"Error: {self.last_error}")
-                return False
-            start_bit = rng.randrange(0, total_lsb_bits - safety_margin)
-
-            # Build per-byte LSB permutation using PRNG (length == lsb_bits)
-            bit_order = list(range(lsb_bits))
-            rng.shuffle(bit_order)
+            # For audio, always read header from bit offset 0 and use identity bit order
+            if self.stego_audio_path:
+                start_bit = 0
+                bit_order = list(range(lsb_bits))
+            else:
+                # For images, keep previous logic
+                rng = self._rng_from_key(self.encryption_key)
+                safety_margin = 4096  # bits reserved to ensure header fits
+                if total_lsb_bits <= safety_margin:
+                    self.last_error = "Cover media is too small for header"
+                    print(f"Error: {self.last_error}")
+                    return False
+                start_bit = rng.randrange(0, total_lsb_bits - safety_margin)
+                bit_order = list(range(lsb_bits))
+                rng.shuffle(bit_order)
 
             # Helper to yield LSB bits starting from start_bit
+            # (bit_order for audio payload is set below, do not overwrite)
+
             def lsb_bit_iter():
                 current_bit_index = start_bit
                 while current_bit_index < total_lsb_bits:
@@ -221,6 +213,17 @@ class StegaDecodeMachine:
                     current_bit_index += 1
 
             bit_iter = lsb_bit_iter()
+
+            # DEBUG: Dump first 16 bytes of LSB stream
+            import itertools
+            lsb_preview_bits = list(itertools.islice(lsb_bit_iter(), 8*16))
+            lsb_preview_bytes = bytearray()
+            for i in range(0, len(lsb_preview_bits), 8):
+                byte = 0
+                for b in lsb_preview_bits[i:i+8]:
+                    byte = (byte << 1) | (b & 1)
+                lsb_preview_bytes.append(byte)
+            print(f"[DEBUG] First 16 bytes from LSB stream: {lsb_preview_bytes.hex()}")
 
             # Utilities to read from bit iterator
             def read_bits(num_bits: int) -> int:
@@ -239,29 +242,46 @@ class StegaDecodeMachine:
                     out.append(read_bits(8))
                 return bytes(out)
 
+
             # Read and parse header
             # Header: magic(4), ver(1), lsb(1), ...
-            fixed = read_bytes_exact(4 + 1 + 1)
-            
+            fixed = read_bytes_exact(7)  # magic(4), ver(1), flags(1), lsb(1)
+            print(f"[DEBUG] Raw header bytes extracted: {list(fixed)}")
+            if len(fixed) < 7:
+                self.last_error = f"Header too short: only {len(fixed)} bytes read"
+                print(f"Error: {self.last_error}")
+                return False
+            print(f"[DEBUG] Header bytes: {fixed.hex()}  (magic: {fixed[:4]}, ver: {fixed[4]}, flags: {fixed[5]}, lsb: {fixed[6]})")
+
             if fixed[:4] != b'STGA':
                 self.last_error = "Magic bytes mismatch. Wrong key or not a stego file."
                 print(f"Error: {self.last_error}")
                 return False
 
             version = fixed[4]
-            header_lsb_bits = fixed[5]
+            flags = fixed[5]
+            header_lsb_bits = fixed[6]
+
 
             if header_lsb_bits != lsb_bits:
                 self.last_error = f"LSB bits mismatch (header {header_lsb_bits} != selected {lsb_bits})"
                 print(f"Error: {self.last_error}")
                 return False
 
+            print(f"[DEBUG] Flags: 0x{flags:02X}  Encrypted: {'yes' if flags & 0x01 else 'no'}")
+
+
             header_start_offset = None
+            nonce = b''
+            suggested_filename = ''
             if version == 2:
                 rest = read_bytes_exact(8 + 4 + 1)
                 header_start_offset = struct.unpack('>Q', rest[:8])[0]
                 payload_length = struct.unpack('>I', rest[8:12])[0]
-                filename_len = rest[12]
+                nonce_len = rest[12]
+                if nonce_len > 0:
+                    nonce = read_bytes_exact(nonce_len)
+                filename_len = read_bytes_exact(1)[0]
             elif version == 1:
                 rest = read_bytes_exact(4 + 1)
                 payload_length = struct.unpack('>I', rest[:4])[0]
@@ -284,15 +304,74 @@ class StegaDecodeMachine:
 
             crc32_bytes = read_bytes_exact(4)
             expected_crc32 = struct.unpack('>I', crc32_bytes)[0]
+
+            print(f"[DEBUG] Start bit offset: {header_start_offset}")
+            print(f"[DEBUG] Nonce: {nonce.hex() if nonce else '-'}")
+            print(f"[DEBUG] Filename: {suggested_filename}")
             
             if payload_length > (total_lsb_bits // 8):
                 self.last_error = "Payload length from header exceeds plausible capacity"
                 print(f"Error: {self.last_error}")
                 return False
 
+
+
+            # For audio, reconstruct the same permutation as encoder for payload region
+            if self.stego_audio_path:
+                from machine.stega_spec import perm_for_lsb_bits, rng_from_key_and_filename
+                # Encoder uses empty filename context for audio
+                rng = rng_from_key_and_filename(self.encryption_key, b"")
+                bit_order = perm_for_lsb_bits(rng, lsb_bits)
+            # else: image logic (bit_order already set)
+
+            def lsb_bit_iter_at_offset(offset_bits):
+                current_bit_index = offset_bits
+                while current_bit_index < total_lsb_bits:
+                    byte_index = current_bit_index // lsb_bits
+                    if byte_index >= len(flat_bytes):
+                        break
+                    within_byte = current_bit_index % lsb_bits
+                    bit_pos = bit_order[within_byte]
+                    byte_value = int(flat_bytes[byte_index])
+                    yield (byte_value >> bit_pos) & 1
+                    current_bit_index += 1
+
+            if header_start_offset is not None:
+                # Dump first 32 bytes of LSB stream at payload start offset
+                preview_iter = lsb_bit_iter_at_offset(header_start_offset)
+                import itertools
+                preview_bits = list(itertools.islice(preview_iter, 8*32))
+                preview_bytes = bytearray()
+                for i in range(0, len(preview_bits), 8):
+                    byte = 0
+                    for b in preview_bits[i:i+8]:
+                        byte = (byte << 1) | (b & 1)
+                    preview_bytes.append(byte)
+                print(f"[DEBUG] First 32 bytes of LSB stream at payload start offset: {list(preview_bytes)}")
+                # Now re-initialize bit_iter for actual payload extraction
+                bit_iter = lsb_bit_iter_at_offset(header_start_offset)
+
             payload = read_bytes_exact(payload_length)
 
+
+
+            # Decrypt payload if encrypted flag is set
+            if flags & 0x01:
+                try:
+                    print(f"[DEBUG] First 32 bytes of raw payload from LSB stream: {list(payload[:32])}")
+                    from machine.stega_spec import decrypt_payload
+                    context_bytes = suggested_filename.encode('utf-8')
+                    print(f"[DEBUG] Decrypt context: key='{self.encryption_key}', nonce={nonce.hex()}, context_bytes={context_bytes}")
+                    payload = decrypt_payload(self.encryption_key, nonce, payload, context_bytes)
+                    print("[DEBUG] Payload decrypted.")
+                except Exception as e:
+                    self.last_error = f"Decryption failed: {e}"
+                    print(f"Error: {self.last_error}")
+                    return False
+
             actual_crc32 = zlib.crc32(payload) & 0xFFFFFFFF
+            print(f"[DEBUG] First 32 bytes of decrypted payload: {list(payload[:32])}")
+            print(f"[DEBUG] CRC32 expected: 0x{expected_crc32:08X}, actual: 0x{actual_crc32:08X}")
             if actual_crc32 != expected_crc32:
                 self.last_error = "CRC32 mismatch. Wrong key or corrupted stego."
                 print(f"Error: {self.last_error}")
