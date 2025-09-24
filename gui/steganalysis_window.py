@@ -309,7 +309,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 10px 20px;
                 border-radius: 12px;
                 font-weight: bold;
-                font-size: 14px;
+                font-size: 12px;
             }
             QPushButton:hover {
                 background: rgba(69,237,242,0.3);
@@ -346,7 +346,7 @@ class SteganalysisWindow(QMainWindow):
         tabs.setTabPosition(QTabWidget.TabPosition.North)
         tabs.setStyleSheet("""
             QTabWidget::pane {
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 15px;
                 background-color: rgba(14,22,37,0.8);
             }
@@ -412,9 +412,9 @@ class SteganalysisWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame { 
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 border-radius: 15px; 
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
             }
         """)
         panel.setGraphicsEffect(self.create_shadow_effect())
@@ -429,14 +429,14 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Image Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
 
         image_group = QGroupBox("Suspicious Image")
         image_group.setStyleSheet("""
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -451,7 +451,7 @@ class SteganalysisWindow(QMainWindow):
         self.image_path = QLineEdit(); self.image_path.setPlaceholderText("Select image to analyze..."); self.image_path.setReadOnly(True)
         self.image_path.setStyleSheet("""
             QLineEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -464,16 +464,18 @@ class SteganalysisWindow(QMainWindow):
         browse_button = QPushButton("Browse Image")
         browse_button.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 8px 16px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
+                color: #ffffff;
             }
         """)
         browse_button.clicked.connect(self.image_window.browse_image)
@@ -487,7 +489,7 @@ class SteganalysisWindow(QMainWindow):
             QLabel {
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 min-height: 150px;
                 max-height: 200px;
@@ -503,7 +505,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -522,20 +524,42 @@ class SteganalysisWindow(QMainWindow):
         ])
         self.method_combo.setStyleSheet("""
             QComboBox { 
-                padding: 8px; 
-                border: 2px solid rgba(69,237,242,0.6); 
+                padding: 8px 12px 8px 12px; 
+                border: 2px solid #45edf2; 
                 border-radius: 8px; 
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
+                font-weight: bold;
             }
             QComboBox:focus { 
-                border: 3px solid rgba(69,237,242,1.0);
+                border: 3px solid #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
             QComboBox::drop-down {
-                border: none;
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 30px;
+                border-left: 2px solid #45edf2;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+                background-color: #45edf2;
             }
             QComboBox::down-arrow {
+                image: none;
                 border: none;
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #0e1625;
+                margin: 0 8px;
+            }
+            QComboBox QAbstractItemView {
+                border: 2px solid #45edf2;
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                selection-background-color: rgba(69,237,242,0.3);
             }
         """)
         self.method_combo.currentTextChanged.connect(self.image_window.on_image_method_changed)
@@ -544,20 +568,21 @@ class SteganalysisWindow(QMainWindow):
         self.img_analyze_btn = QPushButton("Analyze Image")
         self.img_analyze_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(255,140,0,0.2);
+                color: #ff8c00;
+                border: 2px solid #ff8c00;
                 padding: 12px 24px;
                 border-radius: 12px;
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(255,140,0,0.4);
+                border: 3px solid #ff8c00;
+                color: #ffffff;
             }
             QPushButton:pressed {
-                background: rgba(69,237,242,0.3);
+                background: rgba(255,140,0,0.4);
             }
         """)
         self.img_analyze_btn.clicked.connect(self.image_window.analyze_image)
@@ -567,7 +592,7 @@ class SteganalysisWindow(QMainWindow):
         self.image_method_description.setWordWrap(True)
         self.image_method_description.setStyleSheet("""
             QLabel {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
                 padding: 10px;
@@ -595,7 +620,7 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Image Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
 
         self.img_progress_bar = QProgressBar(); self.img_progress_bar.setVisible(False)
         self.img_progress_bar.setStyleSheet("""
@@ -603,7 +628,7 @@ class SteganalysisWindow(QMainWindow):
                 border: 2px solid rgba(69,237,242,0.6); 
                 border-radius: 8px; 
                 text-align: center; 
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
             }
             QProgressBar::chunk { 
@@ -617,7 +642,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -632,7 +657,7 @@ class SteganalysisWindow(QMainWindow):
         self.img_results_text = QTextEdit(); self.img_results_text.setReadOnly(True)
         self.img_results_text.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -648,7 +673,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -674,7 +699,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -689,7 +714,7 @@ class SteganalysisWindow(QMainWindow):
         self.img_stats_text = QTextEdit(); self.img_stats_text.setReadOnly(True); self.img_stats_text.setMaximumHeight(150)
         self.img_stats_text.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -708,16 +733,18 @@ class SteganalysisWindow(QMainWindow):
         export_img_pdf_btn = QPushButton("Export Charts to PDF")
         export_img_pdf_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(147,51,234,0.2);
+                color: #9333ea;
+                border: 2px solid #9333ea;
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(147,51,234,0.4);
+                border: 3px solid #9333ea;
+                color: #ffffff;
             }
         """)
         export_img_pdf_btn.clicked.connect(self.export_charts_pdf)
@@ -727,16 +754,18 @@ class SteganalysisWindow(QMainWindow):
         export_img_report_btn = QPushButton("Export Report")
         export_img_report_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(147,51,234,0.2);
+                color: #9333ea;
+                border: 2px solid #9333ea;
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(147,51,234,0.4);
+                border: 3px solid #9333ea;
+                color: #ffffff;
             }
         """)
         export_img_report_btn.clicked.connect(self.export_report)
@@ -753,14 +782,14 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Audio Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
 
         audio_group = QGroupBox("Suspicious Audio")
         audio_group.setStyleSheet("""
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -775,7 +804,7 @@ class SteganalysisWindow(QMainWindow):
         self.audio_path = QLineEdit(); self.audio_path.setPlaceholderText("Select WAV audio to analyze..."); self.audio_path.setReadOnly(True)
         self.audio_path.setStyleSheet("""
             QLineEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -788,16 +817,18 @@ class SteganalysisWindow(QMainWindow):
         browse_audio_button = QPushButton("Browse Audio")
         browse_audio_button.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 8px 16px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
+                color: #ffffff;
             }
         """)
         browse_audio_button.clicked.connect(self.audio_window.browse_audio)
@@ -811,7 +842,7 @@ class SteganalysisWindow(QMainWindow):
             QLabel {
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 min-height: 100px;
                 max-height: 150px;
@@ -826,7 +857,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -845,20 +876,42 @@ class SteganalysisWindow(QMainWindow):
         ])
         self.audio_method_combo.setStyleSheet("""
             QComboBox { 
-                padding: 8px; 
-                border: 2px solid rgba(69,237,242,0.6); 
+                padding: 8px 12px 8px 12px; 
+                border: 2px solid #45edf2; 
                 border-radius: 8px; 
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
+                font-weight: bold;
             }
             QComboBox:focus { 
-                border: 3px solid rgba(69,237,242,1.0);
+                border: 3px solid #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
             QComboBox::drop-down {
-                border: none;
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 30px;
+                border-left: 2px solid #45edf2;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+                background-color: #45edf2;
             }
             QComboBox::down-arrow {
+                image: none;
                 border: none;
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #0e1625;
+                margin: 0 8px;
+            }
+            QComboBox QAbstractItemView {
+                border: 2px solid #45edf2;
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                selection-background-color: rgba(69,237,242,0.3);
             }
         """)
         self.audio_method_combo.currentTextChanged.connect(self.audio_window.on_audio_method_changed)
@@ -867,20 +920,21 @@ class SteganalysisWindow(QMainWindow):
         self.aud_analyze_btn = QPushButton("Analyze Audio")
         self.aud_analyze_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(255,140,0,0.2);
+                color: #ff8c00;
+                border: 2px solid #ff8c00;
                 padding: 12px 24px;
                 border-radius: 12px;
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(255,140,0,0.4);
+                border: 3px solid #ff8c00;
+                color: #ffffff;
             }
             QPushButton:pressed {
-                background: rgba(69,237,242,0.3);
+                background: rgba(255,140,0,0.4);
             }
         """)
         self.aud_analyze_btn.clicked.connect(self.audio_window.analyze_audio)
@@ -890,7 +944,7 @@ class SteganalysisWindow(QMainWindow):
         self.audio_method_description.setWordWrap(True)
         self.audio_method_description.setStyleSheet("""
             QLabel {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
                 padding: 10px;
@@ -918,14 +972,14 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Audio Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
 
         aud_results_group = QGroupBox("Detection Results")
         aud_results_group.setStyleSheet("""
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -940,7 +994,7 @@ class SteganalysisWindow(QMainWindow):
         self.aud_results_text = QTextEdit(); self.aud_results_text.setReadOnly(True)
         self.aud_results_text.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -955,7 +1009,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -979,7 +1033,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -994,7 +1048,7 @@ class SteganalysisWindow(QMainWindow):
         self.aud_stats_text = QTextEdit(); self.aud_stats_text.setReadOnly(True); self.aud_stats_text.setMaximumHeight(150)
         self.aud_stats_text.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -1007,16 +1061,18 @@ class SteganalysisWindow(QMainWindow):
         export_button = QPushButton("Export Report")
         export_button.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(147,51,234,0.2);
+                color: #9333ea;
+                border: 2px solid #9333ea;
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(147,51,234,0.4);
+                border: 3px solid #9333ea;
+                color: #ffffff;
             }
         """)
         export_button.clicked.connect(self.export_report)
@@ -1025,16 +1081,18 @@ class SteganalysisWindow(QMainWindow):
         export_aud_pdf_btn = QPushButton("Export Charts to PDF")
         export_aud_pdf_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(147,51,234,0.2);
+                color: #9333ea;
+                border: 2px solid #9333ea;
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(147,51,234,0.4);
+                border: 3px solid #9333ea;
+                color: #ffffff;
             }
         """)
         export_aud_pdf_btn.clicked.connect(self.export_charts_pdf)
@@ -1057,14 +1115,14 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Video Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
 
         video_group = QGroupBox("Suspicious Video")
         video_group.setStyleSheet("""
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -1079,7 +1137,7 @@ class SteganalysisWindow(QMainWindow):
         self.video_path = QLineEdit(); self.video_path.setPlaceholderText("Select video to analyze..."); self.video_path.setReadOnly(True)
         self.video_path.setStyleSheet("""
             QLineEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -1092,16 +1150,18 @@ class SteganalysisWindow(QMainWindow):
         browse_video_button = QPushButton("Browse Video")
         browse_video_button.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 8px 16px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
+                color: #ffffff;
             }
         """)
         browse_video_button.clicked.connect(self.video_window.browse_video)
@@ -1115,7 +1175,7 @@ class SteganalysisWindow(QMainWindow):
             QLabel {
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 min-height: 120px;
                 max-height: 180px;
@@ -1131,7 +1191,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -1150,20 +1210,42 @@ class SteganalysisWindow(QMainWindow):
         ])
         self.video_method_combo.setStyleSheet("""
             QComboBox { 
-                padding: 8px; 
-                border: 2px solid rgba(69,237,242,0.6); 
+                padding: 8px 12px 8px 12px; 
+                border: 2px solid #45edf2; 
                 border-radius: 8px; 
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
+                font-weight: bold;
             }
             QComboBox:focus { 
-                border: 3px solid rgba(69,237,242,1.0);
+                border: 3px solid #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
             QComboBox::drop-down {
-                border: none;
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 30px;
+                border-left: 2px solid #45edf2;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
+                background-color: #45edf2;
             }
             QComboBox::down-arrow {
+                image: none;
                 border: none;
+                width: 0;
+                height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #0e1625;
+                margin: 0 8px;
+            }
+            QComboBox QAbstractItemView {
+                border: 2px solid #45edf2;
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                selection-background-color: rgba(69,237,242,0.3);
             }
         """)
         self.video_method_combo.currentTextChanged.connect(self.video_window.on_video_method_changed)
@@ -1174,7 +1256,7 @@ class SteganalysisWindow(QMainWindow):
         self.video_method_description.setWordWrap(True)
         self.video_method_description.setStyleSheet("""
             QLabel {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
                 padding: 10px;
@@ -1188,20 +1270,21 @@ class SteganalysisWindow(QMainWindow):
         self.vid_analyze_btn = QPushButton("Analyze Video")
         self.vid_analyze_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(255,140,0,0.2);
+                color: #ff8c00;
+                border: 2px solid #ff8c00;
                 padding: 12px 24px;
                 border-radius: 12px;
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(255,140,0,0.4);
+                border: 3px solid #ff8c00;
+                color: #ffffff;
             }
             QPushButton:pressed {
-                background: rgba(69,237,242,0.3);
+                background: rgba(255,140,0,0.4);
             }
         """)
         self.vid_analyze_btn.clicked.connect(self.video_window.analyze_video)
@@ -1223,7 +1306,7 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Video Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
 
         self.vid_progress_bar = QProgressBar(); self.vid_progress_bar.setVisible(False)
         self.vid_progress_bar.setStyleSheet("""
@@ -1231,7 +1314,7 @@ class SteganalysisWindow(QMainWindow):
                 border: 2px solid rgba(69,237,242,0.6); 
                 border-radius: 8px; 
                 text-align: center; 
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
             }
             QProgressBar::chunk { 
@@ -1245,7 +1328,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -1260,7 +1343,7 @@ class SteganalysisWindow(QMainWindow):
         self.vid_results_text = QTextEdit(); self.vid_results_text.setReadOnly(True)
         self.vid_results_text.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -1276,7 +1359,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -1301,7 +1384,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
-                border: 2px solid rgba(73,41,154,0.6);
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
                 padding-top: 10px;
@@ -1316,7 +1399,7 @@ class SteganalysisWindow(QMainWindow):
         self.vid_stats_text = QTextEdit(); self.vid_stats_text.setReadOnly(True); self.vid_stats_text.setMaximumHeight(150)
         self.vid_stats_text.setStyleSheet("""
             QTextEdit {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
@@ -1330,16 +1413,18 @@ class SteganalysisWindow(QMainWindow):
         export_vid_pdf_btn = QPushButton("Export Charts to PDF")
         export_vid_pdf_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(147,51,234,0.2);
+                color: #9333ea;
+                border: 2px solid #9333ea;
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(147,51,234,0.4);
+                border: 3px solid #9333ea;
+                color: #ffffff;
             }
         """)
         export_vid_pdf_btn.clicked.connect(self.export_charts_pdf)
@@ -1348,16 +1433,18 @@ class SteganalysisWindow(QMainWindow):
         export_vid_report_btn = QPushButton("Export Report")
         export_vid_report_btn.setStyleSheet("""
             QPushButton { 
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(147,51,234,0.2);
+                color: #9333ea;
+                border: 2px solid #9333ea;
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 12px;
             }
             QPushButton:hover { 
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(147,51,234,0.4);
+                border: 3px solid #9333ea;
+                color: #ffffff;
             }
         """)
         export_vid_report_btn.clicked.connect(self.export_report)
