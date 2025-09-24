@@ -304,7 +304,7 @@ class SteganalysisWindow(QMainWindow):
         back_button.setStyleSheet("""
             QPushButton {
                 background: rgba(69,237,242,0.1);
-                color: #45edf2;
+                color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 padding: 10px 20px;
                 border-radius: 12px;
@@ -355,12 +355,13 @@ class SteganalysisWindow(QMainWindow):
             }
             QTabBar::tab {
                 background: rgba(69,237,242,0.1);
-                color: #45edf2;
+                color: #e8e8fc;
                 border: 2px solid rgba(69,237,242,0.6);
                 padding: 10px 20px;
                 margin: 5px;
                 border-radius: 8px;
                 font-weight: bold;
+                font-size: 14px;
             }
             QTabBar::tab:selected {
                 background: rgba(69,237,242,0.3);
@@ -417,7 +418,6 @@ class SteganalysisWindow(QMainWindow):
                 border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
         return panel
 
     def _build_image_controls(self) -> QWidget:
@@ -429,12 +429,12 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Image Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         image_group = QGroupBox("Suspicious Image")
         image_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -504,7 +504,7 @@ class SteganalysisWindow(QMainWindow):
         method_group = QGroupBox("Image Analysis Method")
         method_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -622,7 +622,7 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Image Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         self.img_progress_bar = QProgressBar(); self.img_progress_bar.setVisible(False)
         self.img_progress_bar.setStyleSheet("""
@@ -642,7 +642,7 @@ class SteganalysisWindow(QMainWindow):
         img_results_group = QGroupBox("Detection Results")
         img_results_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -674,7 +674,7 @@ class SteganalysisWindow(QMainWindow):
         image_charts_group = QGroupBox("Image Charts")
         image_charts_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -701,7 +701,7 @@ class SteganalysisWindow(QMainWindow):
         img_stats_group = QGroupBox("Statistics")
         img_stats_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -787,12 +787,12 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Audio Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         audio_group = QGroupBox("Suspicious Audio")
         audio_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -861,7 +861,7 @@ class SteganalysisWindow(QMainWindow):
         audio_method_group = QGroupBox("Audio Analysis Method")
         audio_method_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -979,12 +979,12 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Audio Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         aud_results_group = QGroupBox("Detection Results")
         aud_results_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -1015,7 +1015,7 @@ class SteganalysisWindow(QMainWindow):
         audio_charts_group = QGroupBox("Audio Charts")
         audio_charts_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -1040,7 +1040,7 @@ class SteganalysisWindow(QMainWindow):
         aud_stats_group = QGroupBox("Statistics")
         aud_stats_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -1125,12 +1125,12 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Video Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         video_group = QGroupBox("Suspicious Video")
         video_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -1200,7 +1200,7 @@ class SteganalysisWindow(QMainWindow):
         video_method_group = QGroupBox("Video Analysis Method")
         video_method_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -1318,7 +1318,7 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Video Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #45edf2; margin-bottom: 10px; border: none;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         self.vid_progress_bar = QProgressBar(); self.vid_progress_bar.setVisible(False)
         self.vid_progress_bar.setStyleSheet("""
@@ -1338,7 +1338,7 @@ class SteganalysisWindow(QMainWindow):
         vid_results_group = QGroupBox("Detection Results")
         vid_results_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -1370,7 +1370,7 @@ class SteganalysisWindow(QMainWindow):
         video_charts_group = QGroupBox("Video Charts")
         video_charts_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
@@ -1396,7 +1396,7 @@ class SteganalysisWindow(QMainWindow):
         vid_stats_group = QGroupBox("Statistics")
         vid_stats_group.setStyleSheet("""
             QGroupBox {
-                color: #45edf2;
+                color: #e8e8fc;
                 font-weight: bold;
                 font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
