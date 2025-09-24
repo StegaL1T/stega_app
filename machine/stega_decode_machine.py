@@ -4,6 +4,7 @@ from datetime import datetime
 
 import numpy as np
 from PIL import Image
+from datetime import datetime
 from PyPDF2 import PdfReader
 import wave
 
@@ -16,6 +17,7 @@ from machine.stega_spec import (
     rng_from_key_and_filename,
     unpack_header,
 )
+
 
 class StegaDecodeMachine:
     """
@@ -35,7 +37,7 @@ class StegaDecodeMachine:
         self.stego_image: Optional[Image.Image] = None
         self.image_array: Optional[np.ndarray] = None
         self.audio_data: Optional[np.ndarray] = None
-        
+
         # Internal state for results
         self.extracted_data: Optional[str] = None
         self.last_error: Optional[str] = None
@@ -57,13 +59,13 @@ class StegaDecodeMachine:
 
             self.stego_image = Image.open(image_path)
             self.stego_image_path = image_path
-            
+
             if self.stego_image.mode != 'RGB':
                 self.stego_image = self.stego_image.convert('RGB')
-                
+
             self.image_array = np.array(self.stego_image)
             self.last_error = None
-            
+
             print(f"Steganographic image loaded: {image_path}")
             print(f"Image dimensions: {self.image_array.shape}")
             return True
@@ -83,14 +85,16 @@ class StegaDecodeMachine:
                 self.last_error = f"Steganographic audio not found: {audio_path}"
                 print(f"Error: {self.last_error}")
                 return False
-                
+
             with wave.open(audio_path, 'rb') as audio_file:
                 n_frames = audio_file.getnframes()
                 samp_width = audio_file.getsampwidth()
                 raw_data = audio_file.readframes(n_frames)
-                print(f"[DEBUG] First 32 bytes of raw audio: {raw_data[:32].hex()}")
+                print(
+                    f"[DEBUG] First 32 bytes of raw audio: {raw_data[:32].hex()}")
                 self.audio_data = np.frombuffer(raw_data, dtype=np.uint8)
-                print(f"[DEBUG] np.uint8 audio_data shape: {self.audio_data.shape}, first 32 bytes: {self.audio_data[:32].tolist()}")
+                print(
+                    f"[DEBUG] np.uint8 audio_data shape: {self.audio_data.shape}, first 32 bytes: {self.audio_data[:32].tolist()}")
                 self.stego_audio_path = audio_path
                 self.last_error = None
 
@@ -137,10 +141,10 @@ class StegaDecodeMachine:
         """
         if not self.stego_image_path and not self.stego_audio_path:
             return False, "Steganographic media not selected"
-            
+
         if self.stego_image_path and self.image_array is None:
             return False, "Steganographic image not loaded properly"
-            
+
         if self.stego_audio_path and self.audio_data is None:
             return False, "Steganographic audio not loaded properly"
 
@@ -158,7 +162,7 @@ class StegaDecodeMachine:
             self.last_error = error_msg
             print(f"Validation failed: {error_msg}")
             return False
-            
+
         # Determine which media to decode from
         if self.stego_image_path:
             media_array = self.image_array
@@ -169,7 +173,7 @@ class StegaDecodeMachine:
             return False
 
         return self._extract_from_media(media_array)
-        
+
     def _extract_from_media(self, media_array: np.ndarray) -> bool:
         """
         Performs the core decoding logic on a NumPy array,
@@ -239,7 +243,8 @@ class StegaDecodeMachine:
                 for bit in preview_bits[i:i + 8]:
                     byte = (byte << 1) | (bit & 1)
                 preview_bytes.append(byte)
-            print(f"[DEBUG] First 16 bytes from LSB stream: {preview_bytes.hex()}")
+            print(
+                f"[DEBUG] First 16 bytes from LSB stream: {preview_bytes.hex()}")
 
             header_cursor = BitCursor(0, identity_order)
             header_bytes = bytearray()
@@ -329,18 +334,23 @@ class StegaDecodeMachine:
                     self.last_error = "Encrypted payload missing nonce in header"
                     print(f"Error: {self.last_error}")
                     return False
-                payload_plain = decrypt_payload(self.encryption_key, nonce, payload_encrypted, filename_bytes)
+                payload_plain = decrypt_payload(
+                    self.encryption_key, nonce, payload_encrypted, filename_bytes)
             else:
                 payload_plain = payload_encrypted
 
             actual_crc32 = crc32(payload_plain)
-            print(f"[DEBUG] CRC32 expected: 0x{expected_crc32:08X}, actual: 0x{actual_crc32:08X}")
+            print(
+                f"[DEBUG] CRC32 expected: 0x{expected_crc32:08X}, actual: 0x{actual_crc32:08X}")
             if actual_crc32 != expected_crc32:
                 self.last_error = "CRC32 mismatch. Wrong key or corrupted stego."
                 print(f"Error: {self.last_error}")
                 return False
 
+            # Decide output path and save payload
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+            # ... (the rest of your original save-file logic) ...
 
             def build_final_name(suggested: str) -> str:
                 if suggested:
@@ -363,7 +373,8 @@ class StegaDecodeMachine:
                         explicit_file = requested_path
                         base_dir = candidate_dir or os.getcwd()
                     else:
-                        base_dir = os.path.join(candidate_dir, base_name) if base_name else candidate_dir
+                        base_dir = os.path.join(
+                            candidate_dir, base_name) if base_name else candidate_dir
                         if base_dir and not os.path.exists(base_dir):
                             os.makedirs(base_dir, exist_ok=True)
 
@@ -372,9 +383,11 @@ class StegaDecodeMachine:
             else:
                 if not base_dir:
                     stego_source = self.stego_image_path if self.stego_image_path else self.stego_audio_path
-                    base_dir = os.path.dirname(stego_source) if stego_source else ''
+                    base_dir = os.path.dirname(
+                        stego_source) if stego_source else ''
                     if not base_dir:
-                        base_dir = os.path.join(os.getcwd(), 'extracted_payloads')
+                        base_dir = os.path.join(
+                            os.getcwd(), 'extracted_payloads')
                     if not os.path.exists(base_dir):
                         os.makedirs(base_dir, exist_ok=True)
                 final_name = build_final_name(suggested_filename)
@@ -385,7 +398,7 @@ class StegaDecodeMachine:
                 os.makedirs(output_dir, exist_ok=True)
 
             with open(output_path, 'wb') as f:
-                f.write(payload_plain)
+                f.write(payload)
 
             self.last_output_path = output_path
 
@@ -393,13 +406,14 @@ class StegaDecodeMachine:
                 if os.path.isdir(requested_path):
                     self.output_path = requested_path
                 else:
-                    preferred_dir = os.path.dirname(requested_path) or os.path.dirname(output_path)
+                    preferred_dir = os.path.dirname(
+                        requested_path) or os.path.dirname(output_path)
                     self.output_path = preferred_dir
             else:
                 self.output_path = os.path.dirname(output_path)
 
             try:
-                self.extracted_data = payload_plain.decode('utf-8')
+                self.extracted_data = payload.decode('utf-8')
             except Exception:
                 self.extracted_data = None
                 try:
@@ -420,9 +434,9 @@ class StegaDecodeMachine:
                 except Exception:
                     pass
                 if self.extracted_data is None:
-                    self.extracted_data = f"Binary payload extracted ({len(payload_plain)} bytes) -> {output_path}"
+                    self.extracted_data = f"Binary payload extracted ({len(payload)} bytes) -> {output_path}"
 
-            print("Steganography decoding completed successfully!")
+            print(f"Steganography decoding completed successfully!")
             print(f"Extracted data saved to: {output_path}")
 
             self.header_info = {
@@ -444,6 +458,7 @@ class StegaDecodeMachine:
             self.last_error = f"Decoding failed: {e}"
             print(f"Error during steganography decoding: {e}")
             return False
+
     def get_image_info(self) -> dict:
         # ... (existing code, no changes needed)
         if self.stego_image is None:
@@ -457,7 +472,7 @@ class StegaDecodeMachine:
             'format': self.stego_image.format,
             'max_capacity_bytes': (self.image_array.size * self.lsb_bits) // 8
         }
-        
+
     def get_extracted_data(self) -> Optional[str]:
         # ... (existing code, no changes needed)
         return self.extracted_data
@@ -486,4 +501,3 @@ class StegaDecodeMachine:
     def get_header_info(self) -> Optional[dict]:
         # ... (existing code, no changes needed)
         return self.header_info
-
