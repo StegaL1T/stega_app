@@ -738,36 +738,61 @@ class StegaEncodeMachine:
 
     @staticmethod
     def _write_video_rgb24(frames_rgb: List[np.ndarray], fps: float, out_path: str) -> str:
+        """Write RGB frames to disk, preferring MP4 when codecs are available.
+
+        Requires an OpenCV build with MP4-compatible codecs; falls back to AVI or a PNG frame
+        sequence when they are missing.
+        """
         if cv2 is None:
             raise UnsupportedFormatError("OpenCV is required for video support")
         h, w, _ = frames_rgb[0].shape
-        # Try uncompressed AVI via DIB 'DIB '
-        tried = []
+        tried: List[str] = []
+
         def _try_write(fourcc_code: Tuple[str, str, str, str], path: str) -> bool:
-            tried.append(''.join(fourcc_code))
-            fourcc = cv2.VideoWriter_fourcc(*fourcc_code)
-            writer = cv2.VideoWriter(path, fourcc, fps, (w, h))
+            label = ''.join(fourcc_code)
+            tried.append(label)
+            try:
+                fourcc = cv2.VideoWriter_fourcc(*fourcc_code)
+                writer = cv2.VideoWriter(path, fourcc, fps, (w, h))
+            except cv2.error as exc:
+                print(f"[WARN] OpenCV rejected FourCC {label} for '{path}': {exc}")
+                return False
             if not writer.isOpened():
                 writer.release()
                 return False
-            for fr in frames_rgb:
-                if fr.shape[0] != h or fr.shape[1] != w:
-                    writer.release()
-                    raise ValidationError("All frames must have identical dimensions")
-                bgr = cv2.cvtColor(fr, cv2.COLOR_RGB2BGR)
-                writer.write(bgr)
+            try:
+                for fr in frames_rgb:
+                    if fr.shape[0] != h or fr.shape[1] != w:
+                        writer.release()
+                        raise ValidationError("All frames must have identical dimensions")
+                    bgr = cv2.cvtColor(fr, cv2.COLOR_RGB2BGR)
+                    writer.write(bgr)
+            except cv2.error as exc:
+                writer.release()
+                print(f"[WARN] OpenCV failed while writing with FourCC {label}: {exc}")
+                return False
             writer.release()
             return True
 
-        # 1) Uncompressed DIB (RGB)
+        if out_path.lower().endswith('.mp4'):
+            mp4_fourccs = [('m', 'p', '4', 'v'), ('a', 'v', 'c', '1'), ('H', '2', '6', '4')]
+            for fourcc_code in mp4_fourccs:
+                if _try_write(fourcc_code, out_path):
+                    return out_path
+            mp4_labels = ', '.join(''.join(code) for code in mp4_fourccs)
+            print(f"[WARN] Unable to encode MP4 using FourCCs [{mp4_labels}]; falling back to AVI. "
+                  "Install ffmpeg/GStreamer codecs for MP4 support.")
+            out_path = os.path.splitext(out_path)[0] + '.avi'
+
+        # Try uncompressed AVI via DIB 'DIB '
         if _try_write(('D', 'I', 'B', ' '), out_path):
             return out_path
         # 2) MJPG as a widely available fallback (note: lossy)
-        alt_path = os.path.splitext(out_path)[0] + "_mjpg.avi"
+        alt_path = os.path.splitext(out_path)[0] + '_mjpg.avi'
         if _try_write(('M', 'J', 'P', 'G'), alt_path):
             return alt_path
         # 3) As a last resort, export PNG frame sequence for lossless output
-        seq_dir = os.path.splitext(out_path)[0] + "_frames"
+        seq_dir = os.path.splitext(out_path)[0] + '_frames'
         os.makedirs(seq_dir, exist_ok=True)
         for i, fr in enumerate(frames_rgb):
             # Save as PNG in RGB order
@@ -775,7 +800,7 @@ class StegaEncodeMachine:
             Image.fromarray(fr, mode='RGB').save(os.path.join(seq_dir, f"frame_{i:06d}.png"))
         raise UnsupportedFormatError(
             f"Failed to write video using FourCCs {tried}. Exported PNG frames to '{seq_dir}'. "
-            "Install a lossless codec (e.g., FFV1 via ffmpeg) or open the PNG sequence in a video editor.")
+            "Install ffmpeg/GStreamer codecs (e.g., via ffmpeg) or open the PNG sequence in a video editor.")
 
     # ====================
     # Video encoder
@@ -867,8 +892,12 @@ class StegaEncodeMachine:
             seg = stacked[i * frame_pixels:(i + 1) * frame_pixels]
             new_frames.append(seg.reshape((h, w, c)))
 
-        out_path = out_path or os.path.splitext(cover_video_path)[0] + "_stego.avi"
-        actual_out = self._write_video_rgb24(new_frames, fps, out_path)
+        target_path = out_path
+        if not target_path:
+            cover_root, cover_ext = os.path.splitext(cover_video_path)
+            default_ext = '.mp4' if cover_ext.lower() == '.mp4' else '.avi'
+            target_path = f"{cover_root}_stego{default_ext}"
+        actual_out = self._write_video_rgb24(new_frames, fps, target_path)
 
         parsed = unpack_header(header_bytes)
         if parsed['crc32'] != payload_crc:
