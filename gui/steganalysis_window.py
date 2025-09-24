@@ -426,12 +426,12 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        title = QLabel("Image Analysis Input")
+        title = QLabel("🖼️ Image Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
         title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
-        image_group = QGroupBox("Suspicious Image")
+        image_group = QGroupBox("🔍 Suspicious Image")
         image_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -501,7 +501,7 @@ class SteganalysisWindow(QMainWindow):
         self.image_preview.setScaledContents(False)
         image_layout.addWidget(self.image_preview)
 
-        method_group = QGroupBox("Image Analysis Method")
+        method_group = QGroupBox("⚙️ Image Analysis Method")
         method_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -619,7 +619,7 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        title = QLabel("Image Analysis Results")
+        title = QLabel("📊 Image Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
         title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
@@ -639,7 +639,7 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
 
-        img_results_group = QGroupBox("Detection Results")
+        img_results_group = QGroupBox("🎯 Detection Results")
         img_results_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -671,7 +671,7 @@ class SteganalysisWindow(QMainWindow):
         img_results_layout.addWidget(self.img_results_text)
 
         # Image charts
-        image_charts_group = QGroupBox("Image Charts")
+        image_charts_group = QGroupBox("📊 Image Charts")
         image_charts_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -698,7 +698,7 @@ class SteganalysisWindow(QMainWindow):
         image_charts_layout.addWidget(self.img_canvas_diff, 0, 1)
         image_charts_layout.addWidget(self.img_canvas_hist, 1, 0, 1, 2)
 
-        img_stats_group = QGroupBox("Statistics")
+        img_stats_group = QGroupBox("📈 Statistics")
         img_stats_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -784,12 +784,12 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        title = QLabel("Audio Analysis Input")
+        title = QLabel("🎵 Audio Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
         title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
-        audio_group = QGroupBox("Suspicious Audio")
+        audio_group = QGroupBox("🔍 Suspicious Audio")
         audio_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -858,7 +858,7 @@ class SteganalysisWindow(QMainWindow):
         self.audio_preview.setText("No audio selected")
         audio_layout.addWidget(self.audio_preview)
 
-        audio_method_group = QGroupBox("Audio Analysis Method")
+        audio_method_group = QGroupBox("⚙️ Audio Analysis Method")
         audio_method_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -976,12 +976,12 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        title = QLabel("Audio Analysis Results")
+        title = QLabel("📈 Audio Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
         title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
-        aud_results_group = QGroupBox("Detection Results")
+        aud_results_group = QGroupBox("🎯 Detection Results")
         aud_results_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -1012,7 +1012,7 @@ class SteganalysisWindow(QMainWindow):
         self.aud_results_text.setPlaceholderText("Analysis results will appear here...")
         aud_results_layout.addWidget(self.aud_results_text)
 
-        audio_charts_group = QGroupBox("Audio Charts")
+        audio_charts_group = QGroupBox("📊 Audio Charts")
         audio_charts_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -1037,7 +1037,7 @@ class SteganalysisWindow(QMainWindow):
         audio_charts_layout.addWidget(self.aud_canvas_spec, 0, 1)
         audio_charts_layout.addWidget(self.aud_canvas_entropy, 1, 0, 1, 2)
 
-        aud_stats_group = QGroupBox("Statistics")
+        aud_stats_group = QGroupBox("📈 Statistics")
         aud_stats_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -1122,12 +1122,12 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        title = QLabel("Video Analysis Input")
+        title = QLabel("🎬 Video Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
         title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
 
-        video_group = QGroupBox("Suspicious Video")
+        video_group = QGroupBox("🔍 Suspicious Video")
         video_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -1197,7 +1197,7 @@ class SteganalysisWindow(QMainWindow):
         self.video_preview.setScaledContents(False)
         video_layout.addWidget(self.video_preview)
 
-        video_method_group = QGroupBox("Video Analysis Method")
+        video_method_group = QGroupBox("⚙️ Video Analysis Method")
         video_method_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -1315,7 +1315,7 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        title = QLabel("Video Analysis Results")
+        title = QLabel("📹 Video Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
         title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
@@ -1335,7 +1335,7 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
 
-        vid_results_group = QGroupBox("Detection Results")
+        vid_results_group = QGroupBox("🎯 Detection Results")
         vid_results_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -1367,7 +1367,7 @@ class SteganalysisWindow(QMainWindow):
         vid_results_layout.addWidget(self.vid_results_text)
 
         # Video charts
-        video_charts_group = QGroupBox("Video Charts")
+        video_charts_group = QGroupBox("📊 Video Charts")
         video_charts_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
@@ -1393,7 +1393,7 @@ class SteganalysisWindow(QMainWindow):
         video_charts_layout.addWidget(self.vid_canvas_motion, 0, 1)
         video_charts_layout.addWidget(self.vid_canvas_lsb, 1, 0, 1, 2)
 
-        vid_stats_group = QGroupBox("Statistics")
+        vid_stats_group = QGroupBox("📈 Statistics")
         vid_stats_group.setStyleSheet("""
             QGroupBox {
                 color: #e8e8fc;
