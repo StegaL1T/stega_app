@@ -7,15 +7,17 @@ import io
 import wave
 import matplotlib.pyplot as plt
 import cv2
+import math
+import random
 
 
 # gui/steganalysis_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar, QApplication,
-                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget)
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen
+                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget, QSpacerItem)
+from PyQt6.QtCore import Qt, QSize, QTimer
+from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QLinearGradient, QBrush
 import numpy as np
 import cv2
 
@@ -30,11 +32,140 @@ from gui.audio_steganalysis_window import AudioSteganalysisWindow
 from gui.video_steganalysis_window import VideoSteganalysisWindow
 
 
+class CyberBackgroundWidget(QWidget):
+    """Custom background widget with subtle cybersecurity elements"""
+    def __init__(self):
+        super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.update)
+        self.animation_timer.start(50)  # 20 FPS animation
+        self.time = 0
+        
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Base dark background
+        painter.fillRect(self.rect(), QColor("#0e1625"))
+        
+        # Subtle grid pattern
+        self.draw_grid(painter)
+        
+        # Floating particles (data packets)
+        self.draw_particles(painter)
+        
+        # Subtle circuit-like patterns
+        self.draw_circuit_patterns(painter)
+        
+        # Cybersecurity scan lines
+        self.draw_scan_lines(painter)
+        
+        self.time += 0.02
+        
+    def draw_grid(self, painter):
+        """Draw an enhanced grid pattern with cybersecurity elements"""
+        # Main grid lines with better visibility
+        painter.setPen(QPen(QColor(69, 237, 242, 18), 1))  # Increased opacity
+        grid_size = 40
+        
+        for x in range(0, self.width(), grid_size):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(0, self.height(), grid_size):
+            painter.drawLine(0, y, self.width(), y)
+        
+        # Add some grid intersections with small dots
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 2))  # Increased opacity
+        for x in range(grid_size, self.width(), grid_size * 2):
+            for y in range(grid_size, self.height(), grid_size * 2):
+                painter.drawPoint(x, y)
+        
+        # Add some diagonal accent lines for tech feel
+        painter.setPen(QPen(QColor(73, 41, 154, 12), 1))  # Increased opacity
+        for i in range(0, self.width(), grid_size * 3):
+            painter.drawLine(i, 0, i + grid_size, grid_size)
+            painter.drawLine(i, self.height(), i + grid_size, self.height() - grid_size)
+        
+        # Static grid - no animated highlights to reduce visual clutter
+    
+    def draw_particles(self, painter):
+        """Draw floating cybersecurity data packets"""
+        # Main data packets
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 2))
+        
+        for i in range(6):
+            x = (self.width() * 0.15 + i * self.width() * 0.12 + 
+                 math.sin(self.time + i) * 15) % self.width()
+            y = (self.height() * 0.25 + i * self.height() * 0.12 + 
+                 math.cos(self.time * 0.8 + i) * 12) % self.height()
+            
+            # Draw data packet squares
+            painter.drawRect(int(x), int(y), 4, 4)
+        
+        # Add some smaller security indicators
+        painter.setPen(QPen(QColor(73, 41, 154, 20), 1))
+        for i in range(4):
+            x = (self.width() * 0.1 + i * self.width() * 0.2 + 
+                 math.sin(self.time * 1.2 + i) * 25) % self.width()
+            y = (self.height() * 0.3 + i * self.height() * 0.15 + 
+                 math.cos(self.time * 0.6 + i) * 18) % self.height()
+            
+            # Draw small security dots
+            painter.drawPoint(int(x), int(y))
+    
+    def draw_circuit_patterns(self, painter):
+        """Draw subtle circuit-like patterns"""
+        painter.setPen(QPen(QColor(73, 41, 154, 15), 1))
+        
+        # Draw some circuit-like lines in corners
+        corner_size = 100
+        # Top-left corner
+        painter.drawLine(20, 20, corner_size, 20)
+        painter.drawLine(20, 20, 20, corner_size)
+        painter.drawLine(20, corner_size, corner_size, corner_size)
+        
+        # Top-right corner
+        painter.drawLine(self.width() - 20, 20, self.width() - corner_size, 20)
+        painter.drawLine(self.width() - 20, 20, self.width() - 20, corner_size)
+        painter.drawLine(self.width() - 20, corner_size, self.width() - corner_size, corner_size)
+        
+        # Bottom corners
+        painter.drawLine(20, self.height() - 20, corner_size, self.height() - 20)
+        painter.drawLine(20, self.height() - 20, 20, self.height() - corner_size)
+        painter.drawLine(20, self.height() - corner_size, corner_size, self.height() - corner_size)
+        
+        painter.drawLine(self.width() - 20, self.height() - 20, self.width() - corner_size, self.height() - 20)
+        painter.drawLine(self.width() - 20, self.height() - 20, self.width() - 20, self.height() - corner_size)
+        painter.drawLine(self.width() - 20, self.height() - corner_size, self.width() - corner_size, self.height() - corner_size)
+    
+    def draw_scan_lines(self, painter):
+        """Draw cybersecurity scan lines effect - maximum 4 lines"""
+        # Two horizontal scan lines
+        painter.setPen(QPen(QColor(69, 237, 242, 45), 2))
+        scan_y = int((self.height() * 0.3 + math.sin(self.time * 2) * self.height() * 0.4) % self.height())
+        painter.drawLine(0, scan_y, self.width(), scan_y)
+        
+        painter.setPen(QPen(QColor(69, 237, 242, 30), 1))
+        scan_y2 = int((self.height() * 0.7 + math.cos(self.time * 1.8) * self.height() * 0.35) % self.height())
+        painter.drawLine(0, scan_y2, self.width(), scan_y2)
+        
+        # Two vertical scan lines
+        painter.setPen(QPen(QColor(69, 237, 242, 40), 2))
+        scan_x = int((self.width() * 0.2 + math.cos(self.time * 1.5) * self.width() * 0.5) % self.width())
+        painter.drawLine(scan_x, 0, scan_x, self.height())
+        
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 1))
+        scan_x2 = int((self.width() * 0.8 + math.sin(self.time * 1.2) * self.width() * 0.4) % self.width())
+        painter.drawLine(scan_x2, 0, scan_x2, self.height())
+
+
 class SteganalysisWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Steganalysis - Detect Hidden Messages")
-        self.setMinimumSize(1000, 700)
+        
+        # Setup responsive sizing
+        self.setup_responsive_sizing()
 
         # Initialize the steganalysis machine
         from machine.steganalysis_machine import SteganalysisMachine
@@ -80,16 +211,32 @@ class SteganalysisWindow(QMainWindow):
             "Video Advanced Comprehensive": "Uses all available video analysis techniques for the most comprehensive steganalysis possible."
         }
 
-        # Set gradient background
+        # Cybersecurity theme: fonts & background
+        # Colors:
+        #   Background: #0e1625 (very dark navy)
+        #   Headings/accents: #49299a (purple)
+        #   Highlights/buttons: #45edf2 (aqua/cyan)
+        #   Light contrast: #e8e8fc (very light lavender)
         self.setStyleSheet("""
             QMainWindow {
-                background: #e3f2fd;
+                background-color: #0e1625;
+                font-family: 'Syne', 'Segoe UI', 'Arial', sans-serif;
+                color: #e8e8fc;
+            }
+            QWidget {
+                font-family: 'Syne', 'Segoe UI', 'Arial', sans-serif;
+                color: #e8e8fc;
             }
         """)
 
         # Create central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
+        
+        # Create background widget
+        self.background_widget = CyberBackgroundWidget()
+        self.background_widget.setParent(central_widget)
+        self.background_widget.lower()  # Put it behind other widgets
 
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(20)
@@ -101,38 +248,87 @@ class SteganalysisWindow(QMainWindow):
         # Main content area (tabs)
         self.create_tabs(main_layout)
 
-        # Make the window fullscreen
-        self.showMaximized()
+        # Set window size and position
+        self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
+        self.show()
+        
+        # Initialize background widget size
+        self.background_widget.setGeometry(0, 0, self.width(), self.height())
+    
+    def resizeEvent(self, event):
+        """Handle window resize to update background"""
+        super().resizeEvent(event)
+        if hasattr(self, 'background_widget'):
+            self.background_widget.setGeometry(0, 0, self.width(), self.height())
+
+    def setup_responsive_sizing(self):
+        """Setup responsive sizing based on screen dimensions"""
+        # Get screen dimensions using modern PyQt6 approach
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication([])
+        screen = app.primaryScreen().geometry()
+        screen_width = screen.width()
+        screen_height = screen.height()
+        
+        # Define responsive scaling factors
+        # For screens between 1200x1080 and 1920x1200
+        if screen_width <= 1366:  # Smaller laptops
+            scale_factor = 0.8
+        elif screen_width <= 1600:  # Medium laptops
+            scale_factor = 0.9
+        else:  # Larger screens
+            scale_factor = 1.0
+        
+        # Calculate window dimensions (leave some margin from screen edges)
+        margin_percent = 0.05  # 5% margin from screen edges
+        self.window_width = int(screen_width * (1 - 2 * margin_percent))
+        self.window_height = int(screen_height * (1 - 2 * margin_percent))
+        
+        # Center the window
+        self.window_x = int(screen_width * margin_percent)
+        self.window_y = int(screen_height * margin_percent)
+        
+        # Set minimum size to ensure usability on smaller screens
+        min_width = 1000
+        min_height = 700
+        self.window_width = max(self.window_width, min_width)
+        self.window_height = max(self.window_height, min_height)
 
     def create_title_section(self, layout):
         """Create the title and back button section"""
         title_layout = QHBoxLayout()
 
-        # Back button
+        # Back button with cyber theme
         back_button = QPushButton("← Back to Main")
         back_button.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 10px 20px;
-                border-radius: 5px;
+                border-radius: 12px;
                 font-weight: bold;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QPushButton:pressed {
+                background: rgba(69,237,242,0.3);
             }
         """)
         back_button.clicked.connect(self.go_back)
 
-        # Title
+        # Title with cyber theme
         title_label = QLabel("Steganalysis - Detect Hidden Messages")
         title_font = QFont()
         title_font.setPointSize(28)
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #2c3e50;")
+        title_label.setStyleSheet("color: #45edf2; margin: 10px 0;")
 
         title_layout.addWidget(back_button)
         title_layout.addStretch()
@@ -148,6 +344,32 @@ class SteganalysisWindow(QMainWindow):
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
         tabs.setTabPosition(QTabWidget.TabPosition.North)
+        tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 15px;
+                background-color: rgba(14,22,37,0.8);
+            }
+            QTabWidget::tab-bar {
+                alignment: center;
+            }
+            QTabBar::tab {
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 10px 20px;
+                margin: 5px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QTabBar::tab:selected {
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QTabBar::tab:hover {
+                background: rgba(69,237,242,0.2);
+            }
+        """)
 
         image_tab = QWidget()
         audio_tab = QWidget()
@@ -189,7 +411,11 @@ class SteganalysisWindow(QMainWindow):
     def _styled_panel(self) -> QFrame:
         panel = QFrame()
         panel.setStyleSheet("""
-            QFrame { background-color: white; border-radius: 15px; border: none; }
+            QFrame { 
+                background-color: rgba(14,22,37,0.8);
+                border-radius: 15px; 
+                border: 2px solid rgba(73,41,154,0.6);
+            }
         """)
         panel.setGraphicsEffect(self.create_shadow_effect())
         return panel
@@ -203,15 +429,52 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Image Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
 
         image_group = QGroupBox("Suspicious Image")
+        image_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         image_layout = QVBoxLayout(image_group)
         self.image_path = QLineEdit(); self.image_path.setPlaceholderText("Select image to analyze..."); self.image_path.setReadOnly(True)
+        self.image_path.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QLineEdit:focus {
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+        """)
         browse_button = QPushButton("Browse Image")
         browse_button.setStyleSheet("""
-            QPushButton { background-color: #9b59b6; color: white; border: none; padding: 8px 16px; border-radius: 5px; }
-            QPushButton:hover { background-color: #8e44ad; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         browse_button.clicked.connect(self.image_window.browse_image)
         image_layout.addWidget(self.image_path)
@@ -222,9 +485,10 @@ class SteganalysisWindow(QMainWindow):
         self.image_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_preview.setStyleSheet("""
             QLabel {
-                border: 2px solid #bdc3c7;
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
-                background-color: #f8f9fa;
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
                 min-height: 150px;
                 max-height: 200px;
             }
@@ -235,6 +499,21 @@ class SteganalysisWindow(QMainWindow):
         image_layout.addWidget(self.image_preview)
 
         method_group = QGroupBox("Image Analysis Method")
+        method_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         method_layout = QVBoxLayout(method_group)
         self.method_combo = QComboBox()
         self.method_combo.addItems([
@@ -242,16 +521,44 @@ class SteganalysisWindow(QMainWindow):
             "DCT Analysis","Wavelet Analysis","Histogram Analysis","Comprehensive Analysis","Advanced Comprehensive"
         ])
         self.method_combo.setStyleSheet("""
-            QComboBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
-            QComboBox:focus { border-color: #9b59b6; }
+            QComboBox { 
+                padding: 8px; 
+                border: 2px solid rgba(69,237,242,0.6); 
+                border-radius: 8px; 
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+            }
+            QComboBox:focus { 
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                border: none;
+            }
         """)
         self.method_combo.currentTextChanged.connect(self.image_window.on_image_method_changed)
         method_layout.addWidget(self.method_combo)
 
         self.img_analyze_btn = QPushButton("Analyze Image")
         self.img_analyze_btn.setStyleSheet("""
-            QPushButton { background-color: #e74c3c; color: white; border: none; padding: 12px 24px; border-radius: 5px; font-size: 16px; font-weight: bold; }
-            QPushButton:hover { background-color: #c0392b; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 12px 24px;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QPushButton:pressed {
+                background: rgba(69,237,242,0.3);
+            }
         """)
         self.img_analyze_btn.clicked.connect(self.image_window.analyze_image)
 
@@ -260,12 +567,12 @@ class SteganalysisWindow(QMainWindow):
         self.image_method_description.setWordWrap(True)
         self.image_method_description.setStyleSheet("""
             QLabel {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 5px;
+                background-color: rgba(14,22,37,0.8);
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
                 padding: 10px;
                 font-size: 12px;
-                color: #495057;
+                color: #e8e8fc;
                 min-height: 60px;
             }
         """)
@@ -288,22 +595,70 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Image Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
 
         self.img_progress_bar = QProgressBar(); self.img_progress_bar.setVisible(False)
         self.img_progress_bar.setStyleSheet("""
-            QProgressBar { border: 2px solid #bdc3c7; border-radius: 5px; text-align: center; background-color: #ecf0f1; }
-            QProgressBar::chunk { background-color: #9b59b6; border-radius: 3px; }
+            QProgressBar { 
+                border: 2px solid rgba(69,237,242,0.6); 
+                border-radius: 8px; 
+                text-align: center; 
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+            }
+            QProgressBar::chunk { 
+                background-color: #45edf2; 
+                border-radius: 6px; 
+            }
         """)
 
         img_results_group = QGroupBox("Detection Results")
+        img_results_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         img_results_layout = QVBoxLayout(img_results_group)
         self.img_results_text = QTextEdit(); self.img_results_text.setReadOnly(True)
+        self.img_results_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
         self.img_results_text.setPlaceholderText("Analysis results will appear here...")
         img_results_layout.addWidget(self.img_results_text)
 
         # Image charts
         image_charts_group = QGroupBox("Image Charts")
+        image_charts_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         image_charts_layout = QGridLayout(image_charts_group)
         # Larger canvases for readability
         self.img_canvas_lsb = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
@@ -315,8 +670,32 @@ class SteganalysisWindow(QMainWindow):
         image_charts_layout.addWidget(self.img_canvas_hist, 1, 0, 1, 2)
 
         img_stats_group = QGroupBox("Statistics")
+        img_stats_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         img_stats_layout = QVBoxLayout(img_stats_group)
         self.img_stats_text = QTextEdit(); self.img_stats_text.setReadOnly(True); self.img_stats_text.setMaximumHeight(150)
+        self.img_stats_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
         self.img_stats_text.setPlaceholderText("Image statistics will appear here...")
         img_stats_layout.addWidget(self.img_stats_text)
 
@@ -328,8 +707,18 @@ class SteganalysisWindow(QMainWindow):
         # Export charts to PDF button
         export_img_pdf_btn = QPushButton("Export Charts to PDF")
         export_img_pdf_btn.setStyleSheet("""
-            QPushButton { background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
-            QPushButton:hover { background-color: #27ae60; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         export_img_pdf_btn.clicked.connect(self.export_charts_pdf)
         layout.addWidget(export_img_pdf_btn)
@@ -337,8 +726,18 @@ class SteganalysisWindow(QMainWindow):
         # Export report button
         export_img_report_btn = QPushButton("Export Report")
         export_img_report_btn.setStyleSheet("""
-            QPushButton { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
-            QPushButton:hover { background-color: #2980b9; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         export_img_report_btn.clicked.connect(self.export_report)
         layout.addWidget(export_img_report_btn)
@@ -354,15 +753,52 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Audio Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
 
         audio_group = QGroupBox("Suspicious Audio")
+        audio_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         audio_layout = QVBoxLayout(audio_group)
         self.audio_path = QLineEdit(); self.audio_path.setPlaceholderText("Select WAV audio to analyze..."); self.audio_path.setReadOnly(True)
+        self.audio_path.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QLineEdit:focus {
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+        """)
         browse_audio_button = QPushButton("Browse Audio")
         browse_audio_button.setStyleSheet("""
-            QPushButton { background-color: #3498db; color: white; border: none; padding: 8px 16px; border-radius: 5px; }
-            QPushButton:hover { background-color: #2980b9; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         browse_audio_button.clicked.connect(self.audio_window.browse_audio)
         audio_layout.addWidget(self.audio_path)
@@ -373,9 +809,10 @@ class SteganalysisWindow(QMainWindow):
         self.audio_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.audio_preview.setStyleSheet("""
             QLabel {
-                border: 2px solid #bdc3c7;
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
-                background-color: #f8f9fa;
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
                 min-height: 100px;
                 max-height: 150px;
             }
@@ -385,6 +822,21 @@ class SteganalysisWindow(QMainWindow):
         audio_layout.addWidget(self.audio_preview)
 
         audio_method_group = QGroupBox("Audio Analysis Method")
+        audio_method_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         audio_method_layout = QVBoxLayout(audio_method_group)
         self.audio_method_combo = QComboBox()
         self.audio_method_combo.addItems([
@@ -392,16 +844,44 @@ class SteganalysisWindow(QMainWindow):
             "Audio Autocorrelation Analysis","Audio Entropy Analysis","Audio Comprehensive Analysis","Audio Advanced Comprehensive"
         ])
         self.audio_method_combo.setStyleSheet("""
-            QComboBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
-            QComboBox:focus { border-color: #3498db; }
+            QComboBox { 
+                padding: 8px; 
+                border: 2px solid rgba(69,237,242,0.6); 
+                border-radius: 8px; 
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+            }
+            QComboBox:focus { 
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                border: none;
+            }
         """)
         self.audio_method_combo.currentTextChanged.connect(self.audio_window.on_audio_method_changed)
         audio_method_layout.addWidget(self.audio_method_combo)
 
         self.aud_analyze_btn = QPushButton("Analyze Audio")
         self.aud_analyze_btn.setStyleSheet("""
-            QPushButton { background-color: #16a085; color: white; border: none; padding: 12px 24px; border-radius: 5px; font-size: 16px; font-weight: bold; }
-            QPushButton:hover { background-color: #138d75; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 12px 24px;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QPushButton:pressed {
+                background: rgba(69,237,242,0.3);
+            }
         """)
         self.aud_analyze_btn.clicked.connect(self.audio_window.analyze_audio)
 
@@ -410,12 +890,12 @@ class SteganalysisWindow(QMainWindow):
         self.audio_method_description.setWordWrap(True)
         self.audio_method_description.setStyleSheet("""
             QLabel {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 5px;
+                background-color: rgba(14,22,37,0.8);
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
                 padding: 10px;
                 font-size: 12px;
-                color: #495057;
+                color: #e8e8fc;
                 min-height: 60px;
             }
         """)
@@ -438,15 +918,54 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Audio Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
 
         aud_results_group = QGroupBox("Detection Results")
+        aud_results_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         aud_results_layout = QVBoxLayout(aud_results_group)
         self.aud_results_text = QTextEdit(); self.aud_results_text.setReadOnly(True)
+        self.aud_results_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
         self.aud_results_text.setPlaceholderText("Analysis results will appear here...")
         aud_results_layout.addWidget(self.aud_results_text)
 
         audio_charts_group = QGroupBox("Audio Charts")
+        audio_charts_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         audio_charts_layout = QGridLayout(audio_charts_group)
         self.aud_canvas_wave = FigureCanvas(Figure(figsize=(3, 2)))
         self.aud_canvas_spec = FigureCanvas(Figure(figsize=(3, 2)))
@@ -456,23 +975,67 @@ class SteganalysisWindow(QMainWindow):
         audio_charts_layout.addWidget(self.aud_canvas_entropy, 1, 0, 1, 2)
 
         aud_stats_group = QGroupBox("Statistics")
+        aud_stats_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         aud_stats_layout = QVBoxLayout(aud_stats_group)
         self.aud_stats_text = QTextEdit(); self.aud_stats_text.setReadOnly(True); self.aud_stats_text.setMaximumHeight(150)
+        self.aud_stats_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
         self.aud_stats_text.setPlaceholderText("Audio statistics will appear here...")
         aud_stats_layout.addWidget(self.aud_stats_text)
 
         export_button = QPushButton("Export Report")
         export_button.setStyleSheet("""
-            QPushButton { background-color: #f39c12; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
-            QPushButton:hover { background-color: #e67e22; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         export_button.clicked.connect(self.export_report)
 
         # Export charts to PDF button
         export_aud_pdf_btn = QPushButton("Export Charts to PDF")
         export_aud_pdf_btn.setStyleSheet("""
-            QPushButton { background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
-            QPushButton:hover { background-color: #27ae60; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         export_aud_pdf_btn.clicked.connect(self.export_charts_pdf)
 
@@ -494,15 +1057,52 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Video Analysis Input")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
 
         video_group = QGroupBox("Suspicious Video")
+        video_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         video_layout = QVBoxLayout(video_group)
         self.video_path = QLineEdit(); self.video_path.setPlaceholderText("Select video to analyze..."); self.video_path.setReadOnly(True)
+        self.video_path.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+            QLineEdit:focus {
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+        """)
         browse_video_button = QPushButton("Browse Video")
         browse_video_button.setStyleSheet("""
-            QPushButton { background-color: #e67e22; color: white; border: none; padding: 8px 16px; border-radius: 5px; }
-            QPushButton:hover { background-color: #d35400; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 8px 16px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         browse_video_button.clicked.connect(self.video_window.browse_video)
         video_layout.addWidget(self.video_path)
@@ -513,9 +1113,10 @@ class SteganalysisWindow(QMainWindow):
         self.video_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.video_preview.setStyleSheet("""
             QLabel {
-                border: 2px solid #bdc3c7;
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 8px;
-                background-color: #f8f9fa;
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
                 min-height: 120px;
                 max-height: 180px;
             }
@@ -526,6 +1127,21 @@ class SteganalysisWindow(QMainWindow):
         video_layout.addWidget(self.video_preview)
 
         video_method_group = QGroupBox("Video Analysis Method")
+        video_method_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         video_method_layout = QVBoxLayout(video_method_group)
         self.video_method_combo = QComboBox()
         self.video_method_combo.addItems([
@@ -533,8 +1149,22 @@ class SteganalysisWindow(QMainWindow):
             "Video Comprehensive Analysis","Video Advanced Comprehensive"
         ])
         self.video_method_combo.setStyleSheet("""
-            QComboBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
-            QComboBox:focus { border-color: #e67e22; }
+            QComboBox { 
+                padding: 8px; 
+                border: 2px solid rgba(69,237,242,0.6); 
+                border-radius: 8px; 
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+            }
+            QComboBox:focus { 
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                border: none;
+            }
         """)
         self.video_method_combo.currentTextChanged.connect(self.video_window.on_video_method_changed)
         video_method_layout.addWidget(self.video_method_combo)
@@ -544,12 +1174,12 @@ class SteganalysisWindow(QMainWindow):
         self.video_method_description.setWordWrap(True)
         self.video_method_description.setStyleSheet("""
             QLabel {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 5px;
+                background-color: rgba(14,22,37,0.8);
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
                 padding: 10px;
                 font-size: 12px;
-                color: #495057;
+                color: #e8e8fc;
                 min-height: 60px;
             }
         """)
@@ -557,8 +1187,22 @@ class SteganalysisWindow(QMainWindow):
 
         self.vid_analyze_btn = QPushButton("Analyze Video")
         self.vid_analyze_btn.setStyleSheet("""
-            QPushButton { background-color: #8e44ad; color: white; border: none; padding: 12px 24px; border-radius: 5px; font-size: 16px; font-weight: bold; }
-            QPushButton:hover { background-color: #7d3c98; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 12px 24px;
+                border-radius: 12px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QPushButton:pressed {
+                background: rgba(69,237,242,0.3);
+            }
         """)
         self.vid_analyze_btn.clicked.connect(self.video_window.analyze_video)
 
@@ -579,22 +1223,70 @@ class SteganalysisWindow(QMainWindow):
         title = QLabel("Video Analysis Results")
         f = QFont(); f.setPointSize(20); f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 10px;")
+        title.setStyleSheet("color: #45edf2; margin-bottom: 10px;")
 
         self.vid_progress_bar = QProgressBar(); self.vid_progress_bar.setVisible(False)
         self.vid_progress_bar.setStyleSheet("""
-            QProgressBar { border: 2px solid #bdc3c7; border-radius: 5px; text-align: center; background-color: #ecf0f1; }
-            QProgressBar::chunk { background-color: #8e44ad; border-radius: 3px; }
+            QProgressBar { 
+                border: 2px solid rgba(69,237,242,0.6); 
+                border-radius: 8px; 
+                text-align: center; 
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+            }
+            QProgressBar::chunk { 
+                background-color: #45edf2; 
+                border-radius: 6px; 
+            }
         """)
 
         vid_results_group = QGroupBox("Detection Results")
+        vid_results_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         vid_results_layout = QVBoxLayout(vid_results_group)
         self.vid_results_text = QTextEdit(); self.vid_results_text.setReadOnly(True)
+        self.vid_results_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
         self.vid_results_text.setPlaceholderText("Analysis results will appear here...")
         vid_results_layout.addWidget(self.vid_results_text)
 
         # Video charts
         video_charts_group = QGroupBox("Video Charts")
+        video_charts_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         video_charts_layout = QGridLayout(video_charts_group)
         self.vid_canvas_frame = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
         self.vid_canvas_motion = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
@@ -605,24 +1297,68 @@ class SteganalysisWindow(QMainWindow):
         video_charts_layout.addWidget(self.vid_canvas_lsb, 1, 0, 1, 2)
 
         vid_stats_group = QGroupBox("Statistics")
+        vid_stats_group.setStyleSheet("""
+            QGroupBox {
+                color: #45edf2;
+                font-weight: bold;
+                border: 2px solid rgba(73,41,154,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         vid_stats_layout = QVBoxLayout(vid_stats_group)
         self.vid_stats_text = QTextEdit(); self.vid_stats_text.setReadOnly(True); self.vid_stats_text.setMaximumHeight(150)
+        self.vid_stats_text.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                padding: 8px;
+            }
+        """)
         self.vid_stats_text.setPlaceholderText("Video statistics will appear here...")
         vid_stats_layout.addWidget(self.vid_stats_text)
 
         # Export charts to PDF button
         export_vid_pdf_btn = QPushButton("Export Charts to PDF")
         export_vid_pdf_btn.setStyleSheet("""
-            QPushButton { background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
-            QPushButton:hover { background-color: #27ae60; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         export_vid_pdf_btn.clicked.connect(self.export_charts_pdf)
 
         # Export report button
         export_vid_report_btn = QPushButton("Export Report")
         export_vid_report_btn.setStyleSheet("""
-            QPushButton { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; }
-            QPushButton:hover { background-color: #2980b9; }
+            QPushButton { 
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton:hover { 
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
         """)
         export_vid_report_btn.clicked.connect(self.export_report)
 
@@ -642,13 +1378,14 @@ class SteganalysisWindow(QMainWindow):
 
 
     def create_shadow_effect(self):
-        """Create a shadow effect for panels"""
+        """Create an enhanced shadow effect for panels"""
         from PyQt6.QtWidgets import QGraphicsDropShadowEffect
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
+        shadow.setBlurRadius(35)  # Increased blur for stronger glow
         shadow.setXOffset(0)
-        shadow.setYOffset(5)
-        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setYOffset(8)  # Increased offset for more depth
+        # Enhanced cyan glow with higher opacity
+        shadow.setColor(QColor(69, 237, 242, 80))  # Doubled opacity for stronger effect
         return shadow
 
     def update_method_description(self, method_name: str, description_widget: QLabel):
