@@ -620,7 +620,9 @@ class StegaEncodeMachine:
             frames = wf.readframes(n_frames)
             params = wf.getparams()
 
+        print(f"[DEBUG] First 32 bytes of raw audio: {frames[:32].hex()}")
         flat = np.frombuffer(frames, dtype=np.uint8).copy()
+        print(f"[DEBUG] np.uint8 flat shape: {flat.shape}, first 32 bytes: {flat[:32].tolist()}")
         total_lsb_bits = flat.size * lsb_bits
 
         fname_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]

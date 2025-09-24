@@ -651,8 +651,13 @@ class StegaDecodeWindow(QMainWindow):
                 print(f"Capacity: {info.get('max_capacity_bytes', 0)} bytes")
             else:
                 print("❌ Error loading steganographic image")
+        elif media_type == 'audio':
+            if self.machine.set_stego_audio(file_path):
+                print(f"✅ AUDIO loaded: {os.path.basename(file_path)}")
+            else:
+                print(f"❌ Error loading steganographic audio: {file_path}")
         else:
-            # For audio and video, we'll need to extend the machine
+            # For video, we'll need to extend the machine
             print(f"✅ {media_type.upper()} loaded: {os.path.basename(file_path)}")
 
     def choose_output_path(self):
