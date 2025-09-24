@@ -309,7 +309,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 10px 20px;
                 border-radius: 12px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover {
                 background: rgba(69,237,242,0.3);
@@ -436,6 +436,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -470,7 +471,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px 16px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(34,139,34,0.4);
@@ -505,6 +506,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -642,6 +644,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -673,6 +676,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -699,6 +703,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -739,7 +744,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(147,51,234,0.4);
@@ -760,7 +765,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(147,51,234,0.4);
@@ -789,6 +794,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -823,7 +829,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px 16px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(34,139,34,0.4);
@@ -857,6 +863,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -979,6 +986,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -1009,6 +1017,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -1033,6 +1042,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -1067,7 +1077,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(147,51,234,0.4);
@@ -1087,7 +1097,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(147,51,234,0.4);
@@ -1122,6 +1132,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -1156,7 +1167,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px 16px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(34,139,34,0.4);
@@ -1191,6 +1202,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -1328,6 +1340,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -1359,6 +1372,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -1384,6 +1398,7 @@ class SteganalysisWindow(QMainWindow):
             QGroupBox {
                 color: #45edf2;
                 font-weight: bold;
+                font-size: 16px;
                 border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
                 margin-top: 10px;
@@ -1419,7 +1434,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(147,51,234,0.4);
@@ -1439,7 +1454,7 @@ class SteganalysisWindow(QMainWindow):
                 padding: 10px 20px;
                 border-radius: 8px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 14px;
             }
             QPushButton:hover { 
                 background: rgba(147,51,234,0.4);
