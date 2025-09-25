@@ -691,7 +691,7 @@ class StegaDecodeWindow(QMainWindow):
                 color: #e8e8fc;
                 padding: 15px;
                 background-color: rgba(14,22,37,0.8);
-                border: 2px solid rgba(69,237,242,0.6);
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
                 font-family: 'Segoe UI', sans-serif;
             }
@@ -732,7 +732,16 @@ class StegaDecodeWindow(QMainWindow):
         for i in range(1, 9):
             lab = QLabel(str(i))
             lab.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lab.setStyleSheet("color: #7f8c8d;")
+            lab.setStyleSheet("""
+                QLabel {
+                    color: #45edf2;
+                    border: 2px solid #49299a;
+                    border-radius: 8px;
+                    padding: 5px 10px;
+                    background-color: rgba(14,22,37,0.8);
+                    font-weight: bold;
+                }
+            """)
             self.lsb_markers.append(lab)
             markers_row.addWidget(lab)
 
@@ -767,7 +776,7 @@ class StegaDecodeWindow(QMainWindow):
         self.key_input.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
-                border: 2px solid rgba(69,237,242,0.6);
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
                 background-color: rgba(14,22,37,0.8);
                 color: #e8e8fc;
@@ -775,11 +784,11 @@ class StegaDecodeWindow(QMainWindow):
                 font-family: 'Segoe UI', sans-serif;
             }
             QLineEdit:focus {
-                border: 3px solid #45edf2;
+                border: 3px dashed #45edf2;
                 background-color: rgba(69,237,242,0.1);
             }
             QLineEdit:hover {
-                border: 3px solid #45edf2;
+                border: 3px dashed #45edf2;
                 background-color: rgba(69,237,242,0.1);
             }
         """)
@@ -812,7 +821,7 @@ class StegaDecodeWindow(QMainWindow):
         self.output_path.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
-                border: 2px solid rgba(69,237,242,0.6);
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
                 background-color: rgba(14,22,37,0.8);
                 color: #e8e8fc;
@@ -867,7 +876,7 @@ class StegaDecodeWindow(QMainWindow):
         self.results_text.setReadOnly(True)
         self.results_text.setStyleSheet("""
             QTextEdit {
-                border: 2px solid rgba(69,237,242,0.6);
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
                 background-color: rgba(14,22,37,0.8);
                 color: #e8e8fc;
@@ -909,9 +918,27 @@ class StegaDecodeWindow(QMainWindow):
         if hasattr(self, 'lsb_markers'):
             for i, lab in enumerate(self.lsb_markers, start=1):
                 if i == value:
-                    lab.setStyleSheet("color: #45edf2; font-weight: bold;")
+                    lab.setStyleSheet("""
+                        QLabel {
+                            color: #45edf2;
+                            border: 2px solid #49299a;
+                            border-radius: 8px;
+                            padding: 5px 10px;
+                            background-color: rgba(69,237,242,0.2);
+                            font-weight: bold;
+                        }
+                    """)
                 else:
-                    lab.setStyleSheet("color: #7f8c8d;")
+                    lab.setStyleSheet("""
+                        QLabel {
+                            color: #45edf2;
+                            border: 2px solid #49299a;
+                            border-radius: 8px;
+                            padding: 5px 10px;
+                            background-color: rgba(14,22,37,0.8);
+                            font-weight: bold;
+                        }
+                    """)
 
     def on_media_loaded(self, file_path, media_type):
         """Handle media loaded from drag and drop or browse"""
