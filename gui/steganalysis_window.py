@@ -38,12 +38,14 @@ class SteganalysisWindow(QMainWindow):
 
         # Initialize the steganalysis machine
         from machine.steganalysis_machine import SteganalysisMachine
+        from machine.video_steganalysis_machine import VideoSteganalysisMachine
         self.machine = SteganalysisMachine()
+        self.video_machine = VideoSteganalysisMachine()
         
         # Initialize individual window modules
         self.image_window = ImageSteganalysisWindow(self.machine)
         self.audio_window = AudioSteganalysisWindow(self.machine)
-        self.video_window = VideoSteganalysisWindow(self.machine)
+        self.video_window = VideoSteganalysisWindow(self.video_machine)
         
         # Set main GUI references
         self.image_window.set_main_gui(self)
