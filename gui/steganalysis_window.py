@@ -15,7 +15,7 @@ import random
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar, QApplication,
-                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget, QSpacerItem)
+                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget, QSpacerItem, QSpinBox)
 from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QLinearGradient, QBrush
 import numpy as np
@@ -34,6 +34,7 @@ from gui.video_steganalysis_window import VideoSteganalysisWindow
 
 class CyberBackgroundWidget(QWidget):
     """Custom background widget with subtle cybersecurity elements"""
+
     def __init__(self):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
@@ -41,121 +42,133 @@ class CyberBackgroundWidget(QWidget):
         self.animation_timer.timeout.connect(self.update)
         self.animation_timer.start(50)  # 20 FPS animation
         self.time = 0
-        
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
+
         # Base dark background
         painter.fillRect(self.rect(), QColor("#0e1625"))
-        
+
         # Subtle grid pattern
         self.draw_grid(painter)
-        
+
         # Floating particles (data packets)
         self.draw_particles(painter)
-        
+
         # Subtle circuit-like patterns
         self.draw_circuit_patterns(painter)
-        
+
         # Cybersecurity scan lines
         self.draw_scan_lines(painter)
-        
+
         self.time += 0.02
-        
+
     def draw_grid(self, painter):
         """Draw an enhanced grid pattern with cybersecurity elements"""
         # Main grid lines with better visibility
         painter.setPen(QPen(QColor(69, 237, 242, 18), 1))  # Increased opacity
         grid_size = 40
-        
+
         for x in range(0, self.width(), grid_size):
             painter.drawLine(x, 0, x, self.height())
         for y in range(0, self.height(), grid_size):
             painter.drawLine(0, y, self.width(), y)
-        
+
         # Add some grid intersections with small dots
         painter.setPen(QPen(QColor(69, 237, 242, 25), 2))  # Increased opacity
         for x in range(grid_size, self.width(), grid_size * 2):
             for y in range(grid_size, self.height(), grid_size * 2):
                 painter.drawPoint(x, y)
-        
+
         # Add some diagonal accent lines for tech feel
         painter.setPen(QPen(QColor(73, 41, 154, 12), 1))  # Increased opacity
         for i in range(0, self.width(), grid_size * 3):
             painter.drawLine(i, 0, i + grid_size, grid_size)
-            painter.drawLine(i, self.height(), i + grid_size, self.height() - grid_size)
-        
+            painter.drawLine(i, self.height(), i + grid_size,
+                             self.height() - grid_size)
+
         # Static grid - no animated highlights to reduce visual clutter
-    
+
     def draw_particles(self, painter):
         """Draw floating cybersecurity data packets"""
         # Main data packets
         painter.setPen(QPen(QColor(69, 237, 242, 25), 2))
-        
+
         for i in range(6):
-            x = (self.width() * 0.15 + i * self.width() * 0.12 + 
+            x = (self.width() * 0.15 + i * self.width() * 0.12 +
                  math.sin(self.time + i) * 15) % self.width()
-            y = (self.height() * 0.25 + i * self.height() * 0.12 + 
+            y = (self.height() * 0.25 + i * self.height() * 0.12 +
                  math.cos(self.time * 0.8 + i) * 12) % self.height()
-            
+
             # Draw data packet squares
             painter.drawRect(int(x), int(y), 4, 4)
-        
+
         # Add some smaller security indicators
         painter.setPen(QPen(QColor(73, 41, 154, 20), 1))
         for i in range(4):
-            x = (self.width() * 0.1 + i * self.width() * 0.2 + 
+            x = (self.width() * 0.1 + i * self.width() * 0.2 +
                  math.sin(self.time * 1.2 + i) * 25) % self.width()
-            y = (self.height() * 0.3 + i * self.height() * 0.15 + 
+            y = (self.height() * 0.3 + i * self.height() * 0.15 +
                  math.cos(self.time * 0.6 + i) * 18) % self.height()
-            
+
             # Draw small security dots
             painter.drawPoint(int(x), int(y))
-    
+
     def draw_circuit_patterns(self, painter):
         """Draw subtle circuit-like patterns"""
         painter.setPen(QPen(QColor(73, 41, 154, 15), 1))
-        
+
         # Draw some circuit-like lines in corners
         corner_size = 100
         # Top-left corner
         painter.drawLine(20, 20, corner_size, 20)
         painter.drawLine(20, 20, 20, corner_size)
         painter.drawLine(20, corner_size, corner_size, corner_size)
-        
+
         # Top-right corner
         painter.drawLine(self.width() - 20, 20, self.width() - corner_size, 20)
         painter.drawLine(self.width() - 20, 20, self.width() - 20, corner_size)
-        painter.drawLine(self.width() - 20, corner_size, self.width() - corner_size, corner_size)
-        
+        painter.drawLine(self.width() - 20, corner_size,
+                         self.width() - corner_size, corner_size)
+
         # Bottom corners
-        painter.drawLine(20, self.height() - 20, corner_size, self.height() - 20)
-        painter.drawLine(20, self.height() - 20, 20, self.height() - corner_size)
-        painter.drawLine(20, self.height() - corner_size, corner_size, self.height() - corner_size)
-        
-        painter.drawLine(self.width() - 20, self.height() - 20, self.width() - corner_size, self.height() - 20)
-        painter.drawLine(self.width() - 20, self.height() - 20, self.width() - 20, self.height() - corner_size)
-        painter.drawLine(self.width() - 20, self.height() - corner_size, self.width() - corner_size, self.height() - corner_size)
-    
+        painter.drawLine(20, self.height() - 20,
+                         corner_size, self.height() - 20)
+        painter.drawLine(20, self.height() - 20, 20,
+                         self.height() - corner_size)
+        painter.drawLine(20, self.height() - corner_size,
+                         corner_size, self.height() - corner_size)
+
+        painter.drawLine(self.width() - 20, self.height() - 20,
+                         self.width() - corner_size, self.height() - 20)
+        painter.drawLine(self.width() - 20, self.height() - 20,
+                         self.width() - 20, self.height() - corner_size)
+        painter.drawLine(self.width() - 20, self.height() - corner_size,
+                         self.width() - corner_size, self.height() - corner_size)
+
     def draw_scan_lines(self, painter):
         """Draw cybersecurity scan lines effect - maximum 4 lines"""
         # Two horizontal scan lines
         painter.setPen(QPen(QColor(69, 237, 242, 45), 2))
-        scan_y = int((self.height() * 0.3 + math.sin(self.time * 2) * self.height() * 0.4) % self.height())
+        scan_y = int((self.height() * 0.3 + math.sin(self.time * 2)
+                     * self.height() * 0.4) % self.height())
         painter.drawLine(0, scan_y, self.width(), scan_y)
-        
+
         painter.setPen(QPen(QColor(69, 237, 242, 30), 1))
-        scan_y2 = int((self.height() * 0.7 + math.cos(self.time * 1.8) * self.height() * 0.35) % self.height())
+        scan_y2 = int((self.height() * 0.7 + math.cos(self.time * 1.8)
+                      * self.height() * 0.35) % self.height())
         painter.drawLine(0, scan_y2, self.width(), scan_y2)
-        
+
         # Two vertical scan lines
         painter.setPen(QPen(QColor(69, 237, 242, 40), 2))
-        scan_x = int((self.width() * 0.2 + math.cos(self.time * 1.5) * self.width() * 0.5) % self.width())
+        scan_x = int((self.width() * 0.2 + math.cos(self.time * 1.5)
+                     * self.width() * 0.5) % self.width())
         painter.drawLine(scan_x, 0, scan_x, self.height())
-        
+
         painter.setPen(QPen(QColor(69, 237, 242, 25), 1))
-        scan_x2 = int((self.width() * 0.8 + math.sin(self.time * 1.2) * self.width() * 0.4) % self.width())
+        scan_x2 = int((self.width() * 0.8 + math.sin(self.time * 1.2)
+                      * self.width() * 0.4) % self.width())
         painter.drawLine(scan_x2, 0, scan_x2, self.height())
 
 
@@ -163,19 +176,19 @@ class SteganalysisWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Steganalysis - Detect Hidden Messages")
-        
+
         # Setup responsive sizing
         self.setup_responsive_sizing()
 
         # Initialize the steganalysis machine
         from machine.steganalysis_machine import SteganalysisMachine
         self.machine = SteganalysisMachine()
-        
+
         # Initialize individual window modules
         self.image_window = ImageSteganalysisWindow(self.machine)
         self.audio_window = AudioSteganalysisWindow(self.machine)
         self.video_window = VideoSteganalysisWindow(self.machine)
-        
+
         # Set main GUI references
         self.image_window.set_main_gui(self)
         self.audio_window.set_main_gui(self)
@@ -193,7 +206,7 @@ class SteganalysisWindow(QMainWindow):
             "Histogram Analysis": "Examines pixel value histograms for unusual patterns that may indicate hidden information.",
             "Comprehensive Analysis": "Combines multiple basic detection methods for a thorough analysis of potential steganographic content.",
             "Advanced Comprehensive": "Uses all available detection methods with advanced algorithms for the most thorough steganalysis possible.",
-            
+
             # Audio analysis methods
             "Audio LSB Analysis": "Analyzes least significant bits in audio samples to detect hidden data embedded in audio files.",
             "Audio Chi-Square Test": "Statistical analysis of audio sample distributions to identify anomalies that may indicate steganographic content.",
@@ -202,7 +215,7 @@ class SteganalysisWindow(QMainWindow):
             "Audio Entropy Analysis": "Measures randomness and information content in audio samples to identify steganographic artifacts.",
             "Audio Comprehensive Analysis": "Combines multiple audio detection methods for thorough analysis of potential hidden content.",
             "Audio Advanced Comprehensive": "Uses all available audio analysis techniques for the most comprehensive steganalysis possible.",
-            
+
             # Video analysis methods
             "Video LSB Analysis": "Analyzes least significant bits in video frames to detect hidden data embedded in video files.",
             "Video Frame Analysis": "Examines individual video frames for anomalies and statistical irregularities that may indicate steganography.",
@@ -232,7 +245,7 @@ class SteganalysisWindow(QMainWindow):
         # Create central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
+
         # Create background widget
         self.background_widget = CyberBackgroundWidget()
         self.background_widget.setParent(central_widget)
@@ -249,17 +262,19 @@ class SteganalysisWindow(QMainWindow):
         self.create_tabs(main_layout)
 
         # Set window size and position
-        self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
+        self.setGeometry(self.window_x, self.window_y,
+                         self.window_width, self.window_height)
         self.show()
-        
+
         # Initialize background widget size
         self.background_widget.setGeometry(0, 0, self.width(), self.height())
-    
+
     def resizeEvent(self, event):
         """Handle window resize to update background"""
         super().resizeEvent(event)
         if hasattr(self, 'background_widget'):
-            self.background_widget.setGeometry(0, 0, self.width(), self.height())
+            self.background_widget.setGeometry(
+                0, 0, self.width(), self.height())
 
     def setup_responsive_sizing(self):
         """Setup responsive sizing based on screen dimensions"""
@@ -270,7 +285,7 @@ class SteganalysisWindow(QMainWindow):
         screen = app.primaryScreen().geometry()
         screen_width = screen.width()
         screen_height = screen.height()
-        
+
         # Define responsive scaling factors
         # For screens between 1200x1080 and 1920x1200
         if screen_width <= 1366:  # Smaller laptops
@@ -279,16 +294,16 @@ class SteganalysisWindow(QMainWindow):
             scale_factor = 0.9
         else:  # Larger screens
             scale_factor = 1.0
-        
+
         # Calculate window dimensions (leave some margin from screen edges)
         margin_percent = 0.05  # 5% margin from screen edges
         self.window_width = int(screen_width * (1 - 2 * margin_percent))
         self.window_height = int(screen_height * (1 - 2 * margin_percent))
-        
+
         # Center the window
         self.window_x = int(screen_width * margin_percent)
         self.window_y = int(screen_height * margin_percent)
-        
+
         # Set minimum size to ensure usability on smaller screens
         min_width = 1000
         min_height = 700
@@ -336,8 +351,6 @@ class SteganalysisWindow(QMainWindow):
         title_layout.addStretch()
 
         layout.addLayout(title_layout)
-
-
 
     def create_tabs(self, layout):
         """Create Image/Audio/Video steganalysis tabs"""
@@ -420,6 +433,23 @@ class SteganalysisWindow(QMainWindow):
         """)
         return panel
 
+    def _validate_time_range(self):
+        """Validate and adjust time range controls"""
+        start_time = self.start_time_spin.value()
+        end_time = self.end_time_spin.value()
+
+        # Update max values based on video duration if available
+        if hasattr(self.machine, 'video_duration') and self.machine.video_duration:
+            max_duration = int(self.machine.video_duration)
+            self.start_time_spin.setMaximum(max_duration - 1)
+            self.end_time_spin.setMaximum(max_duration)
+
+            # Adjust current values if they exceed video duration
+            if start_time >= max_duration:
+                self.start_time_spin.setValue(0)
+            if end_time > max_duration:
+                self.end_time_spin.setValue(max_duration)
+
     def _build_image_controls(self) -> QWidget:
         panel = self._styled_panel()
         layout = QVBoxLayout(panel)
@@ -427,9 +457,12 @@ class SteganalysisWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
 
         title = QLabel("🖼️ Image Analysis Input")
-        f = QFont(); f.setPointSize(20); f.setBold(True)
+        f = QFont()
+        f.setPointSize(20)
+        f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
+        title.setStyleSheet(
+            "color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         image_group = QGroupBox("🔍 Suspicious Image")
         image_group.setStyleSheet("""
@@ -449,7 +482,9 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         image_layout = QVBoxLayout(image_group)
-        self.image_path = QLineEdit(); self.image_path.setPlaceholderText("Select image to analyze..."); self.image_path.setReadOnly(True)
+        self.image_path = QLineEdit()
+        self.image_path.setPlaceholderText("Select image to analyze...")
+        self.image_path.setReadOnly(True)
         self.image_path.setStyleSheet("""
             QLineEdit {
                 background-color: #0e1625;
@@ -496,7 +531,8 @@ class SteganalysisWindow(QMainWindow):
                 max-height: 200px;
             }
         """)
-        self.image_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.image_preview.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.image_preview.setText("No image selected")
         self.image_preview.setScaledContents(False)
         image_layout.addWidget(self.image_preview)
@@ -521,8 +557,8 @@ class SteganalysisWindow(QMainWindow):
         method_layout = QVBoxLayout(method_group)
         self.method_combo = QComboBox()
         self.method_combo.addItems([
-            "LSB Analysis","Chi-Square Test","RS Analysis","Sample Pairs Analysis",
-            "DCT Analysis","Wavelet Analysis","Histogram Analysis","Comprehensive Analysis","Advanced Comprehensive"
+            "LSB Analysis", "Chi-Square Test", "RS Analysis", "Sample Pairs Analysis",
+            "DCT Analysis", "Wavelet Analysis", "Histogram Analysis", "Comprehensive Analysis", "Advanced Comprehensive"
         ])
         self.method_combo.setStyleSheet("""
             QComboBox { 
@@ -564,7 +600,8 @@ class SteganalysisWindow(QMainWindow):
                 selection-background-color: rgba(69,237,242,0.3);
             }
         """)
-        self.method_combo.currentTextChanged.connect(self.image_window.on_image_method_changed)
+        self.method_combo.currentTextChanged.connect(
+            self.image_window.on_image_method_changed)
         method_layout.addWidget(self.method_combo)
 
         self.img_analyze_btn = QPushButton("Analyze Image")
@@ -603,7 +640,9 @@ class SteganalysisWindow(QMainWindow):
                 min-height: 60px;
             }
         """)
-        self.image_method_description.setText("Select an analysis method to see its description...")
+        # Initialize with LSB Analysis description
+        self.image_window.update_method_description(
+            "LSB Analysis", self.image_method_description)
 
         layout.addWidget(title)
         layout.addWidget(image_group)
@@ -620,11 +659,15 @@ class SteganalysisWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
 
         title = QLabel("📊 Image Analysis Results")
-        f = QFont(); f.setPointSize(20); f.setBold(True)
+        f = QFont()
+        f.setPointSize(20)
+        f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
+        title.setStyleSheet(
+            "color: #e8e8fc; margin-bottom: 10px; border: none;")
 
-        self.img_progress_bar = QProgressBar(); self.img_progress_bar.setVisible(False)
+        self.img_progress_bar = QProgressBar()
+        self.img_progress_bar.setVisible(False)
         self.img_progress_bar.setStyleSheet("""
             QProgressBar { 
                 border: 2px solid rgba(69,237,242,0.6); 
@@ -657,7 +700,8 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         img_results_layout = QVBoxLayout(img_results_group)
-        self.img_results_text = QTextEdit(); self.img_results_text.setReadOnly(True)
+        self.img_results_text = QTextEdit()
+        self.img_results_text.setReadOnly(True)
         self.img_results_text.setStyleSheet("""
             QTextEdit {
                 background-color: #0e1625;
@@ -667,7 +711,8 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px;
             }
         """)
-        self.img_results_text.setPlaceholderText("Analysis results will appear here...")
+        self.img_results_text.setPlaceholderText(
+            "Analysis results will appear here...")
         img_results_layout.addWidget(self.img_results_text)
 
         # Image charts
@@ -716,7 +761,9 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         img_stats_layout = QVBoxLayout(img_stats_group)
-        self.img_stats_text = QTextEdit(); self.img_stats_text.setReadOnly(True); self.img_stats_text.setMaximumHeight(150)
+        self.img_stats_text = QTextEdit()
+        self.img_stats_text.setReadOnly(True)
+        self.img_stats_text.setMaximumHeight(150)
         self.img_stats_text.setStyleSheet("""
             QTextEdit {
                 background-color: #0e1625;
@@ -726,7 +773,8 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px;
             }
         """)
-        self.img_stats_text.setPlaceholderText("Image statistics will appear here...")
+        self.img_stats_text.setPlaceholderText(
+            "Image statistics will appear here...")
         img_stats_layout.addWidget(self.img_stats_text)
 
         layout.addWidget(title)
@@ -785,9 +833,12 @@ class SteganalysisWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
 
         title = QLabel("🎵 Audio Analysis Input")
-        f = QFont(); f.setPointSize(20); f.setBold(True)
+        f = QFont()
+        f.setPointSize(20)
+        f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
+        title.setStyleSheet(
+            "color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         audio_group = QGroupBox("🔍 Suspicious Audio")
         audio_group.setStyleSheet("""
@@ -807,7 +858,9 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         audio_layout = QVBoxLayout(audio_group)
-        self.audio_path = QLineEdit(); self.audio_path.setPlaceholderText("Select WAV audio to analyze..."); self.audio_path.setReadOnly(True)
+        self.audio_path = QLineEdit()
+        self.audio_path.setPlaceholderText("Select WAV audio to analyze...")
+        self.audio_path.setReadOnly(True)
         self.audio_path.setStyleSheet("""
             QLineEdit {
                 background-color: #0e1625;
@@ -854,7 +907,8 @@ class SteganalysisWindow(QMainWindow):
                 max-height: 150px;
             }
         """)
-        self.audio_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.audio_preview.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.audio_preview.setText("No audio selected")
         audio_layout.addWidget(self.audio_preview)
 
@@ -878,8 +932,8 @@ class SteganalysisWindow(QMainWindow):
         audio_method_layout = QVBoxLayout(audio_method_group)
         self.audio_method_combo = QComboBox()
         self.audio_method_combo.addItems([
-            "Audio LSB Analysis","Audio Chi-Square Test","Audio Spectral Analysis",
-            "Audio Autocorrelation Analysis","Audio Entropy Analysis","Audio Comprehensive Analysis","Audio Advanced Comprehensive"
+            "Audio LSB Analysis", "Audio Chi-Square Test", "Audio Spectral Analysis",
+            "Audio Autocorrelation Analysis", "Audio Entropy Analysis", "Audio Comprehensive Analysis", "Audio Advanced Comprehensive"
         ])
         self.audio_method_combo.setStyleSheet("""
             QComboBox { 
@@ -921,7 +975,8 @@ class SteganalysisWindow(QMainWindow):
                 selection-background-color: rgba(69,237,242,0.3);
             }
         """)
-        self.audio_method_combo.currentTextChanged.connect(self.audio_window.on_audio_method_changed)
+        self.audio_method_combo.currentTextChanged.connect(
+            self.audio_window.on_audio_method_changed)
         audio_method_layout.addWidget(self.audio_method_combo)
 
         self.aud_analyze_btn = QPushButton("Analyze Audio")
@@ -960,7 +1015,9 @@ class SteganalysisWindow(QMainWindow):
                 min-height: 60px;
             }
         """)
-        self.audio_method_description.setText("Select an analysis method to see its description...")
+        # Initialize with Audio LSB Analysis description
+        self.audio_window.update_method_description(
+            "Audio LSB Analysis", self.audio_method_description)
 
         layout.addWidget(title)
         layout.addWidget(audio_group)
@@ -977,9 +1034,12 @@ class SteganalysisWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
 
         title = QLabel("📈 Audio Analysis Results")
-        f = QFont(); f.setPointSize(20); f.setBold(True)
+        f = QFont()
+        f.setPointSize(20)
+        f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
+        title.setStyleSheet(
+            "color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         aud_results_group = QGroupBox("🎯 Detection Results")
         aud_results_group.setStyleSheet("""
@@ -999,7 +1059,8 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         aud_results_layout = QVBoxLayout(aud_results_group)
-        self.aud_results_text = QTextEdit(); self.aud_results_text.setReadOnly(True)
+        self.aud_results_text = QTextEdit()
+        self.aud_results_text.setReadOnly(True)
         self.aud_results_text.setStyleSheet("""
             QTextEdit {
                 background-color: #0e1625;
@@ -1009,7 +1070,8 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px;
             }
         """)
-        self.aud_results_text.setPlaceholderText("Analysis results will appear here...")
+        self.aud_results_text.setPlaceholderText(
+            "Analysis results will appear here...")
         aud_results_layout.addWidget(self.aud_results_text)
 
         audio_charts_group = QGroupBox("📊 Audio Charts")
@@ -1055,7 +1117,9 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         aud_stats_layout = QVBoxLayout(aud_stats_group)
-        self.aud_stats_text = QTextEdit(); self.aud_stats_text.setReadOnly(True); self.aud_stats_text.setMaximumHeight(150)
+        self.aud_stats_text = QTextEdit()
+        self.aud_stats_text.setReadOnly(True)
+        self.aud_stats_text.setMaximumHeight(150)
         self.aud_stats_text.setStyleSheet("""
             QTextEdit {
                 background-color: #0e1625;
@@ -1065,7 +1129,8 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px;
             }
         """)
-        self.aud_stats_text.setPlaceholderText("Audio statistics will appear here...")
+        self.aud_stats_text.setPlaceholderText(
+            "Audio statistics will appear here...")
         aud_stats_layout.addWidget(self.aud_stats_text)
 
         export_button = QPushButton("Export Report")
@@ -1123,9 +1188,12 @@ class SteganalysisWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
 
         title = QLabel("🎬 Video Analysis Input")
-        f = QFont(); f.setPointSize(20); f.setBold(True)
+        f = QFont()
+        f.setPointSize(20)
+        f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
+        title.setStyleSheet(
+            "color: #e8e8fc; margin-bottom: 10px; border: none;")
 
         video_group = QGroupBox("🔍 Suspicious Video")
         video_group.setStyleSheet("""
@@ -1145,7 +1213,9 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         video_layout = QVBoxLayout(video_group)
-        self.video_path = QLineEdit(); self.video_path.setPlaceholderText("Select video to analyze..."); self.video_path.setReadOnly(True)
+        self.video_path = QLineEdit()
+        self.video_path.setPlaceholderText("Select video to analyze...")
+        self.video_path.setReadOnly(True)
         self.video_path.setStyleSheet("""
             QLineEdit {
                 background-color: #0e1625;
@@ -1192,7 +1262,8 @@ class SteganalysisWindow(QMainWindow):
                 max-height: 180px;
             }
         """)
-        self.video_preview.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.video_preview.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.video_preview.setText("No video selected")
         self.video_preview.setScaledContents(False)
         video_layout.addWidget(self.video_preview)
@@ -1214,11 +1285,49 @@ class SteganalysisWindow(QMainWindow):
                 padding: 0 5px 0 5px;
             }
         """)
+        # Time range controls
+        time_group = QGroupBox("Analysis Time Range")
+        time_layout = QGridLayout(time_group)
+
+        # Start time control
+        start_time_label = QLabel("Start Time (s):")
+        start_time_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
+        self.start_time_spin = QSpinBox()
+        self.start_time_spin.setMinimum(0)
+        self.start_time_spin.setMaximum(999999)
+        self.start_time_spin.setValue(0)
+        self.start_time_spin.setStyleSheet("""
+            QSpinBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
+            QSpinBox:focus { border-color: #e67e22; }
+        """)
+
+        # End time control
+        end_time_label = QLabel("End Time (s):")
+        end_time_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
+        self.end_time_spin = QSpinBox()
+        self.end_time_spin.setMinimum(1)
+        self.end_time_spin.setMaximum(999999)
+        self.end_time_spin.setValue(10)  # Default to 10 seconds
+        self.end_time_spin.setStyleSheet("""
+            QSpinBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
+            QSpinBox:focus { border-color: #e67e22; }
+        """)
+
+        # Connect time controls to validation
+        self.start_time_spin.valueChanged.connect(self._validate_time_range)
+        self.end_time_spin.valueChanged.connect(self._validate_time_range)
+
+        time_layout.addWidget(start_time_label, 0, 0)
+        time_layout.addWidget(self.start_time_spin, 0, 1)
+        time_layout.addWidget(end_time_label, 1, 0)
+        time_layout.addWidget(self.end_time_spin, 1, 1)
+
+        video_method_group = QGroupBox("Video Analysis Method")
         video_method_layout = QVBoxLayout(video_method_group)
         self.video_method_combo = QComboBox()
         self.video_method_combo.addItems([
-            "Video LSB Analysis","Video Frame Analysis","Video Motion Analysis",
-            "Video Comprehensive Analysis","Video Advanced Comprehensive"
+            "Video LSB Analysis", "Video Frame Analysis", "Video Motion Analysis",
+            "Video Comprehensive Analysis", "Video Advanced Comprehensive"
         ])
         self.video_method_combo.setStyleSheet("""
             QComboBox { 
@@ -1260,7 +1369,8 @@ class SteganalysisWindow(QMainWindow):
                 selection-background-color: rgba(69,237,242,0.3);
             }
         """)
-        self.video_method_combo.currentTextChanged.connect(self.video_window.on_video_method_changed)
+        self.video_method_combo.currentTextChanged.connect(
+            self.video_window.on_video_method_changed)
         video_method_layout.addWidget(self.video_method_combo)
 
         # Method description
@@ -1277,7 +1387,9 @@ class SteganalysisWindow(QMainWindow):
                 min-height: 60px;
             }
         """)
-        self.video_method_description.setText("Select an analysis method to see its description...")
+        # Initialize with Video LSB Analysis description
+        self.video_window.update_method_description(
+            "Video LSB Analysis", self.video_method_description)
 
         self.vid_analyze_btn = QPushButton("Analyze Video")
         self.vid_analyze_btn.setStyleSheet("""
@@ -1303,6 +1415,7 @@ class SteganalysisWindow(QMainWindow):
 
         layout.addWidget(title)
         layout.addWidget(video_group)
+        layout.addWidget(time_group)
         layout.addWidget(video_method_group)
         layout.addWidget(self.video_method_description)
         layout.addWidget(self.vid_analyze_btn)
@@ -1316,11 +1429,15 @@ class SteganalysisWindow(QMainWindow):
         layout.setContentsMargins(30, 30, 30, 30)
 
         title = QLabel("📹 Video Analysis Results")
-        f = QFont(); f.setPointSize(20); f.setBold(True)
+        f = QFont()
+        f.setPointSize(20)
+        f.setBold(True)
         title.setFont(f)
-        title.setStyleSheet("color: #e8e8fc; margin-bottom: 10px; border: none;")
+        title.setStyleSheet(
+            "color: #e8e8fc; margin-bottom: 10px; border: none;")
 
-        self.vid_progress_bar = QProgressBar(); self.vid_progress_bar.setVisible(False)
+        self.vid_progress_bar = QProgressBar()
+        self.vid_progress_bar.setVisible(False)
         self.vid_progress_bar.setStyleSheet("""
             QProgressBar { 
                 border: 2px solid rgba(69,237,242,0.6); 
@@ -1353,7 +1470,8 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         vid_results_layout = QVBoxLayout(vid_results_group)
-        self.vid_results_text = QTextEdit(); self.vid_results_text.setReadOnly(True)
+        self.vid_results_text = QTextEdit()
+        self.vid_results_text.setReadOnly(True)
         self.vid_results_text.setStyleSheet("""
             QTextEdit {
                 background-color: #0e1625;
@@ -1363,7 +1481,8 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px;
             }
         """)
-        self.vid_results_text.setPlaceholderText("Analysis results will appear here...")
+        self.vid_results_text.setPlaceholderText(
+            "Analysis results will appear here...")
         vid_results_layout.addWidget(self.vid_results_text)
 
         # Video charts
@@ -1411,7 +1530,9 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         vid_stats_layout = QVBoxLayout(vid_stats_group)
-        self.vid_stats_text = QTextEdit(); self.vid_stats_text.setReadOnly(True); self.vid_stats_text.setMaximumHeight(150)
+        self.vid_stats_text = QTextEdit()
+        self.vid_stats_text.setReadOnly(True)
+        self.vid_stats_text.setMaximumHeight(150)
         self.vid_stats_text.setStyleSheet("""
             QTextEdit {
                 background-color: #0e1625;
@@ -1421,7 +1542,8 @@ class SteganalysisWindow(QMainWindow):
                 padding: 8px;
             }
         """)
-        self.vid_stats_text.setPlaceholderText("Video statistics will appear here...")
+        self.vid_stats_text.setPlaceholderText(
+            "Video statistics will appear here...")
         vid_stats_layout.addWidget(self.vid_stats_text)
 
         # Export charts to PDF button
@@ -1474,11 +1596,6 @@ class SteganalysisWindow(QMainWindow):
         layout.addStretch()
         return panel
 
-
-
-
-
-
     def create_shadow_effect(self):
         """Create an enhanced shadow effect for panels"""
         from PyQt6.QtWidgets import QGraphicsDropShadowEffect
@@ -1487,15 +1604,15 @@ class SteganalysisWindow(QMainWindow):
         shadow.setXOffset(0)
         shadow.setYOffset(8)  # Increased offset for more depth
         # Enhanced cyan glow with higher opacity
-        shadow.setColor(QColor(69, 237, 242, 80))  # Doubled opacity for stronger effect
+        # Doubled opacity for stronger effect
+        shadow.setColor(QColor(69, 237, 242, 80))
         return shadow
 
     def update_method_description(self, method_name: str, description_widget: QLabel):
         """Update the method description based on selected method"""
-        description = self.method_descriptions.get(method_name, "No description available for this method.")
+        description = self.method_descriptions.get(
+            method_name, "No description available for this method.")
         description_widget.setText(description)
-
-
 
     def export_report(self):
         """Export analysis report"""
@@ -1526,21 +1643,23 @@ class SteganalysisWindow(QMainWindow):
         self.main_window.show()
         self.close()
 
-
     # ======== Export charts to PDF ========
+
     def export_charts_pdf(self):
         """Export currently displayed charts (image and/or audio) to a multi-page high-res PDF."""
         # Ask user where to save
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         default_name = f"steganalysis_charts_{timestamp}.pdf"
-        file_path, _ = QFileDialog.getSaveFileName(self, "Export Charts to PDF", default_name, "PDF Files (*.pdf)")
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Charts to PDF", default_name, "PDF Files (*.pdf)")
         if not file_path:
             return
 
         try:
             with PdfPages(file_path) as pdf:
                 # Cover page with summary text
-                fig_cover = Figure(figsize=(8.27, 11.69), dpi=200)  # A4 portrait
+                fig_cover = Figure(figsize=(8.27, 11.69),
+                                   dpi=200)  # A4 portrait
                 axc = fig_cover.subplots(1, 1)
                 axc.axis('off')
                 lines = []
@@ -1551,18 +1670,21 @@ class SteganalysisWindow(QMainWindow):
                     lines.append(f"Audio: {self.machine.audio_path}")
                 if getattr(self.machine, 'video_path', None):
                     lines.append(f"Video: {self.machine.video_path}")
-                lines.append(f"Confidence: {self.machine.get_confidence_level():.2%}")
+                lines.append(
+                    f"Confidence: {self.machine.get_confidence_level():.2%}")
                 y = 0.95
-                axc.text(0.05, y, "Steganalysis Charts", fontsize=16, weight='bold', transform=axc.transAxes)
+                axc.text(0.05, y, "Steganalysis Charts", fontsize=16,
+                         weight='bold', transform=axc.transAxes)
                 y -= 0.05
                 for s in lines:
                     axc.text(0.05, y, s, fontsize=10, transform=axc.transAxes)
                     y -= 0.035
                 pdf.savefig(fig_cover, bbox_inches='tight')
-                
+
                 # Image page: LSB + Diff side-by-side
                 if hasattr(self, 'img_canvas_lsb') and hasattr(self, 'img_canvas_diff'):
-                    fig_img = Figure(figsize=(11.69, 8.27), dpi=200)  # A4 landscape
+                    fig_img = Figure(figsize=(11.69, 8.27),
+                                     dpi=200)  # A4 landscape
                     ax1, ax2 = fig_img.subplots(1, 2)
                     # Recompute from machine to ensure high-res
                     img = self.machine.image_array
@@ -1571,7 +1693,8 @@ class SteganalysisWindow(QMainWindow):
                             img = img.astype(np.uint8)
                         lsb = (img & 1)
                         if lsb.ndim == 3:
-                            lsb_vis = (np.mean(lsb, axis=2) * 255).astype(np.uint8)
+                            lsb_vis = (np.mean(lsb, axis=2)
+                                       * 255).astype(np.uint8)
                         else:
                             lsb_vis = (lsb * 255).astype(np.uint8)
                         ax1.imshow(lsb_vis, cmap='gray')
@@ -1579,7 +1702,8 @@ class SteganalysisWindow(QMainWindow):
                         ax1.axis('off')
                         blurred = cv2.GaussianBlur(img, (5, 5), 0)
                         residual = cv2.absdiff(img, blurred)
-                        residual_gray = cv2.cvtColor(residual, cv2.COLOR_BGR2GRAY) if residual.ndim == 3 else residual
+                        residual_gray = cv2.cvtColor(
+                            residual, cv2.COLOR_BGR2GRAY) if residual.ndim == 3 else residual
                         ax2.imshow(residual_gray, cmap='inferno')
                         ax2.set_title('Difference Map', fontsize=14)
                         ax2.axis('off')
@@ -1589,13 +1713,17 @@ class SteganalysisWindow(QMainWindow):
                     fig_hist = Figure(figsize=(11.69, 8.27), dpi=200)
                     axh = fig_hist.subplots(1, 1)
                     if img is not None:
-                        colors = ('r', 'g', 'b') if (img.ndim == 3 and img.shape[2] == 3) else ('k',)
+                        colors = ('r', 'g', 'b') if (
+                            img.ndim == 3 and img.shape[2] == 3) else ('k',)
                         if len(colors) == 3:
                             for i, c in enumerate(colors):
-                                hist = cv2.calcHist([img], [i], None, [256], [0, 256]).flatten()
-                                axh.plot(hist, color=c, label=f'Channel {c.upper()}')
+                                hist = cv2.calcHist([img], [i], None, [
+                                                    256], [0, 256]).flatten()
+                                axh.plot(hist, color=c,
+                                         label=f'Channel {c.upper()}')
                         else:
-                            hist, _ = np.histogram(img.flatten(), bins=256, range=(0, 256))
+                            hist, _ = np.histogram(
+                                img.flatten(), bins=256, range=(0, 256))
                             axh.plot(hist, color='k', label='Gray')
                         axh.set_title('Histogram', fontsize=16)
                         axh.set_xlabel('Pixel value', fontsize=12)
@@ -1630,7 +1758,8 @@ class SteganalysisWindow(QMainWindow):
                     axs = fig_spec.subplots(1, 1)
                     nfft = 1024
                     noverlap = 512
-                    axs.specgram(data, NFFT=nfft, Fs=sr, noverlap=noverlap, cmap='magma')
+                    axs.specgram(data, NFFT=nfft, Fs=sr,
+                                 noverlap=noverlap, cmap='magma')
                     axs.set_title('Spectrogram', fontsize=16)
                     axs.set_xlabel('Time (s)', fontsize=12)
                     axs.set_ylabel('Frequency (Hz)', fontsize=12)
@@ -1667,11 +1796,11 @@ class SteganalysisWindow(QMainWindow):
                 if frames is not None and len(frames) > 0:
                     # Sample frames for analysis (max 20 frames)
                     sample_frames = frames[::max(1, len(frames)//20)]
-                    
+
                     # Frame Statistics page
                     fig_frame = Figure(figsize=(11.69, 8.27), dpi=200)
                     ax_frame = fig_frame.subplots(1, 1)
-                    
+
                     frame_stats = []
                     for i, frame in enumerate(sample_frames):
                         if frame.ndim == 3:
@@ -1681,40 +1810,43 @@ class SteganalysisWindow(QMainWindow):
                         mean_val = np.mean(gray)
                         std_val = np.std(gray)
                         frame_stats.append((i, mean_val, std_val))
-                    
+
                     frame_nums, means, stds = zip(*frame_stats)
-                    ax_frame.plot(frame_nums, means, 'b-', label='Mean', linewidth=2)
-                    ax_frame.plot(frame_nums, stds, 'r-', label='Std Dev', linewidth=2)
+                    ax_frame.plot(frame_nums, means, 'b-',
+                                  label='Mean', linewidth=2)
+                    ax_frame.plot(frame_nums, stds, 'r-',
+                                  label='Std Dev', linewidth=2)
                     ax_frame.set_title('Video Frame Statistics', fontsize=16)
                     ax_frame.set_xlabel('Frame Number', fontsize=12)
                     ax_frame.set_ylabel('Pixel Value', fontsize=12)
                     ax_frame.legend()
                     ax_frame.grid(True, alpha=0.2)
                     pdf.savefig(fig_frame, bbox_inches='tight')
-                    
+
                     # Motion Analysis page
                     fig_motion = Figure(figsize=(11.69, 8.27), dpi=200)
                     ax_motion = fig_motion.subplots(1, 1)
-                    
+
                     motion_diffs = []
                     for i in range(1, len(sample_frames)):
-                        diff = np.mean(np.abs(sample_frames[i].astype(np.float32) - 
-                                             sample_frames[i-1].astype(np.float32)))
+                        diff = np.mean(np.abs(sample_frames[i].astype(np.float32) -
+                                              sample_frames[i-1].astype(np.float32)))
                         motion_diffs.append((i, diff))
-                    
+
                     if motion_diffs:
                         frame_nums, diffs = zip(*motion_diffs)
                         ax_motion.plot(frame_nums, diffs, 'g-', linewidth=2)
-                        ax_motion.set_title('Video Motion Analysis', fontsize=16)
+                        ax_motion.set_title(
+                            'Video Motion Analysis', fontsize=16)
                         ax_motion.set_xlabel('Frame Number', fontsize=12)
                         ax_motion.set_ylabel('Motion Difference', fontsize=12)
                         ax_motion.grid(True, alpha=0.2)
                         pdf.savefig(fig_motion, bbox_inches='tight')
-                    
+
                     # LSB Analysis page
                     fig_lsb = Figure(figsize=(11.69, 8.27), dpi=200)
                     ax_lsb = fig_lsb.subplots(1, 1)
-                    
+
                     lsb_ratios = []
                     for i, frame in enumerate(sample_frames):
                         if frame.ndim == 3:
@@ -1723,10 +1855,11 @@ class SteganalysisWindow(QMainWindow):
                             r = frame
                         lsb_ratio = np.mean(r & 1)
                         lsb_ratios.append((i, lsb_ratio))
-                    
+
                     frame_nums, ratios = zip(*lsb_ratios)
                     ax_lsb.plot(frame_nums, ratios, 'm-', linewidth=2)
-                    ax_lsb.axhline(y=0.5, color='r', linestyle='--', label='Expected (0.5)')
+                    ax_lsb.axhline(y=0.5, color='r',
+                                   linestyle='--', label='Expected (0.5)')
                     ax_lsb.set_title('Video LSB Analysis', fontsize=16)
                     ax_lsb.set_xlabel('Frame Number', fontsize=12)
                     ax_lsb.set_ylabel('LSB Ratio', fontsize=12)
@@ -1736,11 +1869,14 @@ class SteganalysisWindow(QMainWindow):
 
             # Notify success
             if hasattr(self, 'img_results_text'):
-                self.img_results_text.append(f"Charts exported to PDF: {file_path}")
+                self.img_results_text.append(
+                    f"Charts exported to PDF: {file_path}")
             if hasattr(self, 'aud_results_text'):
-                self.aud_results_text.append(f"Charts exported to PDF: {file_path}")
+                self.aud_results_text.append(
+                    f"Charts exported to PDF: {file_path}")
             if hasattr(self, 'vid_results_text'):
-                self.vid_results_text.append(f"Charts exported to PDF: {file_path}")
+                self.vid_results_text.append(
+                    f"Charts exported to PDF: {file_path}")
         except Exception as e:
             if hasattr(self, 'img_results_text'):
                 self.img_results_text.append(f"Error exporting charts: {e}")

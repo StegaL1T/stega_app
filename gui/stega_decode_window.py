@@ -688,8 +688,13 @@ class StegaDecodeWindow(QMainWindow):
                 print(f"Capacity: {info.get('max_capacity_bytes', 0)} bytes")
             else:
                 print("❌ Error loading steganographic image")
+        elif media_type == 'audio':
+            if self.machine.set_stego_audio(file_path):
+                print(f"✅ AUDIO loaded: {os.path.basename(file_path)}")
+            else:
+                print(f"❌ Error loading steganographic audio: {file_path}")
         else:
-            # For audio and video, we'll need to extend the machine
+            # For video, we'll need to extend the machine
             print(f"✅ {media_type.upper()} loaded: {os.path.basename(file_path)}")
 
     def choose_output_path(self):
@@ -712,18 +717,19 @@ class StegaDecodeWindow(QMainWindow):
 
         # Set default output path if none specified
         if not self.output_path.text().strip():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_path = f"extracted_data_{timestamp}.txt"
-            self.output_path.setText(default_path)
-            self.machine.set_output_path(default_path)
-
+            stego_source = self.machine.stego_image_path or self.machine.stego_audio_path
+            base_dir = os.path.dirname(stego_source) if stego_source else os.path.join(os.getcwd(), 'extracted_payloads')
+            if not os.path.exists(base_dir):
+                os.makedirs(base_dir, exist_ok=True)
+            self.output_path.setText(base_dir)
+            self.machine.set_output_path(base_dir)
         # Perform steganography extraction
         if self.machine.extract_message():
             print("✅ Steganography extraction completed successfully!")
             # Display extracted data and header info in results text area
             extracted_data = self.machine.get_extracted_data()
             header_info = self.machine.get_header_info() or {}
-            out_path = self.machine.output_path or "(unknown)"
+            out_path = self.machine.get_last_output_path() or "(unknown)"
 
             lines = []
             lines.append("=== Decode Success ===")
@@ -754,15 +760,15 @@ class StegaDecodeWindow(QMainWindow):
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Icon.Information)
             msg.setWindowTitle("Decode Successful")
-            out_path = self.machine.output_path or "saved file"
+            out_path = self.machine.get_last_output_path() or "saved file"
             msg.setText(f"Payload extracted successfully.\nSaved to: {out_path}")
             open_btn = msg.addButton("Open file", QMessageBox.ButtonRole.AcceptRole)
             msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
             msg.exec()
-            if msg.clickedButton() == open_btn and self.machine.output_path:
+            if msg.clickedButton() == open_btn and self.machine.get_last_output_path():
                 from PyQt6.QtGui import QDesktopServices
                 from PyQt6.QtCore import QUrl
-                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.output_path))
+                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.get_last_output_path()))
         else:
             print("❌ Steganography extraction failed!")
             error_msg = self.machine.get_last_error() or "Extraction failed. Please check your settings and try again."

@@ -92,6 +92,14 @@ class VideoSteganalysisWindow(QWidget):
             if self.machine.set_video(file_path):
                 # Create preview
                 self.create_video_preview(file_path)
+                
+                # Update time controls with video duration
+                if self.machine.video_duration:
+                    max_duration = int(self.machine.video_duration)
+                    self.main_gui.start_time_spin.setMaximum(max_duration - 1)
+                    self.main_gui.end_time_spin.setMaximum(max_duration)
+                    self.main_gui.end_time_spin.setValue(max_duration)  # Set to full duration
+                
                 if hasattr(self.main_gui, 'vid_results_text'):
                     self.main_gui.vid_results_text.append(f"Video selected: {file_path}")
             else:
@@ -124,8 +132,18 @@ class VideoSteganalysisWindow(QWidget):
         from PyQt6.QtWidgets import QApplication
         QApplication.processEvents()
 
-        # Load video into the machine
-        success = self.machine.set_video(self.main_gui.video_path.text())
+        # Get time range from GUI controls
+        start_time = self.main_gui.start_time_spin.value()
+        end_time = self.main_gui.end_time_spin.value()
+        
+        # Validate time range
+        if end_time <= start_time:
+            self.main_gui.vid_results_text.append("Error: End time must be greater than start time")
+            self.main_gui.vid_progress_bar.setVisible(False)
+            return
+        
+        # Load video into the machine with time range
+        success = self.machine.set_video(self.main_gui.video_path.text(), start_time, end_time)
         if not success:
             self.main_gui.vid_results_text.append("Error: Failed to load video for analysis")
             self.main_gui.vid_progress_bar.setVisible(False)
