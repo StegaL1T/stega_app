@@ -9,7 +9,9 @@ from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal, QRegularExpression
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QIntValidator, QRegularExpressionValidator, QCursor
 import os
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
+from PIL.ImageQt import ImageQt
 import soundfile as sf
 import cv2
 from datetime import datetime
@@ -1168,6 +1170,25 @@ class StegaEncodeWindow(QMainWindow):
         self.video_meta = None  # {'frames':int,'w':int,'h':int,'fps':float}
         self.available_bytes = 0
 
+        # Live preview machinery
+        self._live_preview_timer = QTimer(self)
+        self._live_preview_timer.setSingleShot(True)
+        self._live_preview_timer.setInterval(200)
+        self._live_preview_timer.timeout.connect(self._launch_live_preview_job)
+        self._live_preview_poll_timer = QTimer(self)
+        self._live_preview_poll_timer.setSingleShot(False)
+        self._live_preview_poll_timer.setInterval(40)
+        self._live_preview_poll_timer.timeout.connect(self._check_live_preview_future)
+        self._live_preview_executor = ThreadPoolExecutor(max_workers=1)
+        self._live_preview_future = None
+        self._live_preview_dirty = False
+        self._live_preview_buffer = None
+        self._live_preview_image = None
+        self._live_preview_qimage = None
+        self._live_preview_expected_job = None
+        self._live_preview_job_id = 0
+        self._live_preview_cancelled_jobs = set()
+
         # Set gradient background
         self.setStyleSheet("""
             QMainWindow {
@@ -1732,6 +1753,7 @@ class StegaEncodeWindow(QMainWindow):
             }
         """)
         self.lsb_slider.valueChanged.connect(self.update_lsb_value)
+        self.lsb_slider.valueChanged.connect(self._schedule_live_preview)
 
         lsb_layout.addWidget(self.lsb_value_label)
         lsb_layout.addWidget(self.lsb_slider)
@@ -1766,7 +1788,7 @@ class StegaEncodeWindow(QMainWindow):
             }
         """)
 
-        self.key_input.textChanged.connect(self.on_key_changed)
+        self.key_input.textChanged.connect(self._handle_key_changed)
         key_layout.addWidget(self.key_input)
 
         self.encrypt_checkbox = QCheckBox("Encrypt payload before embedding (recommended)")
@@ -2133,6 +2155,7 @@ class StegaEncodeWindow(QMainWindow):
             self.update_capacity_panel()
         except Exception:
             pass
+        self._schedule_live_preview('lsb-slider')
 
     def show_persistent_notice(self, message: str, severity: str = 'info'):
         """Display a persistent banner at the top of the window."""
@@ -2203,6 +2226,8 @@ class StegaEncodeWindow(QMainWindow):
         if hasattr(self, 'reset_lsb_stats'):
             self.reset_lsb_stats()
         self.reset_post_encode_panels()
+        if hasattr(self, '_clear_live_preview'):
+            self._clear_live_preview()
 
         default_cover_message = 'Drop a cover file to begin. Supported: PNG/BMP/GIF images, WAV audio, MOV/MP4 video.'
         cover_message = None
@@ -2423,49 +2448,89 @@ class StegaEncodeWindow(QMainWindow):
 
     def on_payload_text_changed(self):
         text_value = self.message_text.toPlainText() if hasattr(self, 'message_text') else ''
-        has_text = bool(text_value.strip())
-        if has_text and not self.machine.payload_file_path:
-            self.update_helper_step(3, "Step 3: Enter your numeric key to secure the payload.")
-            self.set_status('Payload text ready. Enter your numeric key next.', 'success')
-        elif not has_text and not self.machine.payload_file_path:
+        trimmed = text_value.strip()
+        has_file_payload = bool(getattr(self.machine, 'payload_file_path', None))
+        if trimmed and not has_file_payload:
+            try:
+                if self.machine.set_payload_text(text_value):
+                    self.update_helper_step(3, "Step 3: Enter your numeric key to secure the payload.")
+                    self.set_status('Payload text ready. Enter your numeric key next.', 'success')
+                    try:
+                        self.update_capacity_panel()
+                    except Exception:
+                        pass
+                    self._schedule_live_preview('payload-text')
+                else:
+                    self._clear_live_preview()
+            except Exception as exc:
+                print(f"Failed to set payload text: {exc}")
+                self._clear_live_preview()
+        elif not trimmed and not has_file_payload:
+            self.machine.payload_data = None
             self.update_helper_step(2, "Step 2: Add a payload file or type a message.")
             self.set_status('Add a payload file or type a secret message.', 'info')
+            try:
+                self.update_capacity_panel()
+            except Exception:
+                pass
+            self._clear_live_preview()
         self.update_step_progress()
 
+    def _handle_key_changed(self, value: str):
+        self.on_key_changed(value)
+
     def on_key_changed(self, value: str):
-        if value and value.strip().isdigit():
+        trimmed = value.strip() if isinstance(value, str) else ''
+        try:
+            self.machine.set_encryption_key(value or '')
+        except Exception as exc:
+            print(f"Failed to set encryption key: {exc}")
+        if trimmed.isdigit():
             self.update_helper_step(4, "Step 4: Adjust LSB bits and choose the start location.")
             self.set_status('Key ready. Adjust LSB bits and pick a start location.', 'success')
             self.show_step_hint('Tweak the embedding settings and mark a start location on the cover.')
+            self._schedule_live_preview('key-change')
         else:
-            if not value.strip():
+            if not trimmed:
                 self.update_helper_step(3, "Step 3: Enter your numeric key to secure the payload.")
                 self.set_status('Enter your numeric key to continue.', 'info')
+            self._clear_live_preview()
         self.update_step_progress()
 
     def on_payload_file_loaded(self, file_path):
         """Handle payload file loaded from drag and drop or browse"""
         if hasattr(self, 'reset_lsb_stats'):
             self.reset_lsb_stats()
-        if not file_path:  # File was removed
+        if not file_path:
             print("Payload file removed")
+            self.machine.payload_file_path = None
+            self.machine.payload_data = None
             if not (hasattr(self, 'message_text') and self.message_text.toPlainText().strip()):
                 self.update_helper_step(2, 'Step 2: Add a payload file or type a message.')
             self.set_status('Payload removed. Add a new payload to continue.', 'info')
+            try:
+                self.update_capacity_panel()
+            except Exception:
+                pass
+            self._clear_live_preview()
             self.update_step_progress()
             return
 
         print(f"Payload file loaded: {file_path}")
 
-        # Update machine with payload file
         if self.machine.set_payload_file(file_path):
-            print(f"�o. Payload file loaded: {os.path.basename(file_path)}")
+            print(f"Payload file ready: {os.path.basename(file_path)}")
             self.update_helper_step(3, 'Step 3: Enter your numeric key to secure the payload.')
             self.set_status(f'Payload ready: {os.path.basename(file_path)}', 'success')
-            self.update_capacity_panel()
+            try:
+                self.update_capacity_panel()
+            except Exception:
+                pass
+            self._schedule_live_preview('payload-file')
         else:
             print("Error loading payload file")
             self.set_status('Could not load the selected payload.', 'error')
+            self._clear_live_preview()
 
         self.update_step_progress()
 
@@ -2679,6 +2744,7 @@ class StegaEncodeWindow(QMainWindow):
             self.update_capacity_panel()
         except Exception:
             pass
+        self._schedule_live_preview('start-pixel')
 
     def on_encrypt_toggle(self, checked: bool):
         try:
@@ -2728,6 +2794,272 @@ class StegaEncodeWindow(QMainWindow):
                 self.media_drop_widget.preview_widget.pixmap_item.setPixmap(pm)
             except Exception as e:
                 print(f"Failed to restore original preview: {e}")
+        if hasattr(self, '_schedule_live_preview'):
+            self._schedule_live_preview('encrypt-toggle')
+
+    def _live_preview_prereqs_met(self) -> bool:
+        if getattr(self, 'media_type', None) != 'image':
+            return False
+        drop_widget = getattr(self, 'media_drop_widget', None)
+        cover_path = getattr(drop_widget, 'media_path', None) if drop_widget else None
+        if not cover_path or not os.path.exists(cover_path):
+            return False
+        if self.start_xy is None:
+            return False
+        key_input = getattr(self, 'key_input', None)
+        key_text = key_input.text().strip() if key_input else ''
+        if not key_text.isdigit():
+            return False
+        payload = getattr(self.machine, 'payload_data', None)
+        if payload is None:
+            return False
+        try:
+            if len(payload) == 0:
+                return False
+        except TypeError:
+            return False
+        return True
+
+    def _collect_live_preview_inputs(self) -> dict | None:
+        if not self._live_preview_prereqs_met():
+            return None
+        drop_widget = getattr(self, 'media_drop_widget', None)
+        cover_path = getattr(drop_widget, 'media_path', None) if drop_widget else None
+        if not cover_path:
+            return None
+        payload = getattr(self.machine, 'payload_data', None)
+        if payload is None:
+            return None
+        try:
+            payload_bytes = bytes(payload)
+        except Exception:
+            try:
+                payload_bytes = bytes(bytearray(payload))
+            except Exception:
+                return None
+        payload_file_path = getattr(self.machine, 'payload_file_path', None)
+        payload_filename = os.path.basename(payload_file_path) if payload_file_path else 'payload.txt'
+        lsb_bits = max(1, int(self.lsb_slider.value())) if hasattr(self, 'lsb_slider') else 1
+        key_text = self.key_input.text().strip() if hasattr(self, 'key_input') else ''
+        return {
+            'cover_path': cover_path,
+            'start_xy': tuple(self.start_xy) if self.start_xy is not None else None,
+            'lsb_bits': lsb_bits,
+            'key': key_text,
+            'payload_bytes': payload_bytes,
+            'payload_file_path': payload_file_path,
+            'payload_filename': payload_filename,
+            'encrypt_payload': bool(getattr(self.machine, 'encrypt_payload', False)),
+        }
+
+    def _schedule_live_preview(self, reason=None):
+        if isinstance(reason, (int, float)):
+            reason = 'signal'
+        if not self._live_preview_prereqs_met():
+            if self._live_preview_image is not None:
+                self._clear_live_preview()
+            return
+        self._live_preview_dirty = True
+        if self._live_preview_future is not None and not self._live_preview_future.done():
+            return
+        if self._live_preview_timer.isActive():
+            self._live_preview_timer.stop()
+        self._live_preview_timer.start()
+
+    def _launch_live_preview_job(self):
+        if not self._live_preview_dirty:
+            return
+        if not self._live_preview_prereqs_met():
+            if self._live_preview_image is not None:
+                self._clear_live_preview()
+            self._live_preview_dirty = False
+            return
+        if self._live_preview_future is not None and not self._live_preview_future.done():
+            return
+        params = self._collect_live_preview_inputs()
+        if not params:
+            self._clear_live_preview()
+            self._live_preview_dirty = False
+            return
+        self._live_preview_timer.stop()
+        self._live_preview_job_id += 1
+        job_id = self._live_preview_job_id
+        params['job_id'] = job_id
+        self._live_preview_expected_job = job_id
+        self._live_preview_dirty = False
+        future = self._live_preview_executor.submit(StegaEncodeWindow._compute_live_preview_payload, params)
+        self._live_preview_future = future
+        if not self._live_preview_poll_timer.isActive():
+            self._live_preview_poll_timer.start()
+
+    def _check_live_preview_future(self):
+        future = self._live_preview_future
+        if future is None:
+            if self._live_preview_poll_timer.isActive():
+                self._live_preview_poll_timer.stop()
+            return
+        if not future.done():
+            return
+        if self._live_preview_poll_timer.isActive():
+            self._live_preview_poll_timer.stop()
+        self._live_preview_future = None
+        try:
+            result = future.result()
+        except Exception as exc:
+            print(f"Live preview worker failed: {exc}")
+            self._clear_live_preview()
+            return
+        self._handle_live_preview_result(result)
+
+    @staticmethod
+    def _compute_live_preview_payload(params: dict) -> dict:
+        result = {'job_id': params.get('job_id')}
+        try:
+            from machine.stega_encode_machine import StegaEncodeMachine
+            clone = StegaEncodeMachine()
+            clone.set_encrypt_payload(bool(params.get('encrypt_payload')))
+            cover_path = params['cover_path']
+            if not clone.set_cover_image(cover_path):
+                raise ValueError('Failed to load cover image')
+            lsb_bits = max(1, int(params.get('lsb_bits', 1)))
+            clone.set_lsb_bits(lsb_bits)
+            clone.set_encryption_key(params.get('key', '') or '')
+            payload_bytes = params.get('payload_bytes', b'')
+            if not payload_bytes:
+                raise ValueError('No payload data available')
+            clone.payload_data = payload_bytes
+            clone.payload_file_path = params.get('payload_file_path')
+            filename = params.get('payload_filename') or 'payload.txt'
+            start_xy = params.get('start_xy')
+            stego_img, _ = clone.encode_image(
+                cover_path,
+                payload_bytes,
+                filename,
+                lsb_bits,
+                params.get('key', '') or '',
+                start_xy=start_xy
+            )
+            cover_img = clone.cover_image.convert('RGB')
+            stego_rgb = stego_img.convert('RGB')
+            cover_arr = np.array(cover_img, dtype=np.uint8)
+            stego_arr = np.array(stego_rgb, dtype=np.uint8)
+            height, width, _ = cover_arr.shape
+            change_counts = np.zeros((height, width), dtype=np.uint16)
+            for bit in range(lsb_bits):
+                cover_bit = (cover_arr >> bit) & 1
+                stego_bit = (stego_arr >> bit) & 1
+                diff = cover_bit != stego_bit
+                change_counts += diff.sum(axis=2, dtype=np.uint16)
+            max_change = int(change_counts.max())
+            if max_change > 0:
+                scaled = (change_counts.astype(np.float32) * (255.0 / max_change)).astype(np.uint8)
+            else:
+                scaled = np.zeros_like(change_counts, dtype=np.uint8)
+            heatmap = np.zeros((height, width, 3), dtype=np.uint8)
+            heatmap[..., 1] = scaled
+            heatmap[..., 2] = np.where(change_counts > 0, 255, 0).astype(np.uint8)
+            heat_bytes = heatmap.tobytes()
+            stats_lines = []
+            for bit in range(lsb_bits):
+                mask = 1 << bit
+                cover_ratio = float(((cover_arr & mask) != 0).mean() * 100.0)
+                stego_ratio = float(((stego_arr & mask) != 0).mean() * 100.0)
+                stats_lines.append(f"bit{bit}: cover {cover_ratio:.2f}% / stego {stego_ratio:.2f}% ones")
+            result.update({
+                'heatmap_bytes': heat_bytes,
+                'width': width,
+                'height': height,
+                'stats_text': '\n'.join(stats_lines),
+            })
+        except Exception as exc:
+            result['error'] = str(exc)
+        return result
+
+    def _handle_live_preview_result(self, result: dict | None):
+        if not isinstance(result, dict):
+            return
+        job_id = result.get('job_id')
+        if job_id in self._live_preview_cancelled_jobs:
+            self._live_preview_cancelled_jobs.discard(job_id)
+            return
+        if self._live_preview_expected_job is not None and job_id != self._live_preview_expected_job:
+            return
+        self._live_preview_expected_job = None
+        error = result.get('error')
+        if error:
+            print(f"Live preview error: {error}")
+            self._clear_live_preview()
+            return
+        heat_bytes = result.get('heatmap_bytes')
+        width = result.get('width')
+        height = result.get('height')
+        stats_text = result.get('stats_text')
+        if heat_bytes and width and height:
+            try:
+                heat_image = Image.frombytes('RGB', (int(width), int(height)), heat_bytes)
+            except Exception as exc:
+                print(f"Failed to build heatmap image: {exc}")
+                self._clear_live_preview()
+            else:
+                self._live_preview_buffer = heat_bytes
+                self._live_preview_image = heat_image
+                self._live_preview_qimage = ImageQt(heat_image)
+                pixmap = QPixmap.fromImage(self._live_preview_qimage)
+                preview_widget = getattr(self.media_drop_widget, 'preview_widget', None) if hasattr(self, 'media_drop_widget') else None
+                pixmap_item = getattr(preview_widget, 'pixmap_item', None)
+                if pixmap_item:
+                    pixmap_item.setPixmap(pixmap)
+                    try:
+                        preview_widget.graphics_view.fitInView(pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
+                    except Exception:
+                        pass
+        if stats_text and hasattr(self, 'proof_stats'):
+            self.proof_stats.setText(stats_text)
+        if self._live_preview_dirty and self._live_preview_prereqs_met():
+            if self._live_preview_timer.isActive():
+                self._live_preview_timer.stop()
+            self._live_preview_timer.start()
+        else:
+            self._live_preview_dirty = False
+
+    def _restore_cover_preview(self):
+        if getattr(self, 'media_type', None) != 'image':
+            return
+        drop_widget = getattr(self, 'media_drop_widget', None)
+        preview = getattr(drop_widget, 'preview_widget', None) if drop_widget else None
+        pixmap_item = getattr(preview, 'pixmap_item', None)
+        cover_path = getattr(drop_widget, 'media_path', None) if drop_widget else None
+        if not pixmap_item or not cover_path or not os.path.exists(cover_path):
+            return
+        pm = QPixmap(cover_path)
+        if pm.isNull():
+            return
+        pixmap_item.setPixmap(pm)
+        try:
+            preview.graphics_view.fitInView(pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
+        except Exception:
+            pass
+
+    def _clear_live_preview(self):
+        try:
+            if self._live_preview_timer.isActive():
+                self._live_preview_timer.stop()
+        except Exception:
+            pass
+        if self._live_preview_poll_timer.isActive():
+            self._live_preview_poll_timer.stop()
+        if self._live_preview_future is not None:
+            self._live_preview_future = None
+        if self._live_preview_expected_job is not None:
+            self._live_preview_cancelled_jobs.add(self._live_preview_expected_job)
+        self._live_preview_expected_job = None
+        self._live_preview_dirty = False
+        self._live_preview_buffer = None
+        self._live_preview_image = None
+        self._live_preview_qimage = None
+        self._restore_cover_preview()
+        if hasattr(self, 'reset_lsb_stats'):
+            self.reset_lsb_stats()
 
     def current_payload_len(self) -> int:
         if self.machine.payload_data:
@@ -3027,6 +3359,8 @@ class StegaEncodeWindow(QMainWindow):
             self.proof_stats.setText(message)
 
     def reset_post_encode_panels(self) -> None:
+        if hasattr(self, '_clear_live_preview'):
+            self._clear_live_preview()
         if hasattr(self, 'header_detail_labels'):
             for label in self.header_detail_labels.values():
                 label.setText('-')
@@ -3347,6 +3681,33 @@ class StegaEncodeWindow(QMainWindow):
             self.update_capacity_panel()
         except Exception:
             pass
+
+    def closeEvent(self, event):
+        try:
+            if self._live_preview_timer.isActive():
+                self._live_preview_timer.stop()
+        except Exception:
+            pass
+        try:
+            if self._live_preview_poll_timer.isActive():
+                self._live_preview_poll_timer.stop()
+        except Exception:
+            pass
+        future = getattr(self, '_live_preview_future', None)
+        if future is not None and not future.done():
+            if self._live_preview_expected_job is not None:
+                self._live_preview_cancelled_jobs.add(self._live_preview_expected_job)
+            self._live_preview_expected_job = None
+        executor = getattr(self, '_live_preview_executor', None)
+        if executor is not None:
+            try:
+                executor.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                executor.shutdown(wait=False)
+            except Exception:
+                pass
+            self._live_preview_executor = None
+        super().closeEvent(event)
 
     def go_back(self):
         """Go back to main window"""
