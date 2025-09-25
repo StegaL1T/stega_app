@@ -13,7 +13,7 @@ import cv2
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar, QApplication,
-                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget)
+                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget, QSpinBox)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen
 import numpy as np
@@ -194,6 +194,23 @@ class SteganalysisWindow(QMainWindow):
         panel.setGraphicsEffect(self.create_shadow_effect())
         return panel
 
+    def _validate_time_range(self):
+        """Validate and adjust time range controls"""
+        start_time = self.start_time_spin.value()
+        end_time = self.end_time_spin.value()
+        
+        # Update max values based on video duration if available
+        if hasattr(self.machine, 'video_duration') and self.machine.video_duration:
+            max_duration = int(self.machine.video_duration)
+            self.start_time_spin.setMaximum(max_duration - 1)
+            self.end_time_spin.setMaximum(max_duration)
+            
+            # Adjust current values if they exceed video duration
+            if start_time >= max_duration:
+                self.start_time_spin.setValue(0)
+            if end_time > max_duration:
+                self.end_time_spin.setValue(max_duration)
+
     def _build_image_controls(self) -> QWidget:
         panel = self._styled_panel()
         layout = QVBoxLayout(panel)
@@ -269,7 +286,8 @@ class SteganalysisWindow(QMainWindow):
                 min-height: 60px;
             }
         """)
-        self.image_method_description.setText("Select an analysis method to see its description...")
+        # Initialize with LSB Analysis description
+        self.image_window.update_method_description("LSB Analysis", self.image_method_description)
 
         layout.addWidget(title)
         layout.addWidget(image_group)
@@ -419,7 +437,8 @@ class SteganalysisWindow(QMainWindow):
                 min-height: 60px;
             }
         """)
-        self.audio_method_description.setText("Select an analysis method to see its description...")
+        # Initialize with Audio LSB Analysis description
+        self.audio_window.update_method_description("Audio LSB Analysis", self.audio_method_description)
 
         layout.addWidget(title)
         layout.addWidget(audio_group)
@@ -525,6 +544,43 @@ class SteganalysisWindow(QMainWindow):
         self.video_preview.setScaledContents(False)
         video_layout.addWidget(self.video_preview)
 
+        # Time range controls
+        time_group = QGroupBox("Analysis Time Range")
+        time_layout = QGridLayout(time_group)
+        
+        # Start time control
+        start_time_label = QLabel("Start Time (s):")
+        start_time_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
+        self.start_time_spin = QSpinBox()
+        self.start_time_spin.setMinimum(0)
+        self.start_time_spin.setMaximum(999999)
+        self.start_time_spin.setValue(0)
+        self.start_time_spin.setStyleSheet("""
+            QSpinBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
+            QSpinBox:focus { border-color: #e67e22; }
+        """)
+        
+        # End time control
+        end_time_label = QLabel("End Time (s):")
+        end_time_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
+        self.end_time_spin = QSpinBox()
+        self.end_time_spin.setMinimum(1)
+        self.end_time_spin.setMaximum(999999)
+        self.end_time_spin.setValue(10)  # Default to 10 seconds
+        self.end_time_spin.setStyleSheet("""
+            QSpinBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
+            QSpinBox:focus { border-color: #e67e22; }
+        """)
+        
+        # Connect time controls to validation
+        self.start_time_spin.valueChanged.connect(self._validate_time_range)
+        self.end_time_spin.valueChanged.connect(self._validate_time_range)
+        
+        time_layout.addWidget(start_time_label, 0, 0)
+        time_layout.addWidget(self.start_time_spin, 0, 1)
+        time_layout.addWidget(end_time_label, 1, 0)
+        time_layout.addWidget(self.end_time_spin, 1, 1)
+
         video_method_group = QGroupBox("Video Analysis Method")
         video_method_layout = QVBoxLayout(video_method_group)
         self.video_method_combo = QComboBox()
@@ -553,7 +609,8 @@ class SteganalysisWindow(QMainWindow):
                 min-height: 60px;
             }
         """)
-        self.video_method_description.setText("Select an analysis method to see its description...")
+        # Initialize with Video LSB Analysis description
+        self.video_window.update_method_description("Video LSB Analysis", self.video_method_description)
 
         self.vid_analyze_btn = QPushButton("Analyze Video")
         self.vid_analyze_btn.setStyleSheet("""
@@ -564,6 +621,7 @@ class SteganalysisWindow(QMainWindow):
 
         layout.addWidget(title)
         layout.addWidget(video_group)
+        layout.addWidget(time_group)
         layout.addWidget(video_method_group)
         layout.addWidget(self.video_method_description)
         layout.addWidget(self.vid_analyze_btn)
