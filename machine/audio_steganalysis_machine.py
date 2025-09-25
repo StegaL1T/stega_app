@@ -1,5 +1,6 @@
 # machine/audio_steganalysis_machine.py
 import os
+import time
 from typing import Optional, Dict, List, Tuple
 import numpy as np
 import wave
@@ -121,6 +122,7 @@ class AudioSteganalysisMachine:
             return False
 
         try:
+            overall_start_time = time.time()
             print(f"Starting {method}...")
 
             # Clear previous results
@@ -149,7 +151,9 @@ class AudioSteganalysisMachine:
             # Calculate overall confidence
             self._calculate_confidence()
 
-            print("Audio analysis completed successfully!")
+            overall_end_time = time.time()
+            overall_execution_time = overall_end_time - overall_start_time
+            print(f"Audio Analysis completed successfully in {overall_execution_time*1000:.2f}ms total!")
             return True
 
         except Exception as e:
@@ -158,6 +162,7 @@ class AudioSteganalysisMachine:
 
     def _perform_audio_lsb_analysis(self):
         """Perform LSB analysis on audio samples"""
+        start_time = time.time()
         print("Performing Audio LSB analysis...")
 
         samples = self.audio_samples
@@ -177,26 +182,38 @@ class AudioSteganalysisMachine:
             # Suspicious if: high average deviation OR multiple channels show significant deviation
             suspicious = (abs(avg_lsb - 0.5) > 0.15) or (max_deviation > 0.2 and avg_deviation > 0.1)
             
+            end_time = time.time()
+            execution_time = end_time - start_time
+            
             self.results = {
                 'method': 'Audio LSB Analysis',
                 'channel_lsb_ratios': channel_lsbs,
                 'avg_lsb_ratio': avg_lsb,
                 'max_deviation': max_deviation,
                 'avg_deviation': avg_deviation,
-                'suspicious': suspicious
+                'suspicious': suspicious,
+                'execution_time_ms': round(execution_time * 1000, 2)
             }
+            
+            print(f"Audio LSB Analysis completed in {execution_time*1000:.2f}ms")
         else:
             lsb_ratio = float(np.mean((samples & 1) != 0))
             deviation = abs(lsb_ratio - 0.5)
             # More conservative threshold for mono audio
             suspicious = deviation > 0.15
             
+            end_time = time.time()
+            execution_time = end_time - start_time
+            
             self.results = {
                 'method': 'Audio LSB Analysis',
                 'lsb_ratio': lsb_ratio,
                 'deviation': deviation,
-                'suspicious': suspicious
+                'suspicious': suspicious,
+                'execution_time_ms': round(execution_time * 1000, 2)
             }
+            
+            print(f"Audio LSB Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_audio_chi_square_test(self):
         """Perform Chi-Square test on audio sample histogram (simplified)"""
@@ -237,6 +254,7 @@ class AudioSteganalysisMachine:
 
     def _perform_audio_comprehensive_analysis(self):
         """Perform comprehensive analysis on audio using multiple methods"""
+        start_time = time.time()
         print("Performing audio comprehensive analysis...")
 
         self._perform_audio_lsb_analysis()
@@ -245,12 +263,18 @@ class AudioSteganalysisMachine:
         self._perform_audio_chi_square_test()
         chi2_results = self.results.copy()
 
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
         self.results = {
             'method': 'Audio Comprehensive Analysis',
             'audio_lsb_analysis': lsb_results,
             'audio_chi_square_test': chi2_results,
-            'suspicious': lsb_results.get('suspicious', False) or chi2_results.get('suspicious', False)
+            'suspicious': lsb_results.get('suspicious', False) or chi2_results.get('suspicious', False),
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"Audio Comprehensive Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_audio_spectral_analysis(self):
         """Perform spectral analysis on audio"""

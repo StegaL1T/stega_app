@@ -1,5 +1,6 @@
 # machine/video_steganalysis_machine.py
 import os
+import time
 from typing import Optional, Dict, List, Tuple
 import numpy as np
 
@@ -136,6 +137,7 @@ class VideoSteganalysisMachine:
             return False
 
         try:
+            overall_start_time = time.time()
             print(f"Starting {method}...")
 
             # Clear previous results
@@ -160,7 +162,9 @@ class VideoSteganalysisMachine:
             # Calculate overall confidence
             self._calculate_confidence()
 
-            print("Video analysis completed successfully!")
+            overall_end_time = time.time()
+            overall_execution_time = overall_end_time - overall_start_time
+            print(f"Video Analysis completed successfully in {overall_execution_time*1000:.2f}ms total!")
             return True
 
         except Exception as e:
@@ -169,6 +173,7 @@ class VideoSteganalysisMachine:
 
     def _perform_video_lsb_analysis(self):
         """Perform LSB analysis on video frames."""
+        start_time = time.time()
         print("Performing Video LSB analysis...")
 
         suspicious_frames = 0
@@ -188,6 +193,9 @@ class VideoSteganalysisMachine:
         total_sampled_frames = len(frame_deviations)
         suspicious_ratio = suspicious_frames / max(total_sampled_frames, 1)
         suspicious = suspicious_ratio > 0.3  # Require 30% of frames to be suspicious
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
         self.results = {
             'method': 'Video LSB Analysis',
             'frames_analyzed': len(self.video_frames),
@@ -195,8 +203,11 @@ class VideoSteganalysisMachine:
             'suspicious_ratio': suspicious_ratio,
             'avg_deviation': np.mean(frame_deviations) if frame_deviations else 0,
             'max_deviation': max(frame_deviations) if frame_deviations else 0,
-            'suspicious': suspicious
+            'suspicious': suspicious,
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"Video LSB Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_video_frame_analysis(self):
         """Detect anomalous frames by variance in pixel intensity."""
@@ -246,6 +257,7 @@ class VideoSteganalysisMachine:
 
     def _perform_video_comprehensive_analysis(self):
         """Run LSB + Frame Analysis and combine results."""
+        start_time = time.time()
         print("Performing video comprehensive analysis...")
 
         self._perform_video_lsb_analysis()
@@ -256,12 +268,18 @@ class VideoSteganalysisMachine:
 
         suspicious = lsb_results.get('suspicious', False) or frame_results.get('suspicious', False)
 
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
         self.results = {
             'method': 'Video Comprehensive Analysis',
             'video_lsb_analysis': lsb_results,
             'video_frame_analysis': frame_results,
-            'suspicious': suspicious
+            'suspicious': suspicious,
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"Video Comprehensive Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_video_advanced_comprehensive_analysis(self):
         """Run all video methods and weigh results."""

@@ -1,5 +1,6 @@
 # machine/image_steganalysis_machine.py
 import os
+import time
 from typing import Optional, Dict, List, Tuple
 from PIL import Image
 import numpy as np
@@ -102,6 +103,7 @@ class ImageSteganalysisMachine:
             return False
 
         try:
+            overall_start_time = time.time()
             print(f"Starting {self.analysis_method}...")
 
             # Clear previous results
@@ -134,7 +136,9 @@ class ImageSteganalysisMachine:
             # Calculate overall confidence
             self._calculate_confidence()
 
-            print("Analysis completed successfully!")
+            overall_end_time = time.time()
+            overall_execution_time = overall_end_time - overall_start_time
+            print(f"Image Analysis completed successfully in {overall_execution_time*1000:.2f}ms total!")
             return True
 
         except Exception as e:
@@ -143,6 +147,7 @@ class ImageSteganalysisMachine:
 
     def _perform_lsb_analysis(self):
         """Perform LSB analysis"""
+        start_time = time.time()
         print("Performing LSB analysis...")
 
         # Extract LSBs from each color channel
@@ -170,6 +175,9 @@ class ImageSteganalysisMachine:
         # Suspicious if: high average deviation OR multiple channels show significant deviation
         suspicious = (abs(avg_lsb_ratio - 0.5) > 0.15) or (max_deviation > 0.2 and avg_deviation > 0.1)
         
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
         self.results = {
             'method': 'LSB Analysis',
             'r_lsb_ratio': r_lsb_ratio,
@@ -178,11 +186,15 @@ class ImageSteganalysisMachine:
             'avg_lsb_ratio': avg_lsb_ratio,
             'max_deviation': max_deviation,
             'avg_deviation': avg_deviation,
-            'suspicious': suspicious
+            'suspicious': suspicious,
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"LSB Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_chi_square_test(self):
         """Perform Chi-Square test"""
+        start_time = time.time()
         print("Performing Chi-Square test...")
 
         # This is a simplified implementation
@@ -206,6 +218,9 @@ class ImageSteganalysisMachine:
         # Suspicious if: high average chi-square OR multiple channels show high values
         suspicious = (avg_chi2 > 0.3) or (max_chi2 > 0.5 and avg_chi2 > 0.2)
         
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
         self.results = {
             'method': 'Chi-Square Test',
             'r_chi2': r_chi2,
@@ -213,8 +228,11 @@ class ImageSteganalysisMachine:
             'b_chi2': b_chi2,
             'avg_chi2': avg_chi2,
             'max_chi2': max_chi2,
-            'suspicious': suspicious
+            'suspicious': suspicious,
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"Chi-Square Test completed in {execution_time*1000:.2f}ms")
 
     def _calculate_chi_square(self, channel: np.ndarray) -> float:
         """Calculate chi-square statistic for a channel with proper statistical analysis"""
@@ -246,6 +264,7 @@ class ImageSteganalysisMachine:
 
     def _perform_rs_analysis(self):
         """Perform RS (Regular-Singular) analysis across all color channels"""
+        start_time = time.time()
         print("Performing RS analysis...")
 
         results_per_channel = {}
@@ -295,12 +314,18 @@ class ImageSteganalysisMachine:
             if abs(rs_ratio - 0.5) > 0.05:
                 suspicious_flag = True
 
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
         # Save combined results
         self.results = {
             'method': 'RS Analysis',
             'channels': results_per_channel,
-            'suspicious': suspicious_flag
+            'suspicious': suspicious_flag,
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"RS Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_sample_pairs_analysis(self):
         """Perform Sample Pairs analysis across all color channels"""
@@ -352,6 +377,7 @@ class ImageSteganalysisMachine:
 
     def _perform_comprehensive_analysis(self):
         """Perform comprehensive analysis using multiple methods"""
+        start_time = time.time()
         print("Performing comprehensive analysis...")
 
         # Run all methods and store their results
@@ -394,13 +420,19 @@ class ImageSteganalysisMachine:
         # Require weighted score > 0.3 to flag as suspicious
         suspicious_flag = (weighted_score / max(total_weight, 0.1)) > 0.3
 
+        end_time = time.time()
+        execution_time = end_time - start_time
+
         self.results = {
             'method': 'Comprehensive Analysis',
             'analyses': all_results,
             'weighted_score': weighted_score,
             'total_weight': total_weight,
-            'suspicious': suspicious_flag
+            'suspicious': suspicious_flag,
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"Comprehensive Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_dct_analysis(self):
         """Perform DCT (Discrete Cosine Transform) analysis"""
