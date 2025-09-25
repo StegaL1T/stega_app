@@ -114,6 +114,7 @@ class ImageSteganalysisWindow(QWidget):
         # Show progress bar
         self.main_gui.img_progress_bar.setVisible(True)
         self.main_gui.img_progress_bar.setValue(0)
+        self.main_gui.img_progress_bar.setFormat("Loading")
         from PyQt6.QtWidgets import QApplication
         QApplication.processEvents()
 
@@ -188,7 +189,7 @@ class ImageSteganalysisWindow(QWidget):
 
         # LSB Plane (combined across channels as mean of LSBs)
         ax_lsb = self.main_gui.img_canvas_lsb.figure.subplots(1, 1)
-        self.main_gui.img_canvas_lsb.figure.tight_layout()
+        self.main_gui.img_canvas_lsb.figure.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.05)
         ax_lsb.clear()
         lsb = (img & 1)
         if lsb.ndim == 3:
@@ -202,7 +203,7 @@ class ImageSteganalysisWindow(QWidget):
 
         # Difference Map (residual to blurred image)
         ax_diff = self.main_gui.img_canvas_diff.figure.subplots(1, 1)
-        self.main_gui.img_canvas_diff.figure.tight_layout()
+        self.main_gui.img_canvas_diff.figure.subplots_adjust(left=0.05, right=0.95, top=0.9, bottom=0.05)
         ax_diff.clear()
         blurred = cv2.GaussianBlur(img, (5, 5), 0)
         residual = cv2.absdiff(img, blurred)
@@ -214,7 +215,7 @@ class ImageSteganalysisWindow(QWidget):
 
         # Histogram (all channels)
         ax_hist = self.main_gui.img_canvas_hist.figure.subplots(1, 1)
-        self.main_gui.img_canvas_hist.figure.tight_layout()
+        self.main_gui.img_canvas_hist.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_hist.clear()
         colors = ('r', 'g', 'b') if (img.ndim == 3 and img.shape[2] == 3) else ('k',)
         if len(colors) == 3:

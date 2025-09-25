@@ -92,14 +92,6 @@ class VideoSteganalysisWindow(QWidget):
             if self.machine.set_video(file_path):
                 # Create preview
                 self.create_video_preview(file_path)
-                
-                # Update time controls with video duration
-                if self.machine.video_duration:
-                    max_duration = int(self.machine.video_duration)
-                    self.main_gui.start_time_spin.setMaximum(max_duration - 1)
-                    self.main_gui.end_time_spin.setMaximum(max_duration)
-                    self.main_gui.end_time_spin.setValue(max_duration)  # Set to full duration
-                
                 if hasattr(self.main_gui, 'vid_results_text'):
                     self.main_gui.vid_results_text.append(f"Video selected: {file_path}")
             else:
@@ -129,21 +121,12 @@ class VideoSteganalysisWindow(QWidget):
         # Show progress bar
         self.main_gui.vid_progress_bar.setVisible(True)
         self.main_gui.vid_progress_bar.setValue(0)
+        self.main_gui.vid_progress_bar.setFormat("Loading")
         from PyQt6.QtWidgets import QApplication
         QApplication.processEvents()
 
-        # Get time range from GUI controls
-        start_time = self.main_gui.start_time_spin.value()
-        end_time = self.main_gui.end_time_spin.value()
-        
-        # Validate time range
-        if end_time <= start_time:
-            self.main_gui.vid_results_text.append("Error: End time must be greater than start time")
-            self.main_gui.vid_progress_bar.setVisible(False)
-            return
-        
-        # Load video into the machine with time range
-        success = self.machine.set_video(self.main_gui.video_path.text(), start_time, end_time)
+        # Load video into the machine
+        success = self.machine.set_video(self.main_gui.video_path.text())
         if not success:
             self.main_gui.vid_results_text.append("Error: Failed to load video for analysis")
             self.main_gui.vid_progress_bar.setVisible(False)
@@ -211,7 +194,7 @@ class VideoSteganalysisWindow(QWidget):
         
         # Frame Analysis Chart
         ax_frame = self.main_gui.vid_canvas_frame.figure.subplots(1, 1)
-        self.main_gui.vid_canvas_frame.figure.tight_layout()
+        self.main_gui.vid_canvas_frame.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_frame.clear()
         
         # Calculate frame statistics
@@ -237,7 +220,7 @@ class VideoSteganalysisWindow(QWidget):
 
         # Motion Analysis Chart
         ax_motion = self.main_gui.vid_canvas_motion.figure.subplots(1, 1)
-        self.main_gui.vid_canvas_motion.figure.tight_layout()
+        self.main_gui.vid_canvas_motion.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_motion.clear()
         
         # Calculate motion between consecutive frames
@@ -267,7 +250,7 @@ class VideoSteganalysisWindow(QWidget):
 
         # LSB Analysis Chart
         ax_lsb = self.main_gui.vid_canvas_lsb.figure.subplots(1, 1)
-        self.main_gui.vid_canvas_lsb.figure.tight_layout()
+        self.main_gui.vid_canvas_lsb.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_lsb.clear()
         
         # Calculate LSB ratios for each frame

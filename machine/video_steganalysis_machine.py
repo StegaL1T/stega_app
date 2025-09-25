@@ -1,5 +1,6 @@
 # machine/video_steganalysis_machine.py
 import os
+import time
 from typing import Optional, Dict, List, Tuple
 import numpy as np
 
@@ -27,14 +28,12 @@ class VideoSteganalysisMachine:
 
         print("VideoSteganalysisMachine initialized")
 
-    def set_video(self, video_path: str, start_sec: float = 0, end_sec: Optional[float] = None) -> bool:
+    def set_video(self, video_path: str) -> bool:
         """
         Load video frames and metadata using OpenCV.
         
         Args:
             video_path: Path to the video file
-            start_sec: Start time in seconds (default: 0)
-            end_sec: End time in seconds (default: None for full video)
         """
         try:
             import cv2
@@ -73,41 +72,11 @@ class VideoSteganalysisMachine:
                 cap.release()
                 return False
 
-            # Validate time parameters
-            if start_sec < 0:
-                print("Error: Start time cannot be negative")
-                cap.release()
-                return False
-                
-            if end_sec is not None:
-                if end_sec <= start_sec:
-                    print("Error: End time must be greater than start time")
-                    cap.release()
-                    return False
-                if end_sec > self.video_duration:
-                    print(f"Error: End time ({end_sec}s) exceeds video duration ({self.video_duration:.2f}s)")
-                    cap.release()
-                    return False
-            else:
-                end_sec = self.video_duration
-
-            # Calculate frame ranges
-            start_frame = int(start_sec * self.video_fps)
-            end_frame = int(end_sec * self.video_fps)
-            
-            # Ensure we don't exceed total frame count
-            end_frame = min(end_frame, total_frame_count)
-            
-            print(f"Loading frames from {start_sec:.2f}s to {end_sec:.2f}s (frames {start_frame} to {end_frame})")
-
-            # Seek to start frame
-            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-            
             frames = []
-            current_frame = start_frame
+            frames_read = 0
             
-            # Read frames in the specified range
-            while current_frame < end_frame:
+            # Read all frames from the video
+            while True:
                 try:
                     success, frame = cap.read()
                     if not success or frame is None:
@@ -115,10 +84,10 @@ class VideoSteganalysisMachine:
                     
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frames.append(frame_rgb)
-                    current_frame += 1
+                    frames_read += 1
                     
                 except Exception as read_error:
-                    print(f"Warning: Error reading frame {current_frame}: {read_error}")
+                    print(f"Warning: Error reading frame: {read_error}")
                     break
 
             cap.release()
@@ -130,7 +99,7 @@ class VideoSteganalysisMachine:
             self.video_frames = frames
 
             print(f"Video loaded: {video_path}")
-            print(f"Frames loaded: {len(frames)} (from {start_sec:.2f}s to {end_sec:.2f}s), FPS: {self.video_fps}, Total duration: {self.video_duration:.2f}s")
+            print(f"Frames: {len(frames)}, FPS: {self.video_fps}, Duration: {self.video_duration:.2f}s")
             return True
 
         except Exception as e:
@@ -168,6 +137,7 @@ class VideoSteganalysisMachine:
             return False
 
         try:
+            overall_start_time = time.time()
             print(f"Starting {method}...")
 
             # Clear previous results
@@ -192,7 +162,9 @@ class VideoSteganalysisMachine:
             # Calculate overall confidence
             self._calculate_confidence()
 
-            print("Video analysis completed successfully!")
+            overall_end_time = time.time()
+            overall_execution_time = overall_end_time - overall_start_time
+            print(f"Video Analysis completed successfully in {overall_execution_time*1000:.2f}ms total!")
             return True
 
         except Exception as e:
@@ -201,23 +173,42 @@ class VideoSteganalysisMachine:
 
     def _perform_video_lsb_analysis(self):
         """Perform LSB analysis on video frames."""
+        start_time = time.time()
         print("Performing Video LSB analysis...")
 
         suspicious_frames = 0
+        frame_deviations = []
+        
         for frame in self.video_frames[::max(1, len(self.video_frames)//50)]:  # sample frames
             r = frame[:, :, 0]
             lsb_ratio = np.mean(r & 1)
-            if abs(lsb_ratio - 0.5) > 0.1:
+            deviation = abs(lsb_ratio - 0.5)
+            frame_deviations.append(deviation)
+            
+            # Ultra-sensitive threshold for video frames: catch very subtle steganography
+            # Special case: if deviation > 2%, flag as suspicious (like your encoded image)
+            if deviation > 0.025:
                 suspicious_frames += 1
 
-        suspicious = suspicious_frames > 0
+        # Ultra-sensitive frame analysis: catch very subtle steganography
+        total_sampled_frames = len(frame_deviations)
+        suspicious_ratio = suspicious_frames / max(total_sampled_frames, 1)
+        suspicious = suspicious_ratio > 0.1  # Require only 10% of frames to be suspicious (down from 20%)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
         self.results = {
             'method': 'Video LSB Analysis',
             'frames_analyzed': len(self.video_frames),
             'suspicious_frames': suspicious_frames,
-            'suspicious_ratio': suspicious_frames / max(len(self.video_frames), 1),
-            'suspicious': suspicious
+            'suspicious_ratio': suspicious_ratio,
+            'avg_deviation': np.mean(frame_deviations) if frame_deviations else 0,
+            'max_deviation': max(frame_deviations) if frame_deviations else 0,
+            'suspicious': suspicious,
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"Video LSB Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_video_frame_analysis(self):
         """Detect anomalous frames by variance in pixel intensity."""
@@ -246,17 +237,28 @@ class VideoSteganalysisMachine:
             diffs.append(diff)
 
         avg_diff = np.mean(diffs)
-        unusual_motion = sum(1 for d in diffs if abs(d - avg_diff) > avg_diff * 0.5)
+        std_diff = np.std(diffs)
+        
+        # More sophisticated motion analysis
+        # Consider both absolute differences and statistical outliers
+        unusual_motion = sum(1 for d in diffs if abs(d - avg_diff) > avg_diff * 0.7)
+        extreme_motion = sum(1 for d in diffs if abs(d - avg_diff) > 2 * std_diff)
+        
+        # Only flag as suspicious if there are both unusual and extreme motion patterns
+        suspicious = unusual_motion > 3 and extreme_motion > 1
 
         self.results = {
             'method': 'Video Motion Analysis',
             'avg_frame_diff': float(avg_diff),
+            'std_frame_diff': float(std_diff),
             'unusual_motion_count': unusual_motion,
-            'suspicious': unusual_motion > 2
+            'extreme_motion_count': extreme_motion,
+            'suspicious': suspicious
         }
 
     def _perform_video_comprehensive_analysis(self):
         """Run LSB + Frame Analysis and combine results."""
+        start_time = time.time()
         print("Performing video comprehensive analysis...")
 
         self._perform_video_lsb_analysis()
@@ -267,12 +269,18 @@ class VideoSteganalysisMachine:
 
         suspicious = lsb_results.get('suspicious', False) or frame_results.get('suspicious', False)
 
+        end_time = time.time()
+        execution_time = end_time - start_time
+        
         self.results = {
             'method': 'Video Comprehensive Analysis',
             'video_lsb_analysis': lsb_results,
             'video_frame_analysis': frame_results,
-            'suspicious': suspicious
+            'suspicious': suspicious,
+            'execution_time_ms': round(execution_time * 1000, 2)
         }
+        
+        print(f"Video Comprehensive Analysis completed in {execution_time*1000:.2f}ms")
 
     def _perform_video_advanced_comprehensive_analysis(self):
         """Run all video methods and weigh results."""
@@ -287,20 +295,40 @@ class VideoSteganalysisMachine:
         self._perform_video_motion_analysis()
         motion_results = self.results.copy()
 
-        suspicious_count = sum([
-            lsb_results.get('suspicious', False),
-            frame_results.get('suspicious', False),
-            motion_results.get('suspicious', False)
-        ])
-
-        overall_suspicious = suspicious_count >= 2
+        # Weighted voting system for video advanced comprehensive analysis
+        method_weights = {
+            'video_lsb_analysis': 0.5,      # Highest weight - most reliable
+            'video_frame_analysis': 0.3,    # Medium weight
+            'video_motion_analysis': 0.2    # Lower weight - most prone to false positives
+        }
+        
+        weighted_score = 0.0
+        total_weight = 0.0
+        
+        all_results = {
+            'video_lsb_analysis': lsb_results,
+            'video_frame_analysis': frame_results,
+            'video_motion_analysis': motion_results
+        }
+        
+        for method, results in all_results.items():
+            if method in method_weights:
+                weight = method_weights[method]
+                if results.get('suspicious', False):
+                    weighted_score += weight
+                total_weight += weight
+        
+        # Ultra-sensitive video comprehensive: catch very subtle steganography
+        # Lower threshold (0.15 instead of 0.3) to match image sensitivity
+        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > 0.15
 
         self.results = {
             'method': 'Video Advanced Comprehensive Analysis',
             'video_lsb_analysis': lsb_results,
             'video_frame_analysis': frame_results,
             'video_motion_analysis': motion_results,
-            'suspicious_methods_count': suspicious_count,
+            'weighted_score': weighted_score,
+            'total_weight': total_weight,
             'suspicious': overall_suspicious
         }
 

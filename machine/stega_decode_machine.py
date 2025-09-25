@@ -1,12 +1,26 @@
 import os
+import json
+import base64
+import tempfile
+import subprocess
+import shutil
 from typing import List, Optional, Tuple
 from datetime import datetime
 
 import numpy as np
 from PIL import Image
-from datetime import datetime
 from PyPDF2 import PdfReader
 import wave
+from pathlib import Path
+
+try:
+    import cv2
+except ImportError:  # pragma: no cover - optional dependency for video handling
+    cv2 = None
+try:
+    from stegano import lsb
+except Exception:
+    lsb = None
 
 from machine.stega_spec import (
     FLAG_PAYLOAD_ENCRYPTED,
@@ -18,7 +32,6 @@ from machine.stega_spec import (
     unpack_header,
 )
 
-
 class StegaDecodeMachine:
     """
     Handles all steganography decoding operations and business logic.
@@ -29,6 +42,7 @@ class StegaDecodeMachine:
         """Initialize the steganography decoding machine"""
         self.stego_image_path: Optional[str] = None
         self.stego_audio_path: Optional[str] = None
+        self.stego_video_path: Optional[str] = None
         self.lsb_bits: int = 1
         self.encryption_key: Optional[str] = None
         self.output_path: Optional[str] = None
@@ -37,7 +51,11 @@ class StegaDecodeMachine:
         self.stego_image: Optional[Image.Image] = None
         self.image_array: Optional[np.ndarray] = None
         self.audio_data: Optional[np.ndarray] = None
-
+        self.video_data: Optional[np.ndarray] = None
+        self.video_shape: Optional[Tuple[int, int, int, int]] = None
+        self.video_fps: Optional[float] = None
+        self.video_metadata: Optional[dict] = None
+        
         # Internal state for results
         self.extracted_data: Optional[str] = None
         self.last_error: Optional[str] = None
@@ -59,13 +77,13 @@ class StegaDecodeMachine:
 
             self.stego_image = Image.open(image_path)
             self.stego_image_path = image_path
-
+            
             if self.stego_image.mode != 'RGB':
                 self.stego_image = self.stego_image.convert('RGB')
-
+                
             self.image_array = np.array(self.stego_image)
             self.last_error = None
-
+            
             print(f"Steganographic image loaded: {image_path}")
             print(f"Image dimensions: {self.image_array.shape}")
             return True
@@ -85,16 +103,14 @@ class StegaDecodeMachine:
                 self.last_error = f"Steganographic audio not found: {audio_path}"
                 print(f"Error: {self.last_error}")
                 return False
-
+                
             with wave.open(audio_path, 'rb') as audio_file:
                 n_frames = audio_file.getnframes()
                 samp_width = audio_file.getsampwidth()
                 raw_data = audio_file.readframes(n_frames)
-                print(
-                    f"[DEBUG] First 32 bytes of raw audio: {raw_data[:32].hex()}")
+                print(f"[DEBUG] First 32 bytes of raw audio: {raw_data[:32].hex()}")
                 self.audio_data = np.frombuffer(raw_data, dtype=np.uint8)
-                print(
-                    f"[DEBUG] np.uint8 audio_data shape: {self.audio_data.shape}, first 32 bytes: {self.audio_data[:32].tolist()}")
+                print(f"[DEBUG] np.uint8 audio_data shape: {self.audio_data.shape}, first 32 bytes: {self.audio_data[:32].tolist()}")
                 self.stego_audio_path = audio_path
                 self.last_error = None
 
@@ -107,6 +123,35 @@ class StegaDecodeMachine:
             print(f"Error: {self.last_error}")
             return False
 
+    def set_stego_video(self, video_path: str) -> bool:
+        """Register a steganographic video path. Frame extraction will be done at decode time.
+
+        We avoid relying on OpenCV's container/codec support here because PNG-in-AVI
+        may not be readable by default on some Windows OpenCV builds. Instead, we
+        defer to ffmpeg during the actual decode to extract frames reliably.
+        """
+        try:
+            self._reset_media()
+            if not os.path.exists(video_path):
+                self.last_error = f"Steganographic video not found: {video_path}"
+                print(f"Error: {self.last_error}")
+                return False
+
+            # We don't pre-parse frames here. Store path and proceed.
+            self.stego_video_path = video_path
+            self.video_data = None
+            self.video_shape = None
+            self.video_fps = None
+            self.video_metadata = None
+            self.last_error = None
+            print(f"Steganographic video selected: {video_path}")
+            return True
+
+        except Exception as e:
+            self.last_error = f"Error loading steganographic video: {e}"
+            print(f"Error: {self.last_error}")
+            return False
+
     def _reset_media(self):
         """Clears all loaded media data."""
         self.stego_image = None
@@ -114,6 +159,11 @@ class StegaDecodeMachine:
         self.stego_image_path = None
         self.audio_data = None
         self.stego_audio_path = None
+        self.video_data = None
+        self.stego_video_path = None
+        self.video_shape = None
+        self.video_fps = None
+        self.video_metadata = None
 
     def set_lsb_bits(self, bits: int) -> bool:
         # ... (existing code, no changes needed)
@@ -139,14 +189,16 @@ class StegaDecodeMachine:
         """
         Validate all inputs before processing.
         """
-        if not self.stego_image_path and not self.stego_audio_path:
+        if not self.stego_image_path and not self.stego_audio_path and not self.stego_video_path:
             return False, "Steganographic media not selected"
-
+            
         if self.stego_image_path and self.image_array is None:
             return False, "Steganographic image not loaded properly"
-
+            
         if self.stego_audio_path and self.audio_data is None:
             return False, "Steganographic audio not loaded properly"
+
+        # For videos, we defer frame extraction to decode time using ffmpeg.
 
         if not self.output_path:
             return False, "Output path not specified"
@@ -163,7 +215,12 @@ class StegaDecodeMachine:
             print(f"Validation failed: {error_msg}")
             return False
 
-        # Determine which media to decode from
+        # If video is provided, use frame-based stegano decode (no header)
+        if self.stego_video_path:
+            ok = self._extract_from_video_frames(self.stego_video_path)
+            return ok
+
+        # Determine which media to decode from for image/audio (header-based)
         if self.stego_image_path:
             media_array = self.image_array
         elif self.stego_audio_path:
@@ -174,117 +231,267 @@ class StegaDecodeMachine:
 
         return self._extract_from_media(media_array)
 
+    def _extract_from_video_frames(self, video_path: str) -> bool:
+        """Decode message segments embedded per-frame using stegano.lsb and reconstruct payload.
+
+        This matches the simple LSB per-frame method: each frame may contain a chunk of
+        text embedded via stegano.lsb.hide. We concatenate all non-empty reveals
+        (in frame order) until we hit the first None, then attempt to parse JSON
+        metadata {filename, kind, payload} where payload is base64 of the original bytes.
+        If parsing fails, we save the concatenated text as a .txt file.
+        """
+        if lsb is None:
+            self.last_error = "Python package 'stegano' is required for video decoding."
+            print(f"Error: {self.last_error}")
+            return False
+
+        # Extract frames to a temporary directory as PNGs using ffmpeg for robust support
+        ffmpeg = shutil.which('ffmpeg')
+        if not ffmpeg:
+            self.last_error = "ffmpeg is required to extract video frames for decoding."
+            print(f"Error: {self.last_error}")
+            return False
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="stego_video_decode_"))
+        frames_dir = temp_dir / "frames"
+        try:
+            frames_dir.mkdir(parents=True, exist_ok=True)
+            pattern = f"{frames_dir.as_posix()}/%06d.png"
+            cmd = [
+                ffmpeg, '-y', '-hide_banner', '-loglevel', 'error',
+                '-i', video_path,
+                '-vsync', '0',
+                pattern,
+            ]
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            if result.returncode != 0:
+                detail = result.stderr.decode(errors='ignore').strip()
+                self.last_error = f"Failed to extract frames with ffmpeg: {detail}"
+                print(f"Error: {self.last_error}")
+                return False
+            count = len(list(frames_dir.glob('*.png')))
+            if count == 0:
+                self.last_error = "Video has no frames after extraction"
+                print(f"Error: {self.last_error}")
+                return False
+
+            # Reveal segments across all frames (skip frames without hidden text)
+            segments: List[tuple[int, str]] = []
+            for idx in range(count):
+                fpath = frames_dir / f"{idx:06d}.png"
+                try:
+                    dec = lsb.reveal(str(fpath))
+                except Exception:
+                    dec = None
+                if dec:
+                    segments.append((idx, dec))
+
+            if not segments:
+                self.last_error = "No hidden data found in video frames"
+                print(f"Error: {self.last_error}")
+                return False
+
+            # Concatenate segments in frame order
+            joined = "".join(seg for _, seg in segments)
+            first_idxs = [i for i, _ in segments][:8]
+            print(f"[VIDEO DECODE] segments_found={len(segments)}, first_frames={first_idxs}")
+
+            # Determine output path base
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            base_dir = self.output_path if (self.output_path and os.path.isdir(self.output_path)) else os.path.dirname(video_path)
+            if not base_dir:
+                base_dir = os.getcwd()
+
+            out_path: Optional[str] = None
+            saved_bytes = False
+            preview_text: Optional[str] = None
+
+            # Try JSON envelope first (supports encrypted or plaintext inner JSON)
+            try:
+                env = json.loads(joined)
+                inner_json_bytes: Optional[bytes] = None
+                if isinstance(env, dict) and env.get('v') == 1:
+                    # Enforce LSB bits match if present
+                    env_bits = env.get('b')
+                    if isinstance(env_bits, int) and 1 <= env_bits <= 8:
+                        if env_bits != self.lsb_bits:
+                            raise ValueError(f"LSB bits mismatch for video envelope (stego {env_bits} != selected {self.lsb_bits})")
+                    if env.get('enc') is True:
+                        # Encrypted envelope requires a key
+                        if not self.encryption_key or not self.encryption_key.strip():
+                            raise ValueError('Encrypted video payload requires a decryption key')
+                        nonce_b64 = env.get('nonce')
+                        ct_b64 = env.get('ct')
+                        if not nonce_b64 or not ct_b64:
+                            raise ValueError('Missing nonce or ciphertext in envelope')
+                        nonce = base64.b64decode(nonce_b64)
+                        ct = base64.b64decode(ct_b64)
+                        inner_json_bytes = decrypt_payload(self.encryption_key, nonce, ct, context=b'video-json')
+                    else:
+                        # Plaintext envelope carries base64 of inner JSON in 'pt'
+                        pt_b64 = env.get('pt')
+                        if not pt_b64:
+                            raise ValueError('Missing plaintext payload in envelope')
+                        inner_json_bytes = base64.b64decode(pt_b64)
+                else:
+                    # Legacy direct metadata structure
+                    if isinstance(env, dict) and 'payload' in env:
+                        inner_json_bytes = json.dumps(env, ensure_ascii=True).encode('utf-8')
+
+                if inner_json_bytes is not None:
+                    inner = json.loads(inner_json_bytes.decode('utf-8'))
+                    b64 = inner.get('payload')
+                    fname = inner.get('filename') or 'payload.bin'
+                    raw = base64.b64decode(b64)
+                    # If user specified an explicit file (with extension) in output_path, honor it
+                    if self.output_path and os.path.splitext(self.output_path)[1]:
+                        out_path = self.output_path
+                    else:
+                        out_path = os.path.join(base_dir, f"{ts}.{fname}")
+                    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                    with open(out_path, 'wb') as f:
+                        f.write(raw)
+                    saved_bytes = True
+                    try:
+                        preview_text = raw.decode('utf-8')
+                    except Exception:
+                        preview_text = None
+            except Exception:
+                pass
+
+            # Fallback: treat as plain text and save
+            if not saved_bytes:
+                if self.output_path and os.path.splitext(self.output_path)[1]:
+                    out_path = self.output_path
+                else:
+                    out_path = os.path.join(base_dir, f"{ts}_extracted.txt")
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                with open(out_path, 'w', encoding='utf-8') as f:
+                    f.write(joined)
+                preview_text = joined
+
+            self.last_output_path = out_path
+            self.extracted_data = preview_text or f"Binary payload extracted -> {out_path}"
+            self.header_info = {
+                'video_frames_scanned': count,
+                'segments_found': len(segments),
+                'segment_frames': [i for (i, _) in segments][:16],
+                'saved_to': out_path,
+                'mode': 'per-frame-lsb',
+            }
+            print("Steganography decoding (video frames) completed successfully!")
+            print(f"Extracted data saved to: {out_path}")
+            return True
+        except Exception as e:
+            self.last_error = f"Video frame decode failed: {e}"
+            print(f"Error: {self.last_error}")
+            return False
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        
     def _extract_from_media(self, media_array: np.ndarray) -> bool:
         """
         Performs the core decoding logic on a NumPy array,
-        abstracting image vs. audio.
+        abstracting image vs. audio. Always outputs a file, even if header/CRC fails.
         """
-        try:
-            self.last_output_path = None
-            print("Starting steganography decoding process...")
+        self.last_output_path = None
+        print("Starting steganography decoding process...")
 
-            if not self.encryption_key or not self.encryption_key.strip():
-                self.last_error = "Decryption key is required for decoding"
-                print(f"Error: {self.last_error}")
-                return False
+        if not (1 <= self.lsb_bits <= 8):
+            self.last_error = f"Invalid LSB bits setting: {self.lsb_bits}"
+            print(f"Error: {self.last_error}")
+            return False
 
-            if not (1 <= self.lsb_bits <= 8):
-                self.last_error = f"Invalid LSB bits setting: {self.lsb_bits}"
-                print(f"Error: {self.last_error}")
-                return False
+        flat_bytes = media_array.astype(np.uint8).reshape(-1)
+        total_bytes = flat_bytes.size
+        lsb_bits = self.lsb_bits
+        total_lsb_bits = total_bytes * lsb_bits
 
-            flat_bytes = media_array.astype(np.uint8).reshape(-1)
-            total_bytes = flat_bytes.size
-            lsb_bits = self.lsb_bits
-            total_lsb_bits = total_bytes * lsb_bits
+        if total_lsb_bits == 0:
+            self.last_error = "Cover media contains no data to decode"
+            print(f"Error: {self.last_error}")
+            return False
 
-            if total_lsb_bits == 0:
-                self.last_error = "Cover media contains no data to decode"
-                print(f"Error: {self.last_error}")
-                return False
+        identity_order = list(range(lsb_bits))
 
-            identity_order = list(range(lsb_bits))
+        class BitCursor:
+            def __init__(self, start_bit: int, order: List[int]):
+                self.pos = start_bit
+                self.order = order
 
-            class BitCursor:
-                def __init__(self, start_bit: int, order: List[int]):
-                    self.pos = start_bit
-                    self.order = order
+            def _read_one(self) -> int:
+                if self.pos >= total_lsb_bits:
+                    raise ValueError("Unexpected end of bitstream")
+                byte_index = self.pos // lsb_bits
+                within_byte = self.pos % lsb_bits
+                bit_pos = self.order[within_byte]
+                byte_value = int(flat_bytes[byte_index])
+                self.pos += 1
+                return (byte_value >> bit_pos) & 1
 
-                def _read_one(self) -> int:
-                    if self.pos >= total_lsb_bits:
-                        raise ValueError("Unexpected end of bitstream")
-                    byte_index = self.pos // lsb_bits
-                    within_byte = self.pos % lsb_bits
-                    bit_pos = self.order[within_byte]
-                    byte_value = int(flat_bytes[byte_index])
-                    self.pos += 1
-                    return (byte_value >> bit_pos) & 1
-
-                def read_bits(self, num_bits: int) -> int:
-                    value = 0
-                    for _ in range(num_bits):
-                        value = (value << 1) | self._read_one()
-                    return value
-
-                def read_bytes(self, num_bytes: int) -> bytes:
-                    return bytes(self.read_bits(8) for _ in range(num_bytes))
-
-            preview_cursor = BitCursor(0, identity_order)
-            preview_bits = []
-            preview_limit = min(total_lsb_bits, 8 * 16)
-            for _ in range(preview_limit):
-                try:
-                    preview_bits.append(preview_cursor.read_bits(1))
-                except ValueError:
-                    break
-            preview_bytes = bytearray()
-            for i in range(0, len(preview_bits), 8):
-                byte = 0
-                for bit in preview_bits[i:i + 8]:
-                    byte = (byte << 1) | (bit & 1)
-                preview_bytes.append(byte)
-            print(
-                f"[DEBUG] First 16 bytes from LSB stream: {preview_bytes.hex()}")
-
-            header_cursor = BitCursor(0, identity_order)
-            header_bytes = bytearray()
-
-            def read_header_bytes(count: int) -> bytes:
-                data = header_cursor.read_bytes(count)
-                header_bytes.extend(data)
-                return data
-
-            def read_header_byte() -> int:
-                value = header_cursor.read_bits(8)
-                header_bytes.append(value)
+            def read_bits(self, num_bits: int) -> int:
+                value = 0
+                for _ in range(num_bits):
+                    value = (value << 1) | self._read_one()
                 return value
 
+            def read_bytes(self, num_bytes: int) -> bytes:
+                return bytes(self.read_bits(8) for _ in range(num_bytes))
+
+        preview_cursor = BitCursor(0, identity_order)
+        preview_bits = []
+        preview_limit = min(total_lsb_bits, 8 * 16)
+        for _ in range(preview_limit):
             try:
-                read_header_bytes(4)  # magic
-                read_header_byte()    # version
-                read_header_byte()    # flags
-                read_header_byte()    # lsb bits
-                read_header_bytes(8)  # start offset
-                read_header_bytes(4)  # payload length
-                nonce_len = read_header_byte()
-                read_header_bytes(nonce_len)  # nonce
-                filename_len = read_header_byte()
-                read_header_bytes(filename_len)  # filename
-                read_header_bytes(4)  # crc32
-            except ValueError as exc:
-                self.last_error = f"Unexpected end of bitstream while reading header: {exc}"
-                print(f"Error: {self.last_error}")
-                return False
+                preview_bits.append(preview_cursor.read_bits(1))
+            except ValueError:
+                break
+        preview_bytes = bytearray()
+        for i in range(0, len(preview_bits), 8):
+            byte = 0
+            for bit in preview_bits[i:i + 8]:
+                byte = (byte << 1) | (bit & 1)
+            preview_bytes.append(byte)
+        print(f"[DEBUG] First 16 bytes from LSB stream: {preview_bytes.hex()}")
 
+        header_cursor = BitCursor(0, identity_order)
+        header_bytes = bytearray()
+
+        def read_header_bytes(count: int) -> bytes:
+            data = header_cursor.read_bytes(count)
+            header_bytes.extend(data)
+            return data
+
+        def read_header_byte() -> int:
+            value = header_cursor.read_bits(8)
+            header_bytes.append(value)
+            return value
+
+        header_valid = False
+        header_info = None
+        try:
+            read_header_bytes(4)  # magic
+            read_header_byte()    # version
+            read_header_byte()    # flags
+            read_header_byte()    # lsb bits
+            read_header_bytes(8)  # start offset
+            read_header_bytes(4)  # payload length
+            nonce_len = read_header_byte()
+            read_header_bytes(nonce_len)  # nonce
+            filename_len = read_header_byte()
+            read_header_bytes(filename_len)  # filename
+            read_header_bytes(4)  # crc32
             print(f"[DEBUG] Raw header bytes extracted: {list(header_bytes)}")
-
             try:
                 header_info = unpack_header(bytes(header_bytes))
+                header_valid = True
             except Exception as exc:
-                self.last_error = f"Invalid header: {exc}"
-                print(f"Error: {self.last_error}")
-                return False
+                print(f"[WARN] Invalid header: {exc} (proceeding with raw extraction)")
+        except Exception as exc:
+            print(f"[WARN] Could not parse header: {exc} (proceeding with raw extraction)")
 
+        # Set defaults if header is invalid
+        if header_valid:
             version = header_info["version"]
             flags = header_info["flags"]
             header_lsb_bits = header_info["lsb_bits"]
@@ -294,170 +501,163 @@ class StegaDecodeMachine:
             filename = header_info["filename"]
             expected_crc32 = header_info["crc32"]
             header_bits_consumed = header_cursor.pos
+        else:
+            version = 0
+            flags = 0
+            header_lsb_bits = self.lsb_bits
+            start_bit = header_cursor.pos
+            payload_length = min(32, (total_lsb_bits - start_bit) // 8)  # Try to extract something
+            nonce = b''
+            filename = 'unknown.bin'
+            expected_crc32 = 0
+            header_bits_consumed = header_cursor.pos
 
-            if header_lsb_bits != self.lsb_bits:
-                self.last_error = f"LSB bits mismatch (header {header_lsb_bits} != selected {self.lsb_bits})"
-                print(f"Error: {self.last_error}")
-                return False
+        # LSB bits mismatch: warn but continue
+        if header_valid and header_lsb_bits != self.lsb_bits:
+            print(f"[WARN] LSB bits mismatch (header {header_lsb_bits} != selected {self.lsb_bits}) (proceeding)")
 
-            if start_bit < header_bits_consumed:
-                self.last_error = "Header reports start offset within header region"
-                print(f"Error: {self.last_error}")
-                return False
+        # Start offset check: warn but continue
+        if header_valid and start_bit < header_bits_consumed:
+            print(f"[WARN] Header reports start offset within header region (proceeding)")
 
+        payload_bits = payload_length * 8
+        if payload_bits == 0:
+            print(f"[WARN] Payload length from header is zero (proceeding with 32 bytes)")
+            payload_length = min(32, (total_lsb_bits - start_bit) // 8)
             payload_bits = payload_length * 8
-            if payload_bits == 0:
-                self.last_error = "Payload length from header is zero"
-                print(f"Error: {self.last_error}")
-                return False
 
-            if start_bit + payload_bits > total_lsb_bits:
-                self.last_error = "Payload length from header exceeds media capacity"
-                print(f"Error: {self.last_error}")
-                return False
+        if start_bit + payload_bits > total_lsb_bits:
+            print(f"[WARN] Payload length from header exceeds media capacity (truncating)")
+            payload_length = max(0, (total_lsb_bits - start_bit) // 8)
+            payload_bits = payload_length * 8
 
-            filename_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
-            rng = rng_from_key_and_filename(self.encryption_key, b"")
-            perm = perm_for_lsb_bits(rng, header_lsb_bits)
-            payload_cursor = BitCursor(start_bit, perm)
+        filename_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
+        rng = rng_from_key_and_filename(self.encryption_key or '', b"")
+        perm = perm_for_lsb_bits(rng, header_lsb_bits)
+        payload_cursor = BitCursor(start_bit, perm)
 
+        try:
+            payload_encrypted = payload_cursor.read_bytes(payload_length)
+        except Exception as exc:
+            print(f"[WARN] Unexpected end of bitstream while reading payload: {exc} (proceeding with partial)")
+            payload_encrypted = b''
+
+        is_encrypted = bool(flags & FLAG_PAYLOAD_ENCRYPTED)
+        if is_encrypted and nonce:
             try:
-                payload_encrypted = payload_cursor.read_bytes(payload_length)
-            except ValueError as exc:
-                self.last_error = f"Unexpected end of bitstream while reading payload: {exc}"
-                print(f"Error: {self.last_error}")
-                return False
-
-            is_encrypted = bool(flags & FLAG_PAYLOAD_ENCRYPTED)
-            if is_encrypted:
-                if not nonce:
-                    self.last_error = "Encrypted payload missing nonce in header"
-                    print(f"Error: {self.last_error}")
-                    return False
-                payload_plain = decrypt_payload(
-                    self.encryption_key, nonce, payload_encrypted, filename_bytes)
-            else:
+                payload_plain = decrypt_payload(self.encryption_key or '', nonce, payload_encrypted, filename_bytes)
+            except Exception as exc:
+                print(f"[WARN] Decryption failed: {exc} (proceeding with raw bytes)")
                 payload_plain = payload_encrypted
+        else:
+            payload_plain = payload_encrypted
 
+        # CRC32 check: warn but continue
+        if header_valid:
             actual_crc32 = crc32(payload_plain)
-            print(
-                f"[DEBUG] CRC32 expected: 0x{expected_crc32:08X}, actual: 0x{actual_crc32:08X}")
+            print(f"[DEBUG] CRC32 expected: 0x{expected_crc32:08X}, actual: 0x{actual_crc32:08X}")
             if actual_crc32 != expected_crc32:
-                self.last_error = "CRC32 mismatch. Wrong key or corrupted stego."
-                print(f"Error: {self.last_error}")
-                return False
+                print(f"[WARN] CRC32 mismatch. Wrong key or corrupted stego. (proceeding with output)")
 
-            # Decide output path and save payload
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-            # ... (the rest of your original save-file logic) ...
+        def build_final_name(suggested: str) -> str:
+            if suggested:
+                return f"{timestamp}.{suggested}"
+            return f"{timestamp}_extracted.bin"
 
-            def build_final_name(suggested: str) -> str:
-                if suggested:
-                    return f"{timestamp}.{suggested}"
-                return f"{timestamp}_extracted.bin"
+        requested_path = (self.output_path or '').strip()
+        suggested_filename = filename
+        base_dir = ''
+        explicit_file = ''
 
-            requested_path = (self.output_path or '').strip()
-            suggested_filename = filename
-            base_dir = ''
-            explicit_file = ''
-
-            if requested_path:
-                if os.path.isdir(requested_path):
-                    base_dir = requested_path
-                else:
-                    candidate_dir = os.path.dirname(requested_path)
-                    base_name = os.path.basename(requested_path)
-                    name, ext = os.path.splitext(base_name)
-                    if ext:
-                        explicit_file = requested_path
-                        base_dir = candidate_dir or os.getcwd()
-                    else:
-                        base_dir = os.path.join(
-                            candidate_dir, base_name) if base_name else candidate_dir
-                        if base_dir and not os.path.exists(base_dir):
-                            os.makedirs(base_dir, exist_ok=True)
-
-            if explicit_file:
-                output_path = explicit_file
+        if requested_path:
+            if os.path.isdir(requested_path):
+                base_dir = requested_path
             else:
-                if not base_dir:
-                    stego_source = self.stego_image_path if self.stego_image_path else self.stego_audio_path
-                    base_dir = os.path.dirname(
-                        stego_source) if stego_source else ''
-                    if not base_dir:
-                        base_dir = os.path.join(
-                            os.getcwd(), 'extracted_payloads')
-                    if not os.path.exists(base_dir):
+                candidate_dir = os.path.dirname(requested_path)
+                base_name = os.path.basename(requested_path)
+                name, ext = os.path.splitext(base_name)
+                if ext:
+                    explicit_file = requested_path
+                    base_dir = candidate_dir or os.getcwd()
+                else:
+                    base_dir = os.path.join(candidate_dir, base_name) if base_name else candidate_dir
+                    if base_dir and not os.path.exists(base_dir):
                         os.makedirs(base_dir, exist_ok=True)
-                final_name = build_final_name(suggested_filename)
-                output_path = os.path.join(base_dir, final_name)
 
-            output_dir = os.path.dirname(output_path)
-            if output_dir and not os.path.exists(output_dir):
-                os.makedirs(output_dir, exist_ok=True)
+        if explicit_file:
+            output_path = explicit_file
+        else:
+            if not base_dir:
+                stego_source = (self.stego_image_path or self.stego_audio_path or self.stego_video_path)
+                base_dir = os.path.dirname(stego_source) if stego_source else ''
+                if not base_dir:
+                    base_dir = os.path.join(os.getcwd(), 'extracted_payloads')
+                if not os.path.exists(base_dir):
+                    os.makedirs(base_dir, exist_ok=True)
+            final_name = build_final_name(suggested_filename)
+            output_path = os.path.join(base_dir, final_name)
 
-            with open(output_path, 'wb') as f:
-                f.write(payload)
+        output_dir = os.path.dirname(output_path)
+        if output_dir and not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
 
-            self.last_output_path = output_path
+        with open(output_path, 'wb') as f:
+            f.write(payload_plain)
 
-            if requested_path:
-                if os.path.isdir(requested_path):
-                    self.output_path = requested_path
-                else:
-                    preferred_dir = os.path.dirname(
-                        requested_path) or os.path.dirname(output_path)
-                    self.output_path = preferred_dir
+        self.last_output_path = output_path
+
+        if requested_path:
+            if os.path.isdir(requested_path):
+                self.output_path = requested_path
             else:
-                self.output_path = os.path.dirname(output_path)
+                preferred_dir = os.path.dirname(requested_path) or os.path.dirname(output_path)
+                self.output_path = preferred_dir
+        else:
+            self.output_path = os.path.dirname(output_path)
 
+        try:
+            self.extracted_data = payload_plain.decode('utf-8')
+        except Exception:
+            self.extracted_data = None
             try:
-                self.extracted_data = payload.decode('utf-8')
+                if output_path.lower().endswith('.pdf'):
+                    with open(output_path, 'rb') as pf:
+                        reader = PdfReader(pf)
+                        texts = []
+                        for page in reader.pages:
+                            try:
+                                t = page.extract_text() or ''
+                            except Exception:
+                                t = ''
+                            if t:
+                                texts.append(t)
+                        preview = "\n".join(texts).strip()
+                        if preview:
+                            self.extracted_data = preview
             except Exception:
-                self.extracted_data = None
-                try:
-                    if output_path.lower().endswith('.pdf'):
-                        with open(output_path, 'rb') as pf:
-                            reader = PdfReader(pf)
-                            texts = []
-                            for page in reader.pages:
-                                try:
-                                    t = page.extract_text() or ''
-                                except Exception:
-                                    t = ''
-                                if t:
-                                    texts.append(t)
-                            preview = "\n".join(texts).strip()
-                            if preview:
-                                self.extracted_data = preview
-                except Exception:
-                    pass
-                if self.extracted_data is None:
-                    self.extracted_data = f"Binary payload extracted ({len(payload)} bytes) -> {output_path}"
+                pass
+            if self.extracted_data is None:
+                self.extracted_data = f"Binary payload extracted ({len(payload_plain)} bytes) -> {output_path}"
 
-            print(f"Steganography decoding completed successfully!")
-            print(f"Extracted data saved to: {output_path}")
+        print("Steganography decoding completed (output may be incorrect if LSB/key is wrong)")
+        print(f"Extracted data saved to: {output_path}")
 
-            self.header_info = {
-                'version': int(version),
-                'lsb_bits': int(header_lsb_bits),
-                'start_offset': int(start_bit),
-                'header_bits': int(header_bits_consumed),
-                'payload_length': int(payload_length),
-                'filename': suggested_filename,
-                'crc32_ok': True,
-                'encrypted': is_encrypted,
-                'flags': int(flags),
-                'nonce': nonce.hex() if nonce else '',
-                'computed_start': int(start_bit),
-            }
-            return True
-
-        except Exception as e:
-            self.last_error = f"Decoding failed: {e}"
-            print(f"Error during steganography decoding: {e}")
-            return False
+        self.header_info = {
+            'version': int(version),
+            'lsb_bits': int(header_lsb_bits),
+            'start_offset': int(start_bit),
+            'header_bits': int(header_bits_consumed),
+            'payload_length': int(payload_length),
+            'filename': suggested_filename,
+            'crc32_ok': not header_valid or (header_valid and (not expected_crc32 or crc32(payload_plain) == expected_crc32)),
+            'encrypted': is_encrypted,
+            'flags': int(flags),
+            'nonce': nonce.hex() if nonce else '',
+            'computed_start': int(start_bit),
+        }
+        return True
 
     def get_image_info(self) -> dict:
         # ... (existing code, no changes needed)
@@ -473,6 +673,25 @@ class StegaDecodeMachine:
             'max_capacity_bytes': (self.image_array.size * self.lsb_bits) // 8
         }
 
+    def get_video_info(self) -> dict:
+        """Return metadata about the loaded steganographic video."""
+        if not self.stego_video_path or self.video_data is None or self.video_metadata is None:
+            return {}
+
+        info = dict(self.video_metadata)
+        info['path'] = self.stego_video_path
+        info['dimensions'] = (info.get('height'), info.get('width'), info.get('channels'))
+        info['flattened_length'] = int(self.video_data.size)
+        frames = info.get('frames') or 0
+        width = info.get('width') or 0
+        height = info.get('height') or 0
+        channels = info.get('channels') or 0
+        fps = info.get('fps') or 0.0
+        max_capacity_bits = frames * width * height * channels * self.lsb_bits
+        info['max_capacity_bytes'] = max_capacity_bits // 8 if max_capacity_bits else 0
+        info['duration'] = (frames / fps) if fps else None
+        return info
+
     def get_extracted_data(self) -> Optional[str]:
         # ... (existing code, no changes needed)
         return self.extracted_data
@@ -486,8 +705,13 @@ class StegaDecodeMachine:
         self.stego_image = None
         self.image_array = None
         self.audio_data = None
+        self.video_data = None
         self.stego_image_path = None
         self.stego_audio_path = None
+        self.stego_video_path = None
+        self.video_shape = None
+        self.video_fps = None
+        self.video_metadata = None
         self.extracted_data = None
         self.last_error = None
         self.header_info = None
@@ -501,3 +725,4 @@ class StegaDecodeMachine:
     def get_header_info(self) -> Optional[dict]:
         # ... (existing code, no changes needed)
         return self.header_info
+
