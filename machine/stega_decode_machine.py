@@ -1,4 +1,9 @@
 import os
+import json
+import base64
+import tempfile
+import subprocess
+import shutil
 from typing import List, Optional, Tuple
 from datetime import datetime
 
@@ -6,6 +11,16 @@ import numpy as np
 from PIL import Image
 from PyPDF2 import PdfReader
 import wave
+from pathlib import Path
+
+try:
+    import cv2
+except ImportError:  # pragma: no cover - optional dependency for video handling
+    cv2 = None
+try:
+    from stegano import lsb
+except Exception:
+    lsb = None
 
 from machine.stega_spec import (
     FLAG_PAYLOAD_ENCRYPTED,
@@ -27,6 +42,7 @@ class StegaDecodeMachine:
         """Initialize the steganography decoding machine"""
         self.stego_image_path: Optional[str] = None
         self.stego_audio_path: Optional[str] = None
+        self.stego_video_path: Optional[str] = None
         self.lsb_bits: int = 1
         self.encryption_key: Optional[str] = None
         self.output_path: Optional[str] = None
@@ -35,6 +51,10 @@ class StegaDecodeMachine:
         self.stego_image: Optional[Image.Image] = None
         self.image_array: Optional[np.ndarray] = None
         self.audio_data: Optional[np.ndarray] = None
+        self.video_data: Optional[np.ndarray] = None
+        self.video_shape: Optional[Tuple[int, int, int, int]] = None
+        self.video_fps: Optional[float] = None
+        self.video_metadata: Optional[dict] = None
         
         # Internal state for results
         self.extracted_data: Optional[str] = None
@@ -103,6 +123,35 @@ class StegaDecodeMachine:
             print(f"Error: {self.last_error}")
             return False
 
+    def set_stego_video(self, video_path: str) -> bool:
+        """Register a steganographic video path. Frame extraction will be done at decode time.
+
+        We avoid relying on OpenCV's container/codec support here because PNG-in-AVI
+        may not be readable by default on some Windows OpenCV builds. Instead, we
+        defer to ffmpeg during the actual decode to extract frames reliably.
+        """
+        try:
+            self._reset_media()
+            if not os.path.exists(video_path):
+                self.last_error = f"Steganographic video not found: {video_path}"
+                print(f"Error: {self.last_error}")
+                return False
+
+            # We don't pre-parse frames here. Store path and proceed.
+            self.stego_video_path = video_path
+            self.video_data = None
+            self.video_shape = None
+            self.video_fps = None
+            self.video_metadata = None
+            self.last_error = None
+            print(f"Steganographic video selected: {video_path}")
+            return True
+
+        except Exception as e:
+            self.last_error = f"Error loading steganographic video: {e}"
+            print(f"Error: {self.last_error}")
+            return False
+
     def _reset_media(self):
         """Clears all loaded media data."""
         self.stego_image = None
@@ -110,6 +159,11 @@ class StegaDecodeMachine:
         self.stego_image_path = None
         self.audio_data = None
         self.stego_audio_path = None
+        self.video_data = None
+        self.stego_video_path = None
+        self.video_shape = None
+        self.video_fps = None
+        self.video_metadata = None
 
     def set_lsb_bits(self, bits: int) -> bool:
         # ... (existing code, no changes needed)
@@ -135,7 +189,7 @@ class StegaDecodeMachine:
         """
         Validate all inputs before processing.
         """
-        if not self.stego_image_path and not self.stego_audio_path:
+        if not self.stego_image_path and not self.stego_audio_path and not self.stego_video_path:
             return False, "Steganographic media not selected"
             
         if self.stego_image_path and self.image_array is None:
@@ -143,6 +197,8 @@ class StegaDecodeMachine:
             
         if self.stego_audio_path and self.audio_data is None:
             return False, "Steganographic audio not loaded properly"
+
+        # For videos, we defer frame extraction to decode time using ffmpeg.
 
         if not self.output_path:
             return False, "Output path not specified"
@@ -158,8 +214,13 @@ class StegaDecodeMachine:
             self.last_error = error_msg
             print(f"Validation failed: {error_msg}")
             return False
-            
-        # Determine which media to decode from
+
+        # If video is provided, use frame-based stegano decode (no header)
+        if self.stego_video_path:
+            ok = self._extract_from_video_frames(self.stego_video_path)
+            return ok
+
+        # Determine which media to decode from for image/audio (header-based)
         if self.stego_image_path:
             media_array = self.image_array
         elif self.stego_audio_path:
@@ -169,6 +230,164 @@ class StegaDecodeMachine:
             return False
 
         return self._extract_from_media(media_array)
+
+    def _extract_from_video_frames(self, video_path: str) -> bool:
+        """Decode message segments embedded per-frame using stegano.lsb and reconstruct payload.
+
+        This matches the simple LSB per-frame method: each frame may contain a chunk of
+        text embedded via stegano.lsb.hide. We concatenate all non-empty reveals
+        (in frame order) until we hit the first None, then attempt to parse JSON
+        metadata {filename, kind, payload} where payload is base64 of the original bytes.
+        If parsing fails, we save the concatenated text as a .txt file.
+        """
+        if lsb is None:
+            self.last_error = "Python package 'stegano' is required for video decoding."
+            print(f"Error: {self.last_error}")
+            return False
+
+        # Extract frames to a temporary directory as PNGs using ffmpeg for robust support
+        ffmpeg = shutil.which('ffmpeg')
+        if not ffmpeg:
+            self.last_error = "ffmpeg is required to extract video frames for decoding."
+            print(f"Error: {self.last_error}")
+            return False
+
+        temp_dir = Path(tempfile.mkdtemp(prefix="stego_video_decode_"))
+        frames_dir = temp_dir / "frames"
+        try:
+            frames_dir.mkdir(parents=True, exist_ok=True)
+            pattern = f"{frames_dir.as_posix()}/%06d.png"
+            cmd = [
+                ffmpeg, '-y', '-hide_banner', '-loglevel', 'error',
+                '-i', video_path,
+                '-vsync', '0',
+                pattern,
+            ]
+            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            if result.returncode != 0:
+                detail = result.stderr.decode(errors='ignore').strip()
+                self.last_error = f"Failed to extract frames with ffmpeg: {detail}"
+                print(f"Error: {self.last_error}")
+                return False
+            count = len(list(frames_dir.glob('*.png')))
+            if count == 0:
+                self.last_error = "Video has no frames after extraction"
+                print(f"Error: {self.last_error}")
+                return False
+
+            # Reveal segments across all frames (skip frames without hidden text)
+            segments: List[tuple[int, str]] = []
+            for idx in range(count):
+                fpath = frames_dir / f"{idx:06d}.png"
+                try:
+                    dec = lsb.reveal(str(fpath))
+                except Exception:
+                    dec = None
+                if dec:
+                    segments.append((idx, dec))
+
+            if not segments:
+                self.last_error = "No hidden data found in video frames"
+                print(f"Error: {self.last_error}")
+                return False
+
+            # Concatenate segments in frame order
+            joined = "".join(seg for _, seg in segments)
+            first_idxs = [i for i, _ in segments][:8]
+            print(f"[VIDEO DECODE] segments_found={len(segments)}, first_frames={first_idxs}")
+
+            # Determine output path base
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            base_dir = self.output_path if (self.output_path and os.path.isdir(self.output_path)) else os.path.dirname(video_path)
+            if not base_dir:
+                base_dir = os.getcwd()
+
+            out_path: Optional[str] = None
+            saved_bytes = False
+            preview_text: Optional[str] = None
+
+            # Try JSON envelope first (supports encrypted or plaintext inner JSON)
+            try:
+                env = json.loads(joined)
+                inner_json_bytes: Optional[bytes] = None
+                if isinstance(env, dict) and env.get('v') == 1:
+                    # Enforce LSB bits match if present
+                    env_bits = env.get('b')
+                    if isinstance(env_bits, int) and 1 <= env_bits <= 8:
+                        if env_bits != self.lsb_bits:
+                            raise ValueError(f"LSB bits mismatch for video envelope (stego {env_bits} != selected {self.lsb_bits})")
+                    if env.get('enc') is True:
+                        # Encrypted envelope requires a key
+                        if not self.encryption_key or not self.encryption_key.strip():
+                            raise ValueError('Encrypted video payload requires a decryption key')
+                        nonce_b64 = env.get('nonce')
+                        ct_b64 = env.get('ct')
+                        if not nonce_b64 or not ct_b64:
+                            raise ValueError('Missing nonce or ciphertext in envelope')
+                        nonce = base64.b64decode(nonce_b64)
+                        ct = base64.b64decode(ct_b64)
+                        inner_json_bytes = decrypt_payload(self.encryption_key, nonce, ct, context=b'video-json')
+                    else:
+                        # Plaintext envelope carries base64 of inner JSON in 'pt'
+                        pt_b64 = env.get('pt')
+                        if not pt_b64:
+                            raise ValueError('Missing plaintext payload in envelope')
+                        inner_json_bytes = base64.b64decode(pt_b64)
+                else:
+                    # Legacy direct metadata structure
+                    if isinstance(env, dict) and 'payload' in env:
+                        inner_json_bytes = json.dumps(env, ensure_ascii=True).encode('utf-8')
+
+                if inner_json_bytes is not None:
+                    inner = json.loads(inner_json_bytes.decode('utf-8'))
+                    b64 = inner.get('payload')
+                    fname = inner.get('filename') or 'payload.bin'
+                    raw = base64.b64decode(b64)
+                    # If user specified an explicit file (with extension) in output_path, honor it
+                    if self.output_path and os.path.splitext(self.output_path)[1]:
+                        out_path = self.output_path
+                    else:
+                        out_path = os.path.join(base_dir, f"{ts}.{fname}")
+                    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                    with open(out_path, 'wb') as f:
+                        f.write(raw)
+                    saved_bytes = True
+                    try:
+                        preview_text = raw.decode('utf-8')
+                    except Exception:
+                        preview_text = None
+            except Exception:
+                pass
+
+            # Fallback: treat as plain text and save
+            if not saved_bytes:
+                if self.output_path and os.path.splitext(self.output_path)[1]:
+                    out_path = self.output_path
+                else:
+                    out_path = os.path.join(base_dir, f"{ts}_extracted.txt")
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                with open(out_path, 'w', encoding='utf-8') as f:
+                    f.write(joined)
+                preview_text = joined
+
+            self.last_output_path = out_path
+            self.extracted_data = preview_text or f"Binary payload extracted -> {out_path}"
+            self.header_info = {
+                'video_frames_scanned': count,
+                'segments_found': len(segments),
+                'segment_frames': [i for (i, _) in segments][:16],
+                'saved_to': out_path,
+                'mode': 'per-frame-lsb',
+            }
+            print("Steganography decoding (video frames) completed successfully!")
+            print(f"Extracted data saved to: {out_path}")
+            return True
+        except Exception as e:
+            self.last_error = f"Video frame decode failed: {e}"
+            print(f"Error: {self.last_error}")
+            return False
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
         
     def _extract_from_media(self, media_array: np.ndarray) -> bool:
         """
@@ -371,7 +590,7 @@ class StegaDecodeMachine:
                 output_path = explicit_file
             else:
                 if not base_dir:
-                    stego_source = self.stego_image_path if self.stego_image_path else self.stego_audio_path
+                    stego_source = (self.stego_image_path or self.stego_audio_path or self.stego_video_path)
                     base_dir = os.path.dirname(stego_source) if stego_source else ''
                     if not base_dir:
                         base_dir = os.path.join(os.getcwd(), 'extracted_payloads')
@@ -444,6 +663,7 @@ class StegaDecodeMachine:
             self.last_error = f"Decoding failed: {e}"
             print(f"Error during steganography decoding: {e}")
             return False
+
     def get_image_info(self) -> dict:
         # ... (existing code, no changes needed)
         if self.stego_image is None:
@@ -457,7 +677,26 @@ class StegaDecodeMachine:
             'format': self.stego_image.format,
             'max_capacity_bytes': (self.image_array.size * self.lsb_bits) // 8
         }
-        
+
+    def get_video_info(self) -> dict:
+        """Return metadata about the loaded steganographic video."""
+        if not self.stego_video_path or self.video_data is None or self.video_metadata is None:
+            return {}
+
+        info = dict(self.video_metadata)
+        info['path'] = self.stego_video_path
+        info['dimensions'] = (info.get('height'), info.get('width'), info.get('channels'))
+        info['flattened_length'] = int(self.video_data.size)
+        frames = info.get('frames') or 0
+        width = info.get('width') or 0
+        height = info.get('height') or 0
+        channels = info.get('channels') or 0
+        fps = info.get('fps') or 0.0
+        max_capacity_bits = frames * width * height * channels * self.lsb_bits
+        info['max_capacity_bytes'] = max_capacity_bits // 8 if max_capacity_bits else 0
+        info['duration'] = (frames / fps) if fps else None
+        return info
+
     def get_extracted_data(self) -> Optional[str]:
         # ... (existing code, no changes needed)
         return self.extracted_data
@@ -471,8 +710,13 @@ class StegaDecodeMachine:
         self.stego_image = None
         self.image_array = None
         self.audio_data = None
+        self.video_data = None
         self.stego_image_path = None
         self.stego_audio_path = None
+        self.stego_video_path = None
+        self.video_shape = None
+        self.video_fps = None
+        self.video_metadata = None
         self.extracted_data = None
         self.last_error = None
         self.header_info = None

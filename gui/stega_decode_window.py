@@ -656,9 +656,24 @@ class StegaDecodeWindow(QMainWindow):
                 print(f"✅ AUDIO loaded: {os.path.basename(file_path)}")
             else:
                 print(f"❌ Error loading steganographic audio: {file_path}")
+        elif media_type == 'video':
+            if self.machine.set_stego_video(file_path):
+                info = self.machine.get_video_info() or {}
+                frames = info.get('frames', 'n/a')
+                dims = info.get('dimensions') or ('n/a', 'n/a', 'n/a')
+                fps = info.get('fps', 0.0) or 0.0
+                capacity = info.get('max_capacity_bytes', 0)
+                print(f"✅ VIDEO loaded: {os.path.basename(file_path)}")
+                if isinstance(dims, tuple) and len(dims) == 3:
+                    height, width, _ = dims
+                else:
+                    height = width = 'n/a'
+                print(f"Frames: {frames}, resolution: {width}x{height}, fps: {fps:.2f}")
+                print(f"Capacity (approx.): {capacity} bytes at {self.machine.lsb_bits} LSBs")
+            else:
+                print(f"❌ Error loading steganographic video: {file_path}")
         else:
-            # For video, we'll need to extend the machine
-            print(f"✅ {media_type.upper()} loaded: {os.path.basename(file_path)}")
+            print(f"❌ Unsupported media type: {media_type}")
 
     def choose_output_path(self):
         """Choose output folder; file will be auto-named (datetime.<header_filename>)."""
@@ -680,7 +695,9 @@ class StegaDecodeWindow(QMainWindow):
 
         # Set default output path if none specified
         if not self.output_path.text().strip():
-            stego_source = self.machine.stego_image_path or self.machine.stego_audio_path
+            stego_source = (self.machine.stego_image_path or
+                            self.machine.stego_audio_path or
+                            self.machine.stego_video_path)
             base_dir = os.path.dirname(stego_source) if stego_source else os.path.join(os.getcwd(), 'extracted_payloads')
             if not os.path.exists(base_dir):
                 os.makedirs(base_dir, exist_ok=True)
