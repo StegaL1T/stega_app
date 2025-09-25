@@ -15,7 +15,7 @@ import random
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar, QApplication,
-                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget, QSpacerItem)
+                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget, QSpacerItem, QScrollArea)
 from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QLinearGradient, QBrush
 import numpy as np
@@ -701,7 +701,7 @@ class SteganalysisWindow(QMainWindow):
             "Analysis results will appear here...")
         img_results_layout.addWidget(self.img_results_text)
 
-        # Image charts
+        # Image charts with scrollable area
         image_charts_group = QGroupBox("📊 Image Charts")
         image_charts_group.setStyleSheet("""
             QGroupBox {
@@ -719,15 +719,45 @@ class SteganalysisWindow(QMainWindow):
                 padding: 0 5px 0 5px;
             }
         """)
-        image_charts_layout = QGridLayout(image_charts_group)
-        # Larger canvases for readability
-        self.img_canvas_lsb = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
-        self.img_canvas_diff = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
-        self.img_canvas_hist = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
-        # No minimum size constraints - let charts fit naturally like audio charts
-        image_charts_layout.addWidget(self.img_canvas_lsb, 0, 0)
-        image_charts_layout.addWidget(self.img_canvas_diff, 0, 1)
-        image_charts_layout.addWidget(self.img_canvas_hist, 1, 0, 1, 2)
+        
+        # Create scrollable area for charts
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                background-color: rgba(69,237,242,0.2);
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: rgba(69,237,242,0.6);
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: rgba(69,237,242,0.8);
+            }
+            QScrollBar:horizontal {
+                background-color: rgba(69,237,242,0.2);
+                height: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: rgba(69,237,242,0.6);
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: rgba(69,237,242,0.8);
+            }
+        """)
+        
 
         img_stats_group = QGroupBox("📈 Statistics")
         img_stats_group.setStyleSheet("""
@@ -763,11 +793,113 @@ class SteganalysisWindow(QMainWindow):
             "Image statistics will appear here...")
         img_stats_layout.addWidget(self.img_stats_text)
 
+        # Create single scrollable area for all charts
+        charts_scroll = QScrollArea()
+        charts_scroll.setWidgetResizable(True)
+        charts_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        charts_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        charts_scroll.setStyleSheet("""
+            QScrollArea {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: white;
+            }
+            QScrollBar:vertical {
+                background-color: rgba(69,237,242,0.2);
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: rgba(69,237,242,0.6);
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: rgba(69,237,242,0.8);
+            }
+            QScrollBar:horizontal {
+                background-color: rgba(69,237,242,0.2);
+                height: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: rgba(69,237,242,0.6);
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: rgba(69,237,242,0.8);
+            }
+        """)
+        
+        # Create container for vertical chart layout
+        charts_widget = QWidget()
+        charts_widget_layout = QVBoxLayout(charts_widget)
+        charts_widget_layout.setSpacing(20)
+        charts_widget_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Create canvases that fit container width
+        self.img_canvas_lsb = FigureCanvas(Figure(figsize=(10, 4), dpi=100))
+        self.img_canvas_diff = FigureCanvas(Figure(figsize=(10, 4), dpi=100))
+        self.img_canvas_hist = FigureCanvas(Figure(figsize=(10, 4), dpi=100))
+        
+        # Set size policy to fit container width
+        self.img_canvas_lsb.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.img_canvas_diff.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.img_canvas_hist.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        
+        # Set fixed height but let width expand
+        self.img_canvas_lsb.setFixedHeight(400)
+        self.img_canvas_diff.setFixedHeight(400)
+        self.img_canvas_hist.setFixedHeight(400)
+        
+        # Add charts vertically to the container
+        charts_widget_layout.addWidget(self.img_canvas_lsb)
+        charts_widget_layout.addWidget(self.img_canvas_diff)
+        charts_widget_layout.addWidget(self.img_canvas_hist)
+        charts_widget_layout.addStretch()  # Add stretch to push charts to top
+        
+        # Set the charts widget as the scroll area's widget
+        charts_scroll.setWidget(charts_widget)
+        
+        # Add scroll area to the image charts group
+        image_charts_layout = QVBoxLayout(image_charts_group)
+        image_charts_layout.addWidget(charts_scroll)
+        
         layout.addWidget(title)
         layout.addWidget(self.img_progress_bar)
-        layout.addWidget(img_results_group)
+        
+        # Create side-by-side layout for detection results and statistics (50:50)
+        results_stats_layout = QHBoxLayout()
+        results_stats_layout.setSpacing(20)
+        
+        # Left side: Detection Results (50%)
+        results_container = QWidget()
+        results_container.setMaximumWidth(400)  # Limit width for results
+        results_vertical_layout = QVBoxLayout(results_container)
+        results_vertical_layout.setSpacing(15)
+        results_vertical_layout.setContentsMargins(10, 10, 10, 10)
+        results_vertical_layout.addWidget(img_results_group)
+        results_vertical_layout.addStretch()  # Add stretch to push results to top
+        
+        # Right side: Statistics (50%)
+        stats_container = QWidget()
+        stats_container.setMaximumWidth(400)  # Limit width for statistics
+        stats_vertical_layout = QVBoxLayout(stats_container)
+        stats_vertical_layout.setSpacing(15)
+        stats_vertical_layout.setContentsMargins(10, 10, 10, 10)
+        stats_vertical_layout.addWidget(img_stats_group)
+        stats_vertical_layout.addStretch()  # Add stretch to push stats to top
+        
+        # Add both containers to results-stats layout
+        results_stats_layout.addWidget(results_container)
+        results_stats_layout.addWidget(stats_container)
+        
+        # Add results-stats layout to main layout
+        layout.addLayout(results_stats_layout)
+        
+        # Add charts section with proper header and border
         layout.addWidget(image_charts_group)
-        layout.addWidget(img_stats_group)
         # Export buttons in horizontal layout
         export_buttons_layout = QHBoxLayout()
         export_buttons_layout.setSpacing(10)
@@ -1031,6 +1163,22 @@ class SteganalysisWindow(QMainWindow):
         title.setStyleSheet(
             "color: #e8e8fc; margin-bottom: 10px; border: none;")
 
+        self.aud_progress_bar = QProgressBar()
+        self.aud_progress_bar.setVisible(False)
+        self.aud_progress_bar.setStyleSheet("""
+            QProgressBar { 
+                border: 2px solid rgba(69,237,242,0.6); 
+                border-radius: 8px; 
+                text-align: center; 
+                background-color: #0e1625;
+                color: #e8e8fc;
+            }
+            QProgressBar::chunk { 
+                background-color: #45edf2; 
+                border-radius: 6px; 
+            }
+        """)
+
         aud_results_group = QGroupBox("🎯 Detection Results")
         aud_results_group.setStyleSheet("""
             QGroupBox {
@@ -1081,13 +1229,78 @@ class SteganalysisWindow(QMainWindow):
                 padding: 0 5px 0 5px;
             }
         """)
-        audio_charts_layout = QGridLayout(audio_charts_group)
-        self.aud_canvas_wave = FigureCanvas(Figure(figsize=(3, 2)))
-        self.aud_canvas_spec = FigureCanvas(Figure(figsize=(3, 2)))
-        self.aud_canvas_entropy = FigureCanvas(Figure(figsize=(3, 2)))
-        audio_charts_layout.addWidget(self.aud_canvas_wave, 0, 0)
-        audio_charts_layout.addWidget(self.aud_canvas_spec, 0, 1)
-        audio_charts_layout.addWidget(self.aud_canvas_entropy, 1, 0, 1, 2)
+        # Create single scrollable area for all audio charts
+        audio_charts_scroll = QScrollArea()
+        audio_charts_scroll.setWidgetResizable(True)
+        audio_charts_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        audio_charts_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        audio_charts_scroll.setStyleSheet("""
+            QScrollArea {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: white;
+            }
+            QScrollBar:vertical {
+                background-color: rgba(69,237,242,0.2);
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: rgba(69,237,242,0.6);
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: rgba(69,237,242,0.8);
+            }
+            QScrollBar:horizontal {
+                background-color: rgba(69,237,242,0.2);
+                height: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: rgba(69,237,242,0.6);
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: rgba(69,237,242,0.8);
+            }
+        """)
+        
+        # Create container for vertical chart layout
+        audio_charts_widget = QWidget()
+        audio_charts_widget_layout = QVBoxLayout(audio_charts_widget)
+        audio_charts_widget_layout.setSpacing(20)
+        audio_charts_widget_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Create canvases that fit container width (reduced width to prevent cutoff)
+        self.aud_canvas_wave = FigureCanvas(Figure(figsize=(8, 4), dpi=100))
+        self.aud_canvas_spec = FigureCanvas(Figure(figsize=(8, 4), dpi=100))
+        self.aud_canvas_entropy = FigureCanvas(Figure(figsize=(8, 4), dpi=100))
+        
+        # Set size policy to fit container width
+        self.aud_canvas_wave.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.aud_canvas_spec.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.aud_canvas_entropy.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        
+        # Set fixed height but let width expand
+        self.aud_canvas_wave.setFixedHeight(400)
+        self.aud_canvas_spec.setFixedHeight(400)
+        self.aud_canvas_entropy.setFixedHeight(400)
+        
+        # Add charts vertically to the container
+        audio_charts_widget_layout.addWidget(self.aud_canvas_wave)
+        audio_charts_widget_layout.addWidget(self.aud_canvas_spec)
+        audio_charts_widget_layout.addWidget(self.aud_canvas_entropy)
+        audio_charts_widget_layout.addStretch()  # Add stretch to push charts to top
+        
+        # Set the charts widget as the scroll area's widget
+        audio_charts_scroll.setWidget(audio_charts_widget)
+        
+        # Add scroll area to the audio charts group
+        audio_charts_layout = QVBoxLayout(audio_charts_group)
+        audio_charts_layout.addWidget(audio_charts_scroll)
 
         aud_stats_group = QGroupBox("📈 Statistics")
         aud_stats_group.setStyleSheet("""
@@ -1169,9 +1382,39 @@ class SteganalysisWindow(QMainWindow):
         export_buttons_layout.addWidget(export_button)
 
         layout.addWidget(title)
-        layout.addWidget(aud_results_group)
+        layout.addWidget(self.aud_progress_bar)
+        
+        # Create side-by-side layout for detection results and statistics (50:50)
+        results_stats_layout = QHBoxLayout()
+        results_stats_layout.setSpacing(20)
+        
+        # Left side: Detection Results (50%)
+        results_container = QWidget()
+        results_container.setMaximumWidth(400)  # Limit width for results
+        results_vertical_layout = QVBoxLayout(results_container)
+        results_vertical_layout.setSpacing(15)
+        results_vertical_layout.setContentsMargins(10, 10, 10, 10)
+        results_vertical_layout.addWidget(aud_results_group)
+        results_vertical_layout.addStretch()  # Add stretch to push results to top
+        
+        # Right side: Statistics (50%)
+        stats_container = QWidget()
+        stats_container.setMaximumWidth(400)  # Limit width for statistics
+        stats_vertical_layout = QVBoxLayout(stats_container)
+        stats_vertical_layout.setSpacing(15)
+        stats_vertical_layout.setContentsMargins(10, 10, 10, 10)
+        stats_vertical_layout.addWidget(aud_stats_group)
+        stats_vertical_layout.addStretch()  # Add stretch to push stats to top
+        
+        # Add both containers to results-stats layout
+        results_stats_layout.addWidget(results_container)
+        results_stats_layout.addWidget(stats_container)
+        
+        # Add results-stats layout to main layout
+        layout.addLayout(results_stats_layout)
+        
+        # Add charts section with proper header and border
         layout.addWidget(audio_charts_group)
-        layout.addWidget(aud_stats_group)
         layout.addLayout(export_buttons_layout)
         layout.addStretch()
         return panel
@@ -1461,14 +1704,78 @@ class SteganalysisWindow(QMainWindow):
                 padding: 0 5px 0 5px;
             }
         """)
-        video_charts_layout = QGridLayout(video_charts_group)
-        self.vid_canvas_frame = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
-        self.vid_canvas_motion = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
-        self.vid_canvas_lsb = FigureCanvas(Figure(figsize=(3, 2), dpi=100))
-        # No minimum size constraints - let charts fit naturally like audio charts
-        video_charts_layout.addWidget(self.vid_canvas_frame, 0, 0)
-        video_charts_layout.addWidget(self.vid_canvas_motion, 0, 1)
-        video_charts_layout.addWidget(self.vid_canvas_lsb, 1, 0, 1, 2)
+        # Create single scrollable area for all video charts
+        video_charts_scroll = QScrollArea()
+        video_charts_scroll.setWidgetResizable(True)
+        video_charts_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        video_charts_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        video_charts_scroll.setStyleSheet("""
+            QScrollArea {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: white;
+            }
+            QScrollBar:vertical {
+                background-color: rgba(69,237,242,0.2);
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: rgba(69,237,242,0.6);
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: rgba(69,237,242,0.8);
+            }
+            QScrollBar:horizontal {
+                background-color: rgba(69,237,242,0.2);
+                height: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: rgba(69,237,242,0.6);
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: rgba(69,237,242,0.8);
+            }
+        """)
+        
+        # Create container for vertical chart layout
+        video_charts_widget = QWidget()
+        video_charts_widget_layout = QVBoxLayout(video_charts_widget)
+        video_charts_widget_layout.setSpacing(20)
+        video_charts_widget_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Create canvases that fit container width
+        self.vid_canvas_frame = FigureCanvas(Figure(figsize=(10, 4), dpi=100))
+        self.vid_canvas_motion = FigureCanvas(Figure(figsize=(10, 4), dpi=100))
+        self.vid_canvas_lsb = FigureCanvas(Figure(figsize=(10, 4), dpi=100))
+        
+        # Set size policy to fit container width
+        self.vid_canvas_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.vid_canvas_motion.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.vid_canvas_lsb.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        
+        # Set fixed height but let width expand
+        self.vid_canvas_frame.setFixedHeight(400)
+        self.vid_canvas_motion.setFixedHeight(400)
+        self.vid_canvas_lsb.setFixedHeight(400)
+        
+        # Add charts vertically to the container
+        video_charts_widget_layout.addWidget(self.vid_canvas_frame)
+        video_charts_widget_layout.addWidget(self.vid_canvas_motion)
+        video_charts_widget_layout.addWidget(self.vid_canvas_lsb)
+        video_charts_widget_layout.addStretch()  # Add stretch to push charts to top
+        
+        # Set the charts widget as the scroll area's widget
+        video_charts_scroll.setWidget(video_charts_widget)
+        
+        # Add scroll area to the video charts group
+        video_charts_layout = QVBoxLayout(video_charts_group)
+        video_charts_layout.addWidget(video_charts_scroll)
 
         vid_stats_group = QGroupBox("📈 Statistics")
         vid_stats_group.setStyleSheet("""
@@ -1551,9 +1858,38 @@ class SteganalysisWindow(QMainWindow):
 
         layout.addWidget(title)
         layout.addWidget(self.vid_progress_bar)
-        layout.addWidget(vid_results_group)
+        
+        # Create side-by-side layout for detection results and statistics (50:50)
+        results_stats_layout = QHBoxLayout()
+        results_stats_layout.setSpacing(20)
+        
+        # Left side: Detection Results (50%)
+        results_container = QWidget()
+        results_container.setMaximumWidth(400)  # Limit width for results
+        results_vertical_layout = QVBoxLayout(results_container)
+        results_vertical_layout.setSpacing(15)
+        results_vertical_layout.setContentsMargins(10, 10, 10, 10)
+        results_vertical_layout.addWidget(vid_results_group)
+        results_vertical_layout.addStretch()  # Add stretch to push results to top
+        
+        # Right side: Statistics (50%)
+        stats_container = QWidget()
+        stats_container.setMaximumWidth(400)  # Limit width for statistics
+        stats_vertical_layout = QVBoxLayout(stats_container)
+        stats_vertical_layout.setSpacing(15)
+        stats_vertical_layout.setContentsMargins(10, 10, 10, 10)
+        stats_vertical_layout.addWidget(vid_stats_group)
+        stats_vertical_layout.addStretch()  # Add stretch to push stats to top
+        
+        # Add both containers to results-stats layout
+        results_stats_layout.addWidget(results_container)
+        results_stats_layout.addWidget(stats_container)
+        
+        # Add results-stats layout to main layout
+        layout.addLayout(results_stats_layout)
+        
+        # Add charts section with proper header and border
         layout.addWidget(video_charts_group)
-        layout.addWidget(vid_stats_group)
         layout.addLayout(export_buttons_layout)
         layout.addStretch()
         return panel

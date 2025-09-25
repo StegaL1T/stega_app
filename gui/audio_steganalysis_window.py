@@ -110,12 +110,24 @@ class AudioSteganalysisWindow(QWidget):
                 "Error: Please select an audio file to analyze")
             return
 
+        # Clear old outputs
+        self.main_gui.aud_results_text.clear()
+        self.main_gui.aud_stats_text.clear()
+
+        # Show progress bar
+        self.main_gui.aud_progress_bar.setVisible(True)
+        self.main_gui.aud_progress_bar.setValue(0)
+        self.main_gui.aud_progress_bar.setFormat("Loading")
+        from PyQt6.QtWidgets import QApplication
+        QApplication.processEvents()
+
         method = self.main_gui.audio_method_combo.currentText()
         ok = self.machine.analyze_audio(method)
 
         self.main_gui.aud_results_text.append("\n=== AUDIO ANALYSIS ===")
         if not ok:
             self.main_gui.aud_results_text.append("Error during audio analysis.")
+            self.main_gui.aud_progress_bar.setVisible(False)
             return
 
         results = self.machine.get_results()
@@ -141,6 +153,9 @@ class AudioSteganalysisWindow(QWidget):
         except Exception as e:
             self.main_gui.aud_results_text.append(f"Audio chart error: {e}")
 
+        # Hide progress bar
+        self.main_gui.aud_progress_bar.setVisible(False)
+
     def _plot_audio_charts(self):
         """Render Waveform, Spectrogram, and Entropy for the current audio."""
         samples = self.machine.audio_samples
@@ -158,7 +173,7 @@ class AudioSteganalysisWindow(QWidget):
 
         # Waveform
         ax_wave = self.main_gui.aud_canvas_wave.figure.subplots(1, 1)
-        self.main_gui.aud_canvas_wave.figure.tight_layout()
+        self.main_gui.aud_canvas_wave.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_wave.clear()
         t = np.arange(len(data)) / float(sr)
         ax_wave.plot(t, data, color='#34495e', linewidth=0.8)
@@ -170,7 +185,7 @@ class AudioSteganalysisWindow(QWidget):
 
         # Spectrogram (log-magnitude)
         ax_spec = self.main_gui.aud_canvas_spec.figure.subplots(1, 1)
-        self.main_gui.aud_canvas_spec.figure.tight_layout()
+        self.main_gui.aud_canvas_spec.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_spec.clear()
         nfft = 1024
         noverlap = 512
@@ -182,7 +197,7 @@ class AudioSteganalysisWindow(QWidget):
 
         # Entropy over time (short-time 8-bit entropy)
         ax_ent = self.main_gui.aud_canvas_entropy.figure.subplots(1, 1)
-        self.main_gui.aud_canvas_entropy.figure.tight_layout()
+        self.main_gui.aud_canvas_entropy.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_ent.clear()
         # Normalize to 8-bit range
         x = data - np.min(data)

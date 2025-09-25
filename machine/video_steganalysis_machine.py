@@ -172,18 +172,29 @@ class VideoSteganalysisMachine:
         print("Performing Video LSB analysis...")
 
         suspicious_frames = 0
+        frame_deviations = []
+        
         for frame in self.video_frames[::max(1, len(self.video_frames)//50)]:  # sample frames
             r = frame[:, :, 0]
             lsb_ratio = np.mean(r & 1)
-            if abs(lsb_ratio - 0.5) > 0.1:
+            deviation = abs(lsb_ratio - 0.5)
+            frame_deviations.append(deviation)
+            
+            # More conservative threshold for video frames
+            if deviation > 0.15:
                 suspicious_frames += 1
 
-        suspicious = suspicious_frames > 0
+        # Only flag as suspicious if significant number of frames are deviant
+        total_sampled_frames = len(frame_deviations)
+        suspicious_ratio = suspicious_frames / max(total_sampled_frames, 1)
+        suspicious = suspicious_ratio > 0.3  # Require 30% of frames to be suspicious
         self.results = {
             'method': 'Video LSB Analysis',
             'frames_analyzed': len(self.video_frames),
             'suspicious_frames': suspicious_frames,
-            'suspicious_ratio': suspicious_frames / max(len(self.video_frames), 1),
+            'suspicious_ratio': suspicious_ratio,
+            'avg_deviation': np.mean(frame_deviations) if frame_deviations else 0,
+            'max_deviation': max(frame_deviations) if frame_deviations else 0,
             'suspicious': suspicious
         }
 
@@ -214,13 +225,23 @@ class VideoSteganalysisMachine:
             diffs.append(diff)
 
         avg_diff = np.mean(diffs)
-        unusual_motion = sum(1 for d in diffs if abs(d - avg_diff) > avg_diff * 0.5)
+        std_diff = np.std(diffs)
+        
+        # More sophisticated motion analysis
+        # Consider both absolute differences and statistical outliers
+        unusual_motion = sum(1 for d in diffs if abs(d - avg_diff) > avg_diff * 0.7)
+        extreme_motion = sum(1 for d in diffs if abs(d - avg_diff) > 2 * std_diff)
+        
+        # Only flag as suspicious if there are both unusual and extreme motion patterns
+        suspicious = unusual_motion > 3 and extreme_motion > 1
 
         self.results = {
             'method': 'Video Motion Analysis',
             'avg_frame_diff': float(avg_diff),
+            'std_frame_diff': float(std_diff),
             'unusual_motion_count': unusual_motion,
-            'suspicious': unusual_motion > 2
+            'extreme_motion_count': extreme_motion,
+            'suspicious': suspicious
         }
 
     def _perform_video_comprehensive_analysis(self):
@@ -255,20 +276,39 @@ class VideoSteganalysisMachine:
         self._perform_video_motion_analysis()
         motion_results = self.results.copy()
 
-        suspicious_count = sum([
-            lsb_results.get('suspicious', False),
-            frame_results.get('suspicious', False),
-            motion_results.get('suspicious', False)
-        ])
-
-        overall_suspicious = suspicious_count >= 2
+        # Weighted voting system for video advanced comprehensive analysis
+        method_weights = {
+            'video_lsb_analysis': 0.5,      # Highest weight - most reliable
+            'video_frame_analysis': 0.3,    # Medium weight
+            'video_motion_analysis': 0.2    # Lower weight - most prone to false positives
+        }
+        
+        weighted_score = 0.0
+        total_weight = 0.0
+        
+        all_results = {
+            'video_lsb_analysis': lsb_results,
+            'video_frame_analysis': frame_results,
+            'video_motion_analysis': motion_results
+        }
+        
+        for method, results in all_results.items():
+            if method in method_weights:
+                weight = method_weights[method]
+                if results.get('suspicious', False):
+                    weighted_score += weight
+                total_weight += weight
+        
+        # Require weighted score > 0.4 to flag as suspicious
+        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > 0.4
 
         self.results = {
             'method': 'Video Advanced Comprehensive Analysis',
             'video_lsb_analysis': lsb_results,
             'video_frame_analysis': frame_results,
             'video_motion_analysis': motion_results,
-            'suspicious_methods_count': suspicious_count,
+            'weighted_score': weighted_score,
+            'total_weight': total_weight,
             'suspicious': overall_suspicious
         }
 

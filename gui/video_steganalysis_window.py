@@ -121,6 +121,7 @@ class VideoSteganalysisWindow(QWidget):
         # Show progress bar
         self.main_gui.vid_progress_bar.setVisible(True)
         self.main_gui.vid_progress_bar.setValue(0)
+        self.main_gui.vid_progress_bar.setFormat("Loading")
         from PyQt6.QtWidgets import QApplication
         QApplication.processEvents()
 
@@ -193,7 +194,7 @@ class VideoSteganalysisWindow(QWidget):
         
         # Frame Analysis Chart
         ax_frame = self.main_gui.vid_canvas_frame.figure.subplots(1, 1)
-        self.main_gui.vid_canvas_frame.figure.tight_layout()
+        self.main_gui.vid_canvas_frame.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_frame.clear()
         
         # Calculate frame statistics
@@ -219,7 +220,7 @@ class VideoSteganalysisWindow(QWidget):
 
         # Motion Analysis Chart
         ax_motion = self.main_gui.vid_canvas_motion.figure.subplots(1, 1)
-        self.main_gui.vid_canvas_motion.figure.tight_layout()
+        self.main_gui.vid_canvas_motion.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_motion.clear()
         
         # Calculate motion between consecutive frames
@@ -249,7 +250,7 @@ class VideoSteganalysisWindow(QWidget):
 
         # LSB Analysis Chart
         ax_lsb = self.main_gui.vid_canvas_lsb.figure.subplots(1, 1)
-        self.main_gui.vid_canvas_lsb.figure.tight_layout()
+        self.main_gui.vid_canvas_lsb.figure.subplots_adjust(left=0.1, right=0.95, top=0.9, bottom=0.1)
         ax_lsb.clear()
         
         # Calculate LSB ratios for each frame

@@ -169,18 +169,33 @@ class AudioSteganalysisMachine:
                 lsb_ratio = np.mean((ch_data & 1) != 0)
                 channel_lsbs.append(float(lsb_ratio))
             avg_lsb = float(np.mean(channel_lsbs))
+            # More conservative threshold for audio LSB analysis
+            channel_deviations = [abs(ratio - 0.5) for ratio in channel_lsbs]
+            max_deviation = max(channel_deviations)
+            avg_deviation = np.mean(channel_deviations)
+            
+            # Suspicious if: high average deviation OR multiple channels show significant deviation
+            suspicious = (abs(avg_lsb - 0.5) > 0.15) or (max_deviation > 0.2 and avg_deviation > 0.1)
+            
             self.results = {
                 'method': 'Audio LSB Analysis',
                 'channel_lsb_ratios': channel_lsbs,
                 'avg_lsb_ratio': avg_lsb,
-                'suspicious': abs(avg_lsb - 0.5) > 0.1
+                'max_deviation': max_deviation,
+                'avg_deviation': avg_deviation,
+                'suspicious': suspicious
             }
         else:
             lsb_ratio = float(np.mean((samples & 1) != 0))
+            deviation = abs(lsb_ratio - 0.5)
+            # More conservative threshold for mono audio
+            suspicious = deviation > 0.15
+            
             self.results = {
                 'method': 'Audio LSB Analysis',
                 'lsb_ratio': lsb_ratio,
-                'suspicious': abs(lsb_ratio - 0.5) > 0.1
+                'deviation': deviation,
+                'suspicious': suspicious
             }
 
     def _perform_audio_chi_square_test(self):
@@ -261,8 +276,9 @@ class AudioSteganalysisMachine:
         arithmetic_mean = np.mean(psd)
         spectral_flatness = geometric_mean / (arithmetic_mean + 1e-10)
         
-        # Check for unusual spectral patterns
-        suspicious = hf_ratio > 0.3 or spectral_flatness < 0.1
+        # More conservative thresholds for spectral analysis
+        # Consider both high-frequency content and spectral characteristics
+        suspicious = (hf_ratio > 0.4) or (spectral_flatness < 0.05) or (hf_ratio > 0.25 and spectral_flatness < 0.15)
         
         self.results = {
             'method': 'Audio Spectral Analysis',
@@ -334,9 +350,10 @@ class AudioSteganalysisMachine:
         max_entropy = np.log2(256)
         entropy_ratio = entropy / max_entropy
         
-        # Check for unusual entropy patterns
-        # Low entropy might indicate steganographic content
-        suspicious = entropy_ratio < 0.7 or entropy_ratio > 0.99
+        # More conservative entropy analysis
+        # Very low entropy (highly structured) or very high entropy (random-like) can indicate steganography
+        # But need to be more conservative to avoid false positives
+        suspicious = entropy_ratio < 0.6 or entropy_ratio > 0.995
         
         self.results = {
             'method': 'Audio Entropy Analysis',
@@ -366,17 +383,35 @@ class AudioSteganalysisMachine:
         self._perform_audio_entropy_analysis()
         entropy_results = self.results.copy()
         
-        # Combine results with weighted scoring
-        suspicious_count = sum([
-            lsb_results.get('suspicious', False),
-            chi2_results.get('suspicious', False),
-            spectral_results.get('suspicious', False),
-            autocorr_results.get('suspicious', False),
-            entropy_results.get('suspicious', False)
-        ])
+        # Weighted voting system for audio advanced comprehensive analysis
+        method_weights = {
+            'audio_lsb_analysis': 0.4,      # High weight - most reliable
+            'audio_chi_square_test': 0.25,   # Medium weight
+            'audio_spectral_analysis': 0.2,  # Medium weight
+            'audio_entropy_analysis': 0.1,   # Lower weight
+            'audio_autocorrelation_analysis': 0.05  # Lowest weight - most prone to false positives
+        }
         
-        # Consider suspicious if 2 or more methods flag it
-        overall_suspicious = suspicious_count >= 2
+        weighted_score = 0.0
+        total_weight = 0.0
+        
+        all_results = {
+            'audio_lsb_analysis': lsb_results,
+            'audio_chi_square_test': chi2_results,
+            'audio_spectral_analysis': spectral_results,
+            'audio_autocorrelation_analysis': autocorr_results,
+            'audio_entropy_analysis': entropy_results
+        }
+        
+        for method, results in all_results.items():
+            if method in method_weights:
+                weight = method_weights[method]
+                if results.get('suspicious', False):
+                    weighted_score += weight
+                total_weight += weight
+        
+        # Require weighted score > 0.3 to flag as suspicious
+        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > 0.3
         
         self.results = {
             'method': 'Audio Advanced Comprehensive Analysis',
@@ -385,7 +420,8 @@ class AudioSteganalysisMachine:
             'audio_spectral_analysis': spectral_results,
             'audio_autocorrelation_analysis': autocorr_results,
             'audio_entropy_analysis': entropy_results,
-            'suspicious_methods_count': suspicious_count,
+            'weighted_score': weighted_score,
+            'total_weight': total_weight,
             'suspicious': overall_suspicious
         }
 

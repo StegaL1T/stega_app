@@ -160,13 +160,25 @@ class ImageSteganalysisMachine:
         g_lsb_ratio = np.mean(g_lsb)
         b_lsb_ratio = np.mean(b_lsb)
 
+        avg_lsb_ratio = (r_lsb_ratio + g_lsb_ratio + b_lsb_ratio) / 3
+        # More conservative threshold: only flag if significantly deviant from 0.5
+        # Also check if multiple channels show similar deviation (stronger indicator)
+        channel_deviations = [abs(r_lsb_ratio - 0.5), abs(g_lsb_ratio - 0.5), abs(b_lsb_ratio - 0.5)]
+        max_deviation = max(channel_deviations)
+        avg_deviation = np.mean(channel_deviations)
+        
+        # Suspicious if: high average deviation OR multiple channels show significant deviation
+        suspicious = (abs(avg_lsb_ratio - 0.5) > 0.15) or (max_deviation > 0.2 and avg_deviation > 0.1)
+        
         self.results = {
             'method': 'LSB Analysis',
             'r_lsb_ratio': r_lsb_ratio,
             'g_lsb_ratio': g_lsb_ratio,
             'b_lsb_ratio': b_lsb_ratio,
-            'avg_lsb_ratio': (r_lsb_ratio + g_lsb_ratio + b_lsb_ratio) / 3,
-            'suspicious': abs((r_lsb_ratio + g_lsb_ratio + b_lsb_ratio) / 3 - 0.5) > 0.1
+            'avg_lsb_ratio': avg_lsb_ratio,
+            'max_deviation': max_deviation,
+            'avg_deviation': avg_deviation,
+            'suspicious': suspicious
         }
 
     def _perform_chi_square_test(self):
@@ -185,30 +197,52 @@ class ImageSteganalysisMachine:
         g_chi2 = self._calculate_chi_square(g_channel)
         b_chi2 = self._calculate_chi_square(b_channel)
 
+        avg_chi2 = (r_chi2 + g_chi2 + b_chi2) / 3
+        # More conservative threshold for chi-square test
+        # Also consider if multiple channels show high chi-square values
+        chi2_values = [r_chi2, g_chi2, b_chi2]
+        max_chi2 = max(chi2_values)
+        
+        # Suspicious if: high average chi-square OR multiple channels show high values
+        suspicious = (avg_chi2 > 0.3) or (max_chi2 > 0.5 and avg_chi2 > 0.2)
+        
         self.results = {
             'method': 'Chi-Square Test',
             'r_chi2': r_chi2,
             'g_chi2': g_chi2,
             'b_chi2': b_chi2,
-            'avg_chi2': (r_chi2 + g_chi2 + b_chi2) / 3,
-            'suspicious': (r_chi2 + g_chi2 + b_chi2) / 3 > 0.5
+            'avg_chi2': avg_chi2,
+            'max_chi2': max_chi2,
+            'suspicious': suspicious
         }
 
     def _calculate_chi_square(self, channel: np.ndarray) -> float:
-        """Calculate chi-square statistic for a channel"""
-        # Simplified chi-square calculation
-        # In practice, you'd implement the full statistical test
-
+        """Calculate chi-square statistic for a channel with proper statistical analysis"""
         # Count pixel value frequencies
-        unique, counts = np.unique(channel, return_counts=True)
-
+        hist, _ = np.histogram(channel, bins=256, range=(0, 256))
+        
         # Calculate expected frequency (uniform distribution)
-        expected = len(channel.flatten()) / 256
-
+        total_pixels = len(channel.flatten())
+        expected = total_pixels / 256
+        
+        # Only use bins with sufficient expected frequency (avoid division by zero)
+        valid_bins = expected >= 5  # Chi-square assumption
+        if np.sum(valid_bins) < 10:  # Need at least 10 valid bins
+            return 0.0
+            
+        observed = hist[valid_bins]
+        expected_valid = expected
+        
         # Calculate chi-square statistic
-        chi2 = np.sum((counts - expected) ** 2 / expected)
-
-        return chi2 / 1000  # Normalize for display
+        chi2 = np.sum((observed - expected_valid) ** 2 / expected_valid)
+        
+        # Calculate degrees of freedom
+        df = np.sum(valid_bins) - 1
+        
+        # Normalize by degrees of freedom and scale for display
+        normalized_chi2 = chi2 / max(df, 1) / 100.0
+        
+        return float(normalized_chi2)
 
     def _perform_rs_analysis(self):
         """Perform RS (Regular-Singular) analysis across all color channels"""
@@ -339,14 +373,32 @@ class ImageSteganalysisMachine:
         self._perform_sample_pairs_analysis()
         all_results['sample_pairs_analysis'] = self.results.copy()
 
-        # Combine into final results
-        suspicious_flag = any(
-            res.get('suspicious', False) for res in all_results.values()
-        )
+        # Weighted voting system for comprehensive analysis
+        method_weights = {
+            'lsb_analysis': 0.4,      # High weight - most reliable
+            'chi_square_test': 0.3,   # Medium weight
+            'rs_analysis': 0.2,       # Medium weight
+            'sample_pairs_analysis': 0.1  # Lower weight - more prone to false positives
+        }
+        
+        weighted_score = 0.0
+        total_weight = 0.0
+        
+        for method, results in all_results.items():
+            if method in method_weights:
+                weight = method_weights[method]
+                if results.get('suspicious', False):
+                    weighted_score += weight
+                total_weight += weight
+        
+        # Require weighted score > 0.3 to flag as suspicious
+        suspicious_flag = (weighted_score / max(total_weight, 0.1)) > 0.3
 
         self.results = {
             'method': 'Comprehensive Analysis',
             'analyses': all_results,
+            'weighted_score': weighted_score,
+            'total_weight': total_weight,
             'suspicious': suspicious_flag
         }
 
@@ -472,17 +524,35 @@ class ImageSteganalysisMachine:
         self._perform_histogram_analysis()
         hist_results = self.results.copy()
         
-        # Combine results with weighted scoring
-        suspicious_count = sum([
-            lsb_results.get('suspicious', False),
-            chi2_results.get('suspicious', False),
-            dct_results.get('suspicious', False),
-            wavelet_results.get('suspicious', False),
-            hist_results.get('suspicious', False)
-        ])
+        # Weighted voting system for advanced comprehensive analysis
+        method_weights = {
+            'lsb_analysis': 0.35,      # High weight - most reliable
+            'chi_square_test': 0.25,   # Medium weight
+            'dct_analysis': 0.2,       # Medium weight
+            'wavelet_analysis': 0.15,  # Lower weight
+            'histogram_analysis': 0.05  # Lowest weight - most prone to false positives
+        }
         
-        # Consider suspicious if 2 or more methods flag it
-        overall_suspicious = suspicious_count >= 2
+        weighted_score = 0.0
+        total_weight = 0.0
+        
+        all_results = {
+            'lsb_analysis': lsb_results,
+            'chi_square_test': chi2_results,
+            'dct_analysis': dct_results,
+            'wavelet_analysis': wavelet_results,
+            'histogram_analysis': hist_results
+        }
+        
+        for method, results in all_results.items():
+            if method in method_weights:
+                weight = method_weights[method]
+                if results.get('suspicious', False):
+                    weighted_score += weight
+                total_weight += weight
+        
+        # Require weighted score > 0.25 to flag as suspicious
+        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > 0.25
         
         self.results = {
             'method': 'Advanced Comprehensive Analysis',
@@ -491,7 +561,8 @@ class ImageSteganalysisMachine:
             'dct_analysis': dct_results,
             'wavelet_analysis': wavelet_results,
             'histogram_analysis': hist_results,
-            'suspicious_methods_count': suspicious_count,
+            'weighted_score': weighted_score,
+            'total_weight': total_weight,
             'suspicious': overall_suspicious
         }
 
