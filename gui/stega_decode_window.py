@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
                              QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-                             QScrollArea, QSlider as QTimeSlider, QToolTip)
+                             QScrollArea, QSlider as QTimeSlider, QToolTip, QApplication)
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage
 import os
@@ -215,7 +215,9 @@ class StegaDecodeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Steganography - Extract Messages")
-        self.setMinimumSize(1200, 800)
+        
+        # Setup responsive sizing
+        self.setup_responsive_sizing()
 
         # Initialize the steganography decoding machine
         from machine.stega_decode_machine import StegaDecodeMachine
@@ -242,8 +244,43 @@ class StegaDecodeWindow(QMainWindow):
         # Main content area
         self.create_content_area(main_layout)
 
-        # Make the window fullscreen
-        self.showMaximized()
+        # Set window size and position
+        self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
+        self.show()
+
+    def setup_responsive_sizing(self):
+        """Setup responsive sizing based on screen dimensions"""
+        # Get screen dimensions using modern PyQt6 approach
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication([])
+        screen = app.primaryScreen().geometry()
+        screen_width = screen.width()
+        screen_height = screen.height()
+        
+        # Define responsive scaling factors
+        # For screens between 1200x1080 and 1920x1200
+        if screen_width <= 1366:  # Smaller laptops
+            scale_factor = 0.8
+        elif screen_width <= 1600:  # Medium laptops
+            scale_factor = 0.9
+        else:  # Larger screens
+            scale_factor = 1.0
+        
+        # Calculate window dimensions (leave some margin from screen edges)
+        margin_percent = 0.05  # 5% margin from screen edges
+        self.window_width = int(screen_width * (1 - 2 * margin_percent))
+        self.window_height = int(screen_height * (1 - 2 * margin_percent))
+        
+        # Center the window
+        self.window_x = int(screen_width * margin_percent)
+        self.window_y = int(screen_height * margin_percent)
+        
+        # Set minimum size to ensure usability on smaller screens
+        min_width = 1000
+        min_height = 700
+        self.window_width = max(self.window_width, min_width)
+        self.window_height = max(self.window_height, min_height)
 
     def create_info_button(self, tooltip_text):
         """Create an orange info button with tooltip"""
@@ -651,8 +688,13 @@ class StegaDecodeWindow(QMainWindow):
                 print(f"Capacity: {info.get('max_capacity_bytes', 0)} bytes")
             else:
                 print("❌ Error loading steganographic image")
+        elif media_type == 'audio':
+            if self.machine.set_stego_audio(file_path):
+                print(f"✅ AUDIO loaded: {os.path.basename(file_path)}")
+            else:
+                print(f"❌ Error loading steganographic audio: {file_path}")
         else:
-            # For audio and video, we'll need to extend the machine
+            # For video, we'll need to extend the machine
             print(f"✅ {media_type.upper()} loaded: {os.path.basename(file_path)}")
 
     def choose_output_path(self):
@@ -675,18 +717,19 @@ class StegaDecodeWindow(QMainWindow):
 
         # Set default output path if none specified
         if not self.output_path.text().strip():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_path = f"extracted_data_{timestamp}.txt"
-            self.output_path.setText(default_path)
-            self.machine.set_output_path(default_path)
-
+            stego_source = self.machine.stego_image_path or self.machine.stego_audio_path
+            base_dir = os.path.dirname(stego_source) if stego_source else os.path.join(os.getcwd(), 'extracted_payloads')
+            if not os.path.exists(base_dir):
+                os.makedirs(base_dir, exist_ok=True)
+            self.output_path.setText(base_dir)
+            self.machine.set_output_path(base_dir)
         # Perform steganography extraction
         if self.machine.extract_message():
             print("✅ Steganography extraction completed successfully!")
             # Display extracted data and header info in results text area
             extracted_data = self.machine.get_extracted_data()
             header_info = self.machine.get_header_info() or {}
-            out_path = self.machine.output_path or "(unknown)"
+            out_path = self.machine.get_last_output_path() or "(unknown)"
 
             lines = []
             lines.append("=== Decode Success ===")
@@ -717,15 +760,15 @@ class StegaDecodeWindow(QMainWindow):
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Icon.Information)
             msg.setWindowTitle("Decode Successful")
-            out_path = self.machine.output_path or "saved file"
+            out_path = self.machine.get_last_output_path() or "saved file"
             msg.setText(f"Payload extracted successfully.\nSaved to: {out_path}")
             open_btn = msg.addButton("Open file", QMessageBox.ButtonRole.AcceptRole)
             msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
             msg.exec()
-            if msg.clickedButton() == open_btn and self.machine.output_path:
+            if msg.clickedButton() == open_btn and self.machine.get_last_output_path():
                 from PyQt6.QtGui import QDesktopServices
                 from PyQt6.QtCore import QUrl
-                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.output_path))
+                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.get_last_output_path()))
         else:
             print("❌ Steganography extraction failed!")
             error_msg = self.machine.get_last_error() or "Extraction failed. Please check your settings and try again."

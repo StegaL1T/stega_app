@@ -41,13 +41,61 @@ def main() -> None:
     if not machine.set_cover_audio(args.cover):
         raise SystemExit(f"Failed to load cover WAV: {args.cover}")
 
+
     payload_path = Path(args.payload)
     if not payload_path.exists():
         raise SystemExit(f"Payload file not found: {payload_path}")
     payload_bytes = payload_path.read_bytes()
     filename = payload_path.name
 
+    # Debug: Show CRC32 and first 32 bytes of payload before embedding
+    import zlib
+    payload_crc32 = zlib.crc32(payload_bytes) & 0xFFFFFFFF
+    print(f"[DEBUG] Payload CRC32 before embedding: 0x{payload_crc32:08X}")
+    print(f"[DEBUG] First 32 bytes of payload before embedding: {list(payload_bytes[:32])}")
+
+    # If encryption is enabled, print first 32 bytes of encrypted payload
+    if not args.no_encrypt:
+        from machine.stega_spec import encrypt_payload
+        context_bytes = filename.encode('utf-8')
+        # Use the same nonce as in the actual encoding (after encode_audio)
+        stego_bytes = machine.encode_audio(args.cover, payload_bytes, filename, args.lsb, args.key, start_sample=args.start)
+        info = getattr(machine, 'last_embed_info', None) or {}
+        header = info.get('header', {})
+        nonce = header.get('nonce', b'') if isinstance(header.get('nonce'), (bytes, bytearray)) else b''
+        if nonce:
+            encrypted_payload = encrypt_payload(args.key, nonce, payload_bytes, context_bytes)
+            print(f"[DEBUG] First 32 bytes of encrypted payload: {list(encrypted_payload[:32])}")
+        else:
+            print(f"[DEBUG] First 32 bytes of encrypted payload: MISSING nonce after encoding")
+        # stego_bytes already written below
+    else:
+        stego_bytes = machine.encode_audio(args.cover, payload_bytes, filename, args.lsb, args.key, start_sample=args.start)
+
+    # Debug: Show first 32 bytes of raw audio and np.uint8 array before encoding
+    import wave
+    import numpy as np
+    with wave.open(args.cover, 'rb') as wf:
+        n_frames = wf.getnframes()
+        raw_data = wf.readframes(n_frames)
+        print(f"[DEBUG] First 32 bytes of raw audio: {raw_data[:32].hex()}")
+        flat = np.frombuffer(raw_data, dtype=np.uint8)
+        print(f"[DEBUG] np.uint8 flat shape: {flat.shape}, first 32 bytes: {flat[:32].tolist()}")
+
+
+
     stego_bytes = machine.encode_audio(args.cover, payload_bytes, filename, args.lsb, args.key, start_sample=args.start)
+
+    # If encryption is enabled, print context for encryption (after encoding, so nonce is available)
+    if not args.no_encrypt:
+        info = getattr(machine, 'last_embed_info', None) or {}
+        header = info.get('header', {})
+        nonce = header.get('nonce', b'') if isinstance(header.get('nonce'), (bytes, bytearray)) else b''
+        context_bytes = filename.encode('utf-8')
+        if nonce:
+            print(f"[DEBUG] Encrypt context: key='{args.key}', nonce={nonce.hex()}, context_bytes={context_bytes}")
+        else:
+            print(f"[DEBUG] Encrypt context: key='{args.key}', nonce=MISSING, context_bytes={context_bytes}  [ERROR: nonce not found after encoding]")
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
