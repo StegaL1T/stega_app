@@ -36,7 +36,13 @@ Capacity math:
 # machine/stega_encode_machine.py
 import os
 import io
+import math
 import wave
+import tempfile
+import base64
+import json
+import subprocess
+import shutil
 from typing import Optional, Tuple, List, Dict, Any
 
 try:
@@ -45,6 +51,8 @@ except ImportError:  # pragma: no cover - optional dependency for video handling
     cv2 = None
 from PIL import Image
 import numpy as np
+from pathlib import Path
+from stegano import lsb
 
 from machine.stega_spec import (
     FLAG_PAYLOAD_ENCRYPTED,
@@ -712,185 +720,177 @@ class StegaEncodeMachine:
 
 
     # ====================
+    # ====================
     # Video helpers
     # ====================
 
     @staticmethod
-    def _iter_video_frames_rgb24(path: str) -> Tuple[List[np.ndarray], float]:
-        if cv2 is None:
-            raise UnsupportedFormatError("OpenCV is required for video support")
-        cap = cv2.VideoCapture(path)
-        if not cap.isOpened():
-            raise UnsupportedFormatError(f"Cannot open video: {path}")
-        fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
-        frames: List[np.ndarray] = []
-        while True:
-            ret, frame_bgr = cap.read()
-            if not ret:
-                break
-            # Convert BGR->RGB
-            frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-            frames.append(frame_rgb)
-        cap.release()
-        if not frames:
-            raise UnsupportedFormatError("Video has no frames")
-        return frames, float(fps)
+    def _split_message_for_frames(message: str, frame_count: int) -> List[str]:
+        if frame_count <= 0:
+            raise ValueError("Frame count must be positive")
+        chunk_size = math.ceil(len(message) / frame_count)
+        if chunk_size <= 0:
+            chunk_size = len(message)
+        return [message[i:i + chunk_size] for i in range(0, len(message), chunk_size)]
 
     @staticmethod
-    def _write_video_rgb24(frames_rgb: List[np.ndarray], fps: float, out_path: str) -> str:
-        if cv2 is None:
-            raise UnsupportedFormatError("OpenCV is required for video support")
-        h, w, _ = frames_rgb[0].shape
-        # Try uncompressed AVI via DIB 'DIB '
-        tried = []
-        def _try_write(fourcc_code: Tuple[str, str, str, str], path: str) -> bool:
-            tried.append(''.join(fourcc_code))
-            fourcc = cv2.VideoWriter_fourcc(*fourcc_code)
-            writer = cv2.VideoWriter(path, fourcc, fps, (w, h))
-            if not writer.isOpened():
-                writer.release()
-                return False
-            for fr in frames_rgb:
-                if fr.shape[0] != h or fr.shape[1] != w:
-                    writer.release()
-                    raise ValidationError("All frames must have identical dimensions")
-                bgr = cv2.cvtColor(fr, cv2.COLOR_RGB2BGR)
-                writer.write(bgr)
-            writer.release()
-            return True
+    def _extract_frames_to_directory(video_path: str, target_dir: Path) -> float:
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            raise UnsupportedFormatError(f"Cannot open video: {video_path}")
+        fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+        index = 0
+        while True:
+            success, frame = cap.read()
+            if not success:
+                break
+            frame_path = target_dir / f"{index:06d}.png"
+            cv2.imwrite(str(frame_path), frame)
+            index += 1
+        cap.release()
+        if index == 0:
+            raise UnsupportedFormatError("Video has no frames")
+        return float(fps)
 
-        # 1) Uncompressed DIB (RGB)
-        if _try_write(('D', 'I', 'B', ' '), out_path):
-            return out_path
-        # 2) MJPG as a widely available fallback (note: lossy)
-        alt_path = os.path.splitext(out_path)[0] + "_mjpg.avi"
-        if _try_write(('M', 'J', 'P', 'G'), alt_path):
-            return alt_path
-        # 3) As a last resort, export PNG frame sequence for lossless output
-        seq_dir = os.path.splitext(out_path)[0] + "_frames"
-        os.makedirs(seq_dir, exist_ok=True)
-        for i, fr in enumerate(frames_rgb):
-            # Save as PNG in RGB order
-            from PIL import Image
-            Image.fromarray(fr, mode='RGB').save(os.path.join(seq_dir, f"frame_{i:06d}.png"))
-        raise UnsupportedFormatError(
-            f"Failed to write video using FourCCs {tried}. Exported PNG frames to '{seq_dir}'. "
-            "Install a lossless codec (e.g., FFV1 via ffmpeg) or open the PNG sequence in a video editor.")
+    @staticmethod
+    def _extract_audio_track(video_path: str, temp_dir: Path) -> Optional[Path]:
+        ffmpeg = shutil.which('ffmpeg')
+        if not ffmpeg:
+            return None
+        audio_path = temp_dir / "audio.wav"
+        cmd = [
+            ffmpeg, '-y', '-hide_banner', '-loglevel', 'error',
+            '-i', video_path,
+            '-vn',
+            '-acodec', 'pcm_s16le',
+            str(audio_path),
+        ]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        if result.returncode != 0:
+            return None
+        return audio_path if audio_path.exists() else None
 
-    # ====================
-    # Video encoder
-    # ====================
-
-
-
+    @staticmethod
+    def _assemble_frames_with_ffmpeg(frames_dir: Path, fps: float, audio_path: Optional[Path], output_path: str) -> str:
+        ffmpeg = shutil.which('ffmpeg')
+        if not ffmpeg:
+            raise UnsupportedFormatError("ffmpeg is required to assemble video frames")
+        pattern = f"{frames_dir.as_posix()}/%06d.png"
+        # Important: place encoding options AFTER all inputs to avoid ffmpeg
+        # interpreting them as input options for the following input (audio).
+        cmd = [
+            ffmpeg, '-y', '-hide_banner', '-loglevel', 'error',
+            # Image sequence input (controls input framerate for the image2 demuxer)
+            '-framerate', f"{fps:.6f}",
+            '-i', pattern,
+        ]
+        if audio_path and audio_path.exists():
+            cmd.extend(['-i', str(audio_path)])
+        # Output encoding options
+        cmd.extend([
+            '-c:v', 'png',
+            '-pix_fmt', 'rgb24',
+        ])
+        if audio_path and audio_path.exists():
+            cmd.extend(['-c:a', 'pcm_s16le', '-shortest'])
+        cmd.append(output_path)
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        if result.returncode != 0:
+            detail = result.stderr.decode(errors='ignore').strip()
+            raise UnsupportedFormatError(f"ffmpeg failed to assemble video: {detail}")
+        return output_path
 
     def encode_video(self, cover_video_path: str, payload_bytes: bytes, filename: str, lsb_bits: int, key: str, start_fxy: Optional[Tuple[int, int, int]] = None, out_path: Optional[str] = None) -> str:
-        if not (1 <= lsb_bits <= 8):
-            raise ValidationError(f"LSB bits must be 1..8, got {lsb_bits}")
-        if not key or not key.isdigit():
-            raise ValidationError("Key must be numeric and non-empty")
         if not os.path.exists(cover_video_path):
             raise ValidationError(f"Cover video not found: {cover_video_path}")
 
-        frames_rgb, fps = self._iter_video_frames_rgb24(cover_video_path)
-        h, w, c = frames_rgb[0].shape
-        if c != 3:
-            raise UnsupportedFormatError("Expected RGB24 frames (3 channels)")
+        temp_dir = Path(tempfile.mkdtemp(prefix="stego_video_"))
+        frames_dir = temp_dir / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            fps = self._extract_frames_to_directory(cover_video_path, frames_dir)
+            audio_path = self._extract_audio_track(cover_video_path, temp_dir)
 
-        stacked = np.concatenate([fr.reshape(-1) for fr in frames_rgb], axis=0)
-        total_lsb_bits = stacked.size * lsb_bits
+            payload_kind = 'file' if self.payload_file_path else 'text'
+            safe_filename = filename or (Path(self.payload_file_path).name if self.payload_file_path else 'payload.bin')
+            # Build inner JSON that describes the payload
+            inner = {
+                'filename': safe_filename,
+                'kind': payload_kind,
+                'payload': base64.b64encode(payload_bytes).decode('ascii'),
+            }
+            inner_json = json.dumps(inner, ensure_ascii=True).encode('utf-8')
 
-        fname_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
-        rng = rng_from_key_and_filename(key, b'')
-        perm = perm_for_lsb_bits(rng, lsb_bits)
+            envelope: dict
+            nonce: bytes | None = None
+            if self.encrypt_payload and key and key.isdigit():
+                # Encrypt the inner JSON and wrap with nonce + ciphertext
+                nonce = generate_nonce()
+                ct = encrypt_payload(key, nonce, inner_json, context=b'video-json')
+                envelope = {
+                    'v': 1,
+                    'enc': True,
+                    'alg': 'xor-s256',
+                    'b': int(lsb_bits),
+                    'nonce': base64.b64encode(nonce).decode('ascii'),
+                    'ct': base64.b64encode(ct).decode('ascii'),
+                }
+            else:
+                # No encryption: store base64 of the inner JSON as plaintext
+                envelope = {
+                    'v': 1,
+                    'enc': False,
+                    'b': int(lsb_bits),
+                    'pt': base64.b64encode(inner_json).decode('ascii'),
+                }
+            message = json.dumps(envelope, ensure_ascii=True)
 
-        flags = 0
-        nonce = b''
-        payload_for_embed = payload_bytes
-        if self.encrypt_payload:
-            nonce = generate_nonce()
-            payload_for_embed = encrypt_payload(key, nonce, payload_bytes, fname_bytes)
-            flags |= FLAG_PAYLOAD_ENCRYPTED
+            frame_files = sorted(frames_dir.glob('*.png'))
+            total_frames = len(frame_files)
+            # If a start frame is provided, embed the whole message into that one frame for robustness
+            start_frame = 0
+            if start_fxy is not None:
+                sf, _, _ = start_fxy
+                if 0 <= sf < total_frames:
+                    start_frame = sf
+            if start_fxy is not None:
+                segments = [message]
+                if start_frame >= total_frames:
+                    raise CapacityError('Selected start frame is beyond the end of the video')
+                frame_index = start_frame
+                frame_path = frames_dir / f"{frame_index:06d}.png"
+                secret = lsb.hide(str(frame_path), segments[0])
+                secret.save(str(frame_path))
+            else:
+                segments = self._split_message_for_frames(message, total_frames)
+                if len(segments) > total_frames:
+                    raise CapacityError('Video does not have enough frames to store the payload')
+                # Embed sequentially from frame 0
+                for idx, segment in enumerate(segments):
+                    frame_index = idx
+                    frame_path = frames_dir / f"{frame_index:06d}.png"
+                    secret = lsb.hide(str(frame_path), segment)
+                    secret.save(str(frame_path))
 
-        payload_crc = crc32(payload_bytes)
-        header_placeholder = HeaderMeta(
-            lsb_bits=lsb_bits,
-            start_bit_offset=0,
-            payload_len=len(payload_bytes),
-            filename=filename,
-            crc32=payload_crc,
-            flags=flags,
-            nonce=nonce,
-        )
-        header_bytes = pack_header(header_placeholder)
-        header_bits = len(header_bytes) * 8
-        payload_bits = len(payload_for_embed) * 8
-        required_bits = header_bits + payload_bits
-        if required_bits > total_lsb_bits:
-            raise CapacityError(f"Not enough capacity: need {required_bits} bits, have {total_lsb_bits} bits")
+            cover_root = os.path.splitext(cover_video_path)[0]
+            target_path = out_path or f"{cover_root}_stego.avi"
+            assembled = self._assemble_frames_with_ffmpeg(frames_dir, fps, audio_path, target_path)
 
-        if cv2 is None:
-            raise UnsupportedFormatError("OpenCV is required for video support")
-
-        if start_fxy is not None:
-            f, x, y = start_fxy
-            if not (0 <= x < w and 0 <= y < h and 0 <= f < len(frames_rgb)):
-                raise ValidationError(f"Start (frame,x,y) out of bounds: ({f},{x},{y})")
-            pixel_index_across = f * (w * h) + y * w + x
-            start_bit = pixel_index_across * c * lsb_bits
-            if start_bit < header_bits:
-                raise CapacityError("Selected start position overlaps header region")
-            if start_bit + payload_bits > total_lsb_bits:
-                raise CapacityError("Selected start position too late for payload")
-        else:
-            start_bit = rng.randrange(header_bits, total_lsb_bits - payload_bits + 1)
-
-        header_actual = HeaderMeta(
-            lsb_bits=lsb_bits,
-            start_bit_offset=start_bit,
-            payload_len=len(payload_bytes),
-            filename=filename,
-            crc32=payload_crc,
-            flags=flags,
-            nonce=nonce,
-        )
-        header_bytes = pack_header(header_actual)
-        assert len(header_bytes) * 8 == header_bits, "Header size changed unexpectedly"
-
-        identity_order = list(range(lsb_bits))
-        self._embed_bits(stacked, lsb_bits, 0, identity_order, header_bytes)
-        self._embed_bits(stacked, lsb_bits, start_bit, perm, payload_for_embed)
-
-        frame_pixels = w * h * c
-        new_frames = []
-        for i in range(len(frames_rgb)):
-            seg = stacked[i * frame_pixels:(i + 1) * frame_pixels]
-            new_frames.append(seg.reshape((h, w, c)))
-
-        out_path = out_path or os.path.splitext(cover_video_path)[0] + "_stego.avi"
-        actual_out = self._write_video_rgb24(new_frames, fps, out_path)
-
-        parsed = unpack_header(header_bytes)
-        if parsed['crc32'] != payload_crc:
-            raise StegaError("Header CRC mismatch after pack/unpack")
-
-        self.last_embed_info = {
-            'perm': perm,
-            'start_bit': start_bit,
-            'header': parsed,
-            'lsb_bits': lsb_bits,
-            'filename': filename,
-            'video_shape': (len(frames_rgb), h, w, c),
-            'fps': fps,
-            'output': actual_out,
-            'flags': flags,
-            'nonce': nonce.hex() if nonce else '',
-            'encrypted': bool(flags & FLAG_PAYLOAD_ENCRYPTED),
-            'crc32': payload_crc,
-        }
-
-        return actual_out
-
+            self.last_embed_info = {
+                'filename': safe_filename,
+                'payload_kind': payload_kind,
+                'payload_length': len(payload_bytes),
+                'frames': total_frames,
+                'start_frame': start_frame,
+                'segments': len(segments),
+                'output': assembled,
+                'encrypted': bool(self.encrypt_payload and key and key.isdigit()),
+                'nonce': (nonce.hex() if (nonce is not None) else ''),
+            }
+            self.output_path = os.path.dirname(assembled)
+            return assembled
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
     # Helper for GUI

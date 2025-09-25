@@ -2474,6 +2474,15 @@ class StegaEncodeWindow(QMainWindow):
         # This method is now handled by the MediaDropWidget
         pass
 
+    def _default_output_filename(self) -> str:
+        """Return a media-aware default file name for the stego output."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if self.media_type == 'audio':
+            return f"stego_output_{timestamp}.wav"
+        if self.media_type == 'video':
+            return f"stego_output_{timestamp}.avi"
+        return f"stego_output_{timestamp}.png"
+
     def choose_output_path(self):
         """Choose output path"""
         if self.media_type == 'audio':
@@ -2482,7 +2491,7 @@ class StegaEncodeWindow(QMainWindow):
             default_name = "stego_output.wav"
         elif self.media_type == 'video':
             title = "Save Steganographic Video"
-            filt = "AVI Files (*.avi);;All Files (*)"
+            filt = "AVI Files (*.avi);;MP4 Files (*.mp4);;All Files (*)"
             default_name = "stego_output.avi"
         else:
             title = "Save Steganographic Image"
@@ -2518,12 +2527,7 @@ class StegaEncodeWindow(QMainWindow):
             self.machine.set_payload_text(self.message_text.toPlainText())
 
         if not self.output_path.text().strip():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_path = f"stego_output_{timestamp}.png"
-            if self.media_type == 'audio':
-                default_path = f"stego_output_{timestamp}.wav"
-            elif self.media_type == 'video':
-                default_path = f"stego_output_{timestamp}.avi"
+            default_path = self._default_output_filename()
             self.output_path.setText(default_path)
             self.machine.set_output_path(default_path)
 
@@ -2537,8 +2541,7 @@ class StegaEncodeWindow(QMainWindow):
             ok = self.machine.hide_message(start_xy=self.start_xy)
         elif self.media_type == 'audio':
             if not self.output_path.text().strip():
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                default_path = f"stego_output_{timestamp}.wav"
+                default_path = self._default_output_filename()
                 self.output_path.setText(default_path)
                 self.machine.set_output_path(default_path)
             start_sample = self.start_sample if self.start_sample is not None else 0
@@ -2561,8 +2564,7 @@ class StegaEncodeWindow(QMainWindow):
                 ok = False
         elif self.media_type == 'video':
             if not self.output_path.text().strip():
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                default_path = f"stego_output_{timestamp}.avi"
+                default_path = self._default_output_filename()
                 self.output_path.setText(default_path)
                 self.machine.set_output_path(default_path)
             try:
