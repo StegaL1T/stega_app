@@ -2480,10 +2480,7 @@ class StegaEncodeWindow(QMainWindow):
         if self.media_type == 'audio':
             return f"stego_output_{timestamp}.wav"
         if self.media_type == 'video':
-            cover_path = getattr(self.media_drop_widget, 'media_path', None)
-            cover_ext = os.path.splitext(cover_path)[1].lower() if cover_path else ''
-            ext = '.mp4' if cover_ext == '.mp4' else '.avi'
-            return f"stego_output_{timestamp}{ext}"
+            return f"stego_output_{timestamp}.avi"
         return f"stego_output_{timestamp}.png"
 
     def choose_output_path(self):
@@ -2494,10 +2491,8 @@ class StegaEncodeWindow(QMainWindow):
             default_name = "stego_output.wav"
         elif self.media_type == 'video':
             title = "Save Steganographic Video"
-            cover_path = getattr(self.media_drop_widget, 'media_path', None)
-            cover_ext = os.path.splitext(cover_path)[1].lower() if cover_path else ''
-            filt = "Video Files (*.mp4 *.avi);;MP4 Files (*.mp4);;AVI Files (*.avi);;All Files (*)"
-            default_name = f"stego_output{'.mp4' if cover_ext == '.mp4' else '.avi'}"
+            filt = "AVI Files (*.avi);;MP4 Files (*.mp4);;All Files (*)"
+            default_name = "stego_output.avi"
         else:
             title = "Save Steganographic Image"
             filt = "PNG Files (*.png);;JPEG Files (*.jpg);;All Files (*)"
