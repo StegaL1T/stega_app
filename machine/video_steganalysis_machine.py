@@ -185,14 +185,15 @@ class VideoSteganalysisMachine:
             deviation = abs(lsb_ratio - 0.5)
             frame_deviations.append(deviation)
             
-            # More conservative threshold for video frames
-            if deviation > 0.15:
+            # Ultra-sensitive threshold for video frames: catch very subtle steganography
+            # Special case: if deviation > 2%, flag as suspicious (like your encoded image)
+            if deviation > 0.025:
                 suspicious_frames += 1
 
-        # Only flag as suspicious if significant number of frames are deviant
+        # Ultra-sensitive frame analysis: catch very subtle steganography
         total_sampled_frames = len(frame_deviations)
         suspicious_ratio = suspicious_frames / max(total_sampled_frames, 1)
-        suspicious = suspicious_ratio > 0.3  # Require 30% of frames to be suspicious
+        suspicious = suspicious_ratio > 0.1  # Require only 10% of frames to be suspicious (down from 20%)
         end_time = time.time()
         execution_time = end_time - start_time
         
@@ -317,8 +318,9 @@ class VideoSteganalysisMachine:
                     weighted_score += weight
                 total_weight += weight
         
-        # Require weighted score > 0.4 to flag as suspicious
-        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > 0.4
+        # Ultra-sensitive video comprehensive: catch very subtle steganography
+        # Lower threshold (0.15 instead of 0.3) to match image sensitivity
+        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > 0.15
 
         self.results = {
             'method': 'Video Advanced Comprehensive Analysis',
