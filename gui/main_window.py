@@ -1,6 +1,6 @@
 # gui/main_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QLabel, QPushButton, QFrame, QApplication, QSizePolicy)
+                             QLabel, QPushButton, QFrame, QApplication, QSizePolicy, QSpacerItem)
 from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QLinearGradient, QBrush, QPen, QPainterPath
 import math
@@ -8,7 +8,7 @@ import random
 
 
 class GradientLabel(QLabel):
-    """Custom QLabel with gradient text effect"""
+    """Custom QLabel with solid color text effect"""
     def __init__(self, text):
         super().__init__(text)
         self.setMinimumHeight(50)
@@ -17,22 +17,15 @@ class GradientLabel(QLabel):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
-        # Create gradient - smooth fade from blue to purple
-        gradient = QLinearGradient(0, 0, self.width(), 0)
-        gradient.setColorAt(0, QColor("#45edf2"))    # Cyan blue at start
-        gradient.setColorAt(0.3, QColor("#45edf2"))  # Blue continues
-        gradient.setColorAt(0.7, QColor("#49299a"))  # Purple starts
-        gradient.setColorAt(1, QColor("#49299a"))    # Purple at end
+        # Use solid color instead of gradient
+        solid_color = QColor("#45edf2")
         
-        # Set the gradient as the brush
-        painter.setBrush(QBrush(gradient))
-        painter.setPen(Qt.PenStyle.NoPen)
+        # Set the solid color
+        painter.setPen(QPen(solid_color, 1))
         
-        # Draw text with gradient
+        # Draw text with solid color
         font = self.font()
         painter.setFont(font)
-        painter.setBrush(QBrush(gradient))
-        painter.setPen(QPen(gradient, 1))
         
         # Get text metrics
         metrics = painter.fontMetrics()
@@ -210,11 +203,19 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(self.spacing)  # Responsive spacing
         main_layout.setContentsMargins(self.margins, self.margins, self.margins, self.margins)  # Responsive margins
 
+        # Add top spacer to push content down and create better vertical distribution
+        top_spacer = QSpacerItem(20, int(60 * (self.title_font_size / 28)), QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        main_layout.addItem(top_spacer)
+
         # Title section
         self.create_title_section(main_layout)
 
         # Cards section
         self.create_cards_section(main_layout)
+        
+        # Add bottom spacer to balance the layout
+        bottom_spacer = QSpacerItem(20, int(40 * (self.title_font_size / 28)), QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        main_layout.addItem(bottom_spacer)
 
         # Set window size and position
         self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
@@ -276,7 +277,7 @@ class MainWindow(QMainWindow):
         self.card_spacing = int(30 * scale_factor)
         
         # Responsive icon size
-        self.icon_size = int(80 * scale_factor)
+        self.icon_size = int(100 * scale_factor)
         
     def resizeEvent(self, event):
         """Handle window resize to update background"""
@@ -286,7 +287,7 @@ class MainWindow(QMainWindow):
 
     def create_title_section(self, layout):
         """Create the title and subtitle section with enhanced typography"""
-        # Main title with gradient effect using custom painting
+        # Main title with solid color using custom painting
         title_label = GradientLabel("LSB Steganography & Steganalysis Tool")
         title_font = QFont()
         title_font.setPointSize(self.title_font_size)  # Responsive font size
@@ -356,8 +357,8 @@ class MainWindow(QMainWindow):
         """Create an enhanced responsive card widget with better UX"""
         card = QFrame()
         card.setMinimumSize(self.card_min_width, self.card_min_height)  # Responsive minimum size
-        card.setMaximumSize(self.card_max_width, self.card_max_height)  # Responsive maximum size
-        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        card.setMaximumWidth(self.card_max_width)  # Only limit width, not height
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
         card.setStyleSheet("""
             QFrame {
                 background-color: #0e1625;
@@ -371,9 +372,11 @@ class MainWindow(QMainWindow):
 
         layout = QVBoxLayout(card)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.setSpacing(int(6 * (self.card_min_width / 280)))  # Responsive spacing
-        layout.setContentsMargins(int(15 * (self.card_min_width / 280)), int(15 * (self.card_min_width / 280)), 
-                                 int(15 * (self.card_min_width / 280)), int(15 * (self.card_min_width / 280)))  # Responsive margins
+        # More responsive spacing and margins
+        responsive_spacing = max(int(8 * (self.card_min_width / 280)), 6)  # Minimum 6px spacing
+        responsive_margin = max(int(15 * (self.card_min_width / 280)), 10)  # Minimum 10px margin
+        layout.setSpacing(responsive_spacing)
+        layout.setContentsMargins(responsive_margin, responsive_margin, responsive_margin, responsive_margin)
 
         # Icon with proper centering - no borders
         icon_container = QWidget()
@@ -420,19 +423,22 @@ class MainWindow(QMainWindow):
         """)
         title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-        # Description with improved readability
+        # Description with improved readability and proper text wrapping
         desc_label = QLabel(description)
         desc_font = QFont()
-        desc_font.setPointSize(self.card_desc_font_size)  # Responsive font size
+        # Make font size more responsive to prevent clipping
+        responsive_font_size = max(self.card_desc_font_size, int(self.card_desc_font_size * 0.8))
+        desc_font.setPointSize(responsive_font_size)
         desc_font.setWeight(QFont.Weight.Normal)
         desc_label.setFont(desc_font)
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Center-align for consistency
         desc_label.setWordWrap(True)
-        desc_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        desc_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
+        desc_label.setMinimumHeight(int(60 * (self.card_min_width / 280)))  # Ensure minimum height for text
         desc_label.setStyleSheet("""
             color: #D9D9D9;
-            line-height: 1.5;
-            padding: 4px 4px 2px 4px;
+            line-height: 1.4;
+            padding: 6px 8px 4px 8px;
             text-align: center;
             border: none;
             background: transparent;
@@ -444,7 +450,7 @@ class MainWindow(QMainWindow):
         button_font.setPointSize(self.button_font_size)  # Responsive font size
         button_font.setBold(True)
         button.setFont(button_font)
-        button.setMinimumHeight(int(35 * (self.card_min_width / 280)))  # Responsive button height
+        button.setMinimumHeight(int(40 * (self.card_min_width / 280)))  # Slightly increased responsive button height
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         button.setStyleSheet(f"""
             QPushButton {{

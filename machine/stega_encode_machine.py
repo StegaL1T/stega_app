@@ -52,7 +52,6 @@ except ImportError:  # pragma: no cover - optional dependency for video handling
 from PIL import Image
 import numpy as np
 from pathlib import Path
-from stegano import lsb
 
 from machine.stega_spec import (
     FLAG_PAYLOAD_ENCRYPTED,
@@ -83,12 +82,6 @@ class CapacityError(StegaError):
 
 class UnsupportedFormatError(StegaError):
     pass
-
-
-
-
-
-
 
 
 class StegaEncodeMachine:
@@ -131,7 +124,8 @@ class StegaEncodeMachine:
                     print(f"Error: Unsupported WAV compression: {comptype}")
                     return False
                 if sampwidth not in (1, 2, 3, 4):
-                    print(f"Error: Unsupported WAV sample width: {sampwidth} bytes")
+                    print(
+                        f"Error: Unsupported WAV sample width: {sampwidth} bytes")
                     return False
             self.cover_audio_path = wav_path
             print(f"Cover audio loaded: {wav_path}")
@@ -345,7 +339,8 @@ class StegaEncodeMachine:
             if self.cover_image is None or self.image_array is None:
                 raise ValidationError("Cover image not loaded")
 
-            filename = os.path.basename(self.payload_file_path) if self.payload_file_path else "payload.txt"
+            filename = os.path.basename(
+                self.payload_file_path) if self.payload_file_path else "payload.txt"
             stego_img, header = self.encode_image(
                 self.cover_image_path, self.payload_data, filename, self.lsb_bits, self.encryption_key, start_xy=start_xy
             )
@@ -453,10 +448,12 @@ class StegaEncodeMachine:
                 return max(0, total_bits - start_byte * lsb_bits)
         elif cover_type == 'video':
             if cv2 is None:
-                raise UnsupportedFormatError("OpenCV is required for video support")
+                raise UnsupportedFormatError(
+                    "OpenCV is required for video support")
             cap = cv2.VideoCapture(cover_path)
             if not cap.isOpened():
-                raise UnsupportedFormatError(f"Cannot open video: {cover_path}")
+                raise UnsupportedFormatError(
+                    f"Cannot open video: {cover_path}")
             frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -477,7 +474,8 @@ class StegaEncodeMachine:
             start_bit = pixel_index_across * channels * lsb_bits
             return max(0, total_bits - start_bit)
         else:
-            raise UnsupportedFormatError(f"Unsupported cover type: {cover_type}")
+            raise UnsupportedFormatError(
+                f"Unsupported cover type: {cover_type}")
 
     # ====================
     # Embedding core
@@ -510,7 +508,6 @@ class StegaEncodeMachine:
     # Encoders
     # ====================
 
-
     def encode_image(self, cover_image_path: str, payload_bytes: bytes, filename: str, lsb_bits: int, key: str, start_xy: Optional[Tuple[int, int]] = None) -> Tuple[Image.Image, Dict[str, Any]]:
         if not (1 <= lsb_bits <= 8):
             raise ValidationError(f"LSB bits must be 1..8, got {lsb_bits}")
@@ -532,7 +529,8 @@ class StegaEncodeMachine:
         payload_for_embed = payload_bytes
         if self.encrypt_payload:
             nonce = generate_nonce()
-            payload_for_embed = encrypt_payload(key, nonce, payload_bytes, fname_bytes)
+            payload_for_embed = encrypt_payload(
+                key, nonce, payload_bytes, fname_bytes)
             flags |= FLAG_PAYLOAD_ENCRYPTED
 
         payload_crc = crc32(payload_bytes)
@@ -550,20 +548,25 @@ class StegaEncodeMachine:
         payload_bits = len(payload_for_embed) * 8
         required_bits = header_bits + payload_bits
         if required_bits > total_lsb_bits:
-            raise CapacityError(f"Not enough capacity: need {required_bits} bits, have {total_lsb_bits} bits")
+            raise CapacityError(
+                f"Not enough capacity: need {required_bits} bits, have {total_lsb_bits} bits")
 
         if start_xy is not None:
             x, y = start_xy
             if not (0 <= x < w and 0 <= y < h):
-                raise ValidationError(f"Start (x,y) out of bounds: ({x},{y}) for image {w}x{h}")
+                raise ValidationError(
+                    f"Start (x,y) out of bounds: ({x},{y}) for image {w}x{h}")
             pixel_index = y * w + x
             start_bit = pixel_index * c * lsb_bits
             if start_bit < header_bits:
-                raise CapacityError("Selected start position overlaps header region")
+                raise CapacityError(
+                    "Selected start position overlaps header region")
             if start_bit + payload_bits > total_lsb_bits:
-                raise CapacityError("Selected start position too late for payload")
+                raise CapacityError(
+                    "Selected start position too late for payload")
         else:
-            start_bit = rng.randrange(header_bits, total_lsb_bits - payload_bits + 1)
+            start_bit = rng.randrange(
+                header_bits, total_lsb_bits - payload_bits + 1)
 
         header_actual = HeaderMeta(
             lsb_bits=lsb_bits,
@@ -575,7 +578,8 @@ class StegaEncodeMachine:
             nonce=nonce,
         )
         header_bytes = pack_header(header_actual)
-        assert len(header_bytes) * 8 == header_bits, "Header size changed unexpectedly"
+        assert len(header_bytes) * \
+            8 == header_bits, "Header size changed unexpectedly"
 
         identity_order = list(range(lsb_bits))
         self._embed_bits(flat, lsb_bits, 0, identity_order, header_bytes)
@@ -603,9 +607,6 @@ class StegaEncodeMachine:
 
         return stego_img, parsed
 
-
-
-
     def encode_audio(self, cover_wav_path: str, payload_bytes: bytes, filename: str, lsb_bits: int, key: str, start_sample: Optional[int] = None) -> bytes:
         if not (1 <= lsb_bits <= 8):
             raise ValidationError(f"LSB bits must be 1..8, got {lsb_bits}")
@@ -622,13 +623,18 @@ class StegaEncodeMachine:
             comptype = wf.getcomptype()
             compname = wf.getcompname()
             if comptype not in ('NONE', 'not compressed'):
-                raise UnsupportedFormatError(f"Unsupported WAV compression: {comptype} ({compname})")
+                raise UnsupportedFormatError(
+                    f"Unsupported WAV compression: {comptype} ({compname})")
             if sampwidth not in (1, 2, 3, 4):
-                raise UnsupportedFormatError(f"Unsupported sample width: {sampwidth} bytes")
+                raise UnsupportedFormatError(
+                    f"Unsupported sample width: {sampwidth} bytes")
             frames = wf.readframes(n_frames)
             params = wf.getparams()
 
+        print(f"[DEBUG] First 32 bytes of raw audio: {frames[:32].hex()}")
         flat = np.frombuffer(frames, dtype=np.uint8).copy()
+        print(
+            f"[DEBUG] np.uint8 flat shape: {flat.shape}, first 32 bytes: {flat[:32].tolist()}")
         total_lsb_bits = flat.size * lsb_bits
 
         fname_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
@@ -640,7 +646,8 @@ class StegaEncodeMachine:
         payload_for_embed = payload_bytes
         if self.encrypt_payload:
             nonce = generate_nonce()
-            payload_for_embed = encrypt_payload(key, nonce, payload_bytes, fname_bytes)
+            payload_for_embed = encrypt_payload(
+                key, nonce, payload_bytes, fname_bytes)
             flags |= FLAG_PAYLOAD_ENCRYPTED
 
         payload_crc = crc32(payload_bytes)
@@ -658,7 +665,8 @@ class StegaEncodeMachine:
         payload_bits = len(payload_for_embed) * 8
         required_bits = header_bits + payload_bits
         if required_bits > total_lsb_bits:
-            raise CapacityError(f"Not enough capacity: need {required_bits} bits, have {total_lsb_bits} bits")
+            raise CapacityError(
+                f"Not enough capacity: need {required_bits} bits, have {total_lsb_bits} bits")
 
         bytes_per_frame = n_channels * sampwidth
         if start_sample is not None:
@@ -666,14 +674,18 @@ class StegaEncodeMachine:
                 start_sample = 0
             start_byte = start_sample * bytes_per_frame
             if start_byte >= flat.size:
-                raise CapacityError("Selected start sample beyond audio length")
+                raise CapacityError(
+                    "Selected start sample beyond audio length")
             start_bit = start_byte * lsb_bits
             if start_bit < header_bits:
-                raise CapacityError("Selected start sample overlaps header region")
+                raise CapacityError(
+                    "Selected start sample overlaps header region")
             if start_bit + payload_bits > total_lsb_bits:
-                raise CapacityError("Selected start position too late for payload")
+                raise CapacityError(
+                    "Selected start position too late for payload")
         else:
-            start_bit = rng.randrange(header_bits, total_lsb_bits - payload_bits + 1)
+            start_bit = rng.randrange(
+                header_bits, total_lsb_bits - payload_bits + 1)
 
         header_actual = HeaderMeta(
             lsb_bits=lsb_bits,
@@ -685,7 +697,8 @@ class StegaEncodeMachine:
             nonce=nonce,
         )
         header_bytes = pack_header(header_actual)
-        assert len(header_bytes) * 8 == header_bits, "Header size changed unexpectedly"
+        assert len(header_bytes) * \
+            8 == header_bits, "Header size changed unexpectedly"
 
         identity_order = list(range(lsb_bits))
         self._embed_bits(flat, lsb_bits, 0, identity_order, header_bytes)
@@ -716,8 +729,6 @@ class StegaEncodeMachine:
         }
 
         return audio_bytes
-
-
 
     # ====================
     # ====================
@@ -765,7 +776,8 @@ class StegaEncodeMachine:
             '-acodec', 'pcm_s16le',
             str(audio_path),
         ]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
         if result.returncode != 0:
             return None
         return audio_path if audio_path.exists() else None
@@ -774,7 +786,8 @@ class StegaEncodeMachine:
     def _assemble_frames_with_ffmpeg(frames_dir: Path, fps: float, audio_path: Optional[Path], output_path: str) -> str:
         ffmpeg = shutil.which('ffmpeg')
         if not ffmpeg:
-            raise UnsupportedFormatError("ffmpeg is required to assemble video frames")
+            raise UnsupportedFormatError(
+                "ffmpeg is required to assemble video frames")
         pattern = f"{frames_dir.as_posix()}/%06d.png"
         # Important: place encoding options AFTER all inputs to avoid ffmpeg
         # interpreting them as input options for the following input (audio).
@@ -794,10 +807,12 @@ class StegaEncodeMachine:
         if audio_path and audio_path.exists():
             cmd.extend(['-c:a', 'pcm_s16le', '-shortest'])
         cmd.append(output_path)
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
         if result.returncode != 0:
             detail = result.stderr.decode(errors='ignore').strip()
-            raise UnsupportedFormatError(f"ffmpeg failed to assemble video: {detail}")
+            raise UnsupportedFormatError(
+                f"ffmpeg failed to assemble video: {detail}")
         return output_path
 
     def encode_video(self, cover_video_path: str, payload_bytes: bytes, filename: str, lsb_bits: int, key: str, start_fxy: Optional[Tuple[int, int, int]] = None, out_path: Optional[str] = None) -> str:
@@ -808,11 +823,13 @@ class StegaEncodeMachine:
         frames_dir = temp_dir / "frames"
         frames_dir.mkdir(parents=True, exist_ok=True)
         try:
-            fps = self._extract_frames_to_directory(cover_video_path, frames_dir)
+            fps = self._extract_frames_to_directory(
+                cover_video_path, frames_dir)
             audio_path = self._extract_audio_track(cover_video_path, temp_dir)
 
             payload_kind = 'file' if self.payload_file_path else 'text'
-            safe_filename = filename or (Path(self.payload_file_path).name if self.payload_file_path else 'payload.bin')
+            safe_filename = filename or (
+                Path(self.payload_file_path).name if self.payload_file_path else 'payload.bin')
             # Build inner JSON that describes the payload
             inner = {
                 'filename': safe_filename,
@@ -826,7 +843,8 @@ class StegaEncodeMachine:
             if self.encrypt_payload and key and key.isdigit():
                 # Encrypt the inner JSON and wrap with nonce + ciphertext
                 nonce = generate_nonce()
-                ct = encrypt_payload(key, nonce, inner_json, context=b'video-json')
+                ct = encrypt_payload(
+                    key, nonce, inner_json, context=b'video-json')
                 envelope = {
                     'v': 1,
                     'enc': True,
@@ -856,15 +874,18 @@ class StegaEncodeMachine:
             if start_fxy is not None:
                 segments = [message]
                 if start_frame >= total_frames:
-                    raise CapacityError('Selected start frame is beyond the end of the video')
+                    raise CapacityError(
+                        'Selected start frame is beyond the end of the video')
                 frame_index = start_frame
                 frame_path = frames_dir / f"{frame_index:06d}.png"
                 secret = lsb.hide(str(frame_path), segments[0])
                 secret.save(str(frame_path))
             else:
-                segments = self._split_message_for_frames(message, total_frames)
+                segments = self._split_message_for_frames(
+                    message, total_frames)
                 if len(segments) > total_frames:
-                    raise CapacityError('Video does not have enough frames to store the payload')
+                    raise CapacityError(
+                        'Video does not have enough frames to store the payload')
                 # Embed sequentially from frame 0
                 for idx, segment in enumerate(segments):
                     frame_index = idx
@@ -874,7 +895,8 @@ class StegaEncodeMachine:
 
             cover_root = os.path.splitext(cover_video_path)[0]
             target_path = out_path or f"{cover_root}_stego.avi"
-            assembled = self._assemble_frames_with_ffmpeg(frames_dir, fps, audio_path, target_path)
+            assembled = self._assemble_frames_with_ffmpeg(
+                frames_dir, fps, audio_path, target_path)
 
             self.last_embed_info = {
                 'filename': safe_filename,
@@ -892,8 +914,8 @@ class StegaEncodeMachine:
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-
     # Helper for GUI
+
     def get_audio_info(self, wav_path: str) -> Dict[str, Any]:
         with wave.open(wav_path, 'rb') as wf:
             n_channels = wf.getnchannels()
