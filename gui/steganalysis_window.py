@@ -15,7 +15,7 @@ import random
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QProgressBar, QApplication,
-                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget, QSpacerItem, QSpinBox)
+                             QStackedWidget, QHBoxLayout, QSizePolicy, QTabWidget, QSpacerItem)
 from PyQt6.QtCore import Qt, QSize, QTimer
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QLinearGradient, QBrush
 import numpy as np
@@ -435,22 +435,6 @@ class SteganalysisWindow(QMainWindow):
         """)
         return panel
 
-    def _validate_time_range(self):
-        """Validate and adjust time range controls"""
-        start_time = self.start_time_spin.value()
-        end_time = self.end_time_spin.value()
-
-        # Update max values based on video duration if available
-        if hasattr(self.machine, 'video_duration') and self.machine.video_duration:
-            max_duration = int(self.machine.video_duration)
-            self.start_time_spin.setMaximum(max_duration - 1)
-            self.end_time_spin.setMaximum(max_duration)
-
-            # Adjust current values if they exceed video duration
-            if start_time >= max_duration:
-                self.start_time_spin.setValue(0)
-            if end_time > max_duration:
-                self.end_time_spin.setValue(max_duration)
 
     def _build_image_controls(self) -> QWidget:
         panel = self._styled_panel()
@@ -649,8 +633,8 @@ class SteganalysisWindow(QMainWindow):
         layout.addWidget(title)
         layout.addWidget(image_group)
         layout.addWidget(method_group)
-        layout.addWidget(self.img_analyze_btn)
         layout.addWidget(self.image_method_description)
+        layout.addWidget(self.img_analyze_btn)
         layout.addStretch()
         return panel
 
@@ -784,7 +768,10 @@ class SteganalysisWindow(QMainWindow):
         layout.addWidget(img_results_group)
         layout.addWidget(image_charts_group)
         layout.addWidget(img_stats_group)
-        # Export charts to PDF button
+        # Export buttons in horizontal layout
+        export_buttons_layout = QHBoxLayout()
+        export_buttons_layout.setSpacing(10)
+        
         export_img_pdf_btn = QPushButton("Export Charts to PDF")
         export_img_pdf_btn.setStyleSheet("""
             QPushButton { 
@@ -803,9 +790,7 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         export_img_pdf_btn.clicked.connect(self.export_charts_pdf)
-        layout.addWidget(export_img_pdf_btn)
 
-        # Export report button
         export_img_report_btn = QPushButton("Export Report")
         export_img_report_btn.setStyleSheet("""
             QPushButton { 
@@ -824,7 +809,10 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         export_img_report_btn.clicked.connect(self.export_report)
-        layout.addWidget(export_img_report_btn)
+        
+        export_buttons_layout.addWidget(export_img_pdf_btn)
+        export_buttons_layout.addWidget(export_img_report_btn)
+        layout.addLayout(export_buttons_layout)
         layout.addStretch()
         return panel
 
@@ -1024,8 +1012,8 @@ class SteganalysisWindow(QMainWindow):
         layout.addWidget(title)
         layout.addWidget(audio_group)
         layout.addWidget(audio_method_group)
-        layout.addWidget(self.aud_analyze_btn)
         layout.addWidget(self.audio_method_description)
+        layout.addWidget(self.aud_analyze_btn)
         layout.addStretch()
         return panel
 
@@ -1135,26 +1123,10 @@ class SteganalysisWindow(QMainWindow):
             "Audio statistics will appear here...")
         aud_stats_layout.addWidget(self.aud_stats_text)
 
-        export_button = QPushButton("Export Report")
-        export_button.setStyleSheet("""
-            QPushButton { 
-                background: rgba(147,51,234,0.2);
-                color: #9333ea;
-                border: 2px solid #9333ea;
-                padding: 10px 20px;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-            }
-            QPushButton:hover { 
-                background: rgba(147,51,234,0.4);
-                border: 3px solid #9333ea;
-                color: #ffffff;
-            }
-        """)
-        export_button.clicked.connect(self.export_report)
-
-        # Export charts to PDF button
+        # Export buttons in horizontal layout
+        export_buttons_layout = QHBoxLayout()
+        export_buttons_layout.setSpacing(10)
+        
         export_aud_pdf_btn = QPushButton("Export Charts to PDF")
         export_aud_pdf_btn.setStyleSheet("""
             QPushButton { 
@@ -1174,12 +1146,33 @@ class SteganalysisWindow(QMainWindow):
         """)
         export_aud_pdf_btn.clicked.connect(self.export_charts_pdf)
 
+        export_button = QPushButton("Export Report")
+        export_button.setStyleSheet("""
+            QPushButton { 
+                background: rgba(147,51,234,0.2);
+                color: #9333ea;
+                border: 2px solid #9333ea;
+                padding: 10px 20px;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover { 
+                background: rgba(147,51,234,0.4);
+                border: 3px solid #9333ea;
+                color: #ffffff;
+            }
+        """)
+        export_button.clicked.connect(self.export_report)
+        
+        export_buttons_layout.addWidget(export_aud_pdf_btn)
+        export_buttons_layout.addWidget(export_button)
+
         layout.addWidget(title)
         layout.addWidget(aud_results_group)
         layout.addWidget(audio_charts_group)
         layout.addWidget(aud_stats_group)
-        layout.addWidget(export_aud_pdf_btn)
-        layout.addWidget(export_button)
+        layout.addLayout(export_buttons_layout)
         layout.addStretch()
         return panel
 
@@ -1287,42 +1280,6 @@ class SteganalysisWindow(QMainWindow):
                 padding: 0 5px 0 5px;
             }
         """)
-        # Time range controls
-        time_group = QGroupBox("Analysis Time Range")
-        time_layout = QGridLayout(time_group)
-
-        # Start time control
-        start_time_label = QLabel("Start Time (s):")
-        start_time_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
-        self.start_time_spin = QSpinBox()
-        self.start_time_spin.setMinimum(0)
-        self.start_time_spin.setMaximum(999999)
-        self.start_time_spin.setValue(0)
-        self.start_time_spin.setStyleSheet("""
-            QSpinBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
-            QSpinBox:focus { border-color: #e67e22; }
-        """)
-
-        # End time control
-        end_time_label = QLabel("End Time (s):")
-        end_time_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
-        self.end_time_spin = QSpinBox()
-        self.end_time_spin.setMinimum(1)
-        self.end_time_spin.setMaximum(999999)
-        self.end_time_spin.setValue(10)  # Default to 10 seconds
-        self.end_time_spin.setStyleSheet("""
-            QSpinBox { padding: 8px; border: 2px solid #bdc3c7; border-radius: 5px; background-color: white; }
-            QSpinBox:focus { border-color: #e67e22; }
-        """)
-
-        # Connect time controls to validation
-        self.start_time_spin.valueChanged.connect(self._validate_time_range)
-        self.end_time_spin.valueChanged.connect(self._validate_time_range)
-
-        time_layout.addWidget(start_time_label, 0, 0)
-        time_layout.addWidget(self.start_time_spin, 0, 1)
-        time_layout.addWidget(end_time_label, 1, 0)
-        time_layout.addWidget(self.end_time_spin, 1, 1)
 
         video_method_group = QGroupBox("Video Analysis Method")
         video_method_layout = QVBoxLayout(video_method_group)
@@ -1417,7 +1374,6 @@ class SteganalysisWindow(QMainWindow):
 
         layout.addWidget(title)
         layout.addWidget(video_group)
-        layout.addWidget(time_group)
         layout.addWidget(video_method_group)
         layout.addWidget(self.video_method_description)
         layout.addWidget(self.vid_analyze_btn)
@@ -1548,7 +1504,10 @@ class SteganalysisWindow(QMainWindow):
             "Video statistics will appear here...")
         vid_stats_layout.addWidget(self.vid_stats_text)
 
-        # Export charts to PDF button
+        # Export buttons in horizontal layout
+        export_buttons_layout = QHBoxLayout()
+        export_buttons_layout.setSpacing(10)
+        
         export_vid_pdf_btn = QPushButton("Export Charts to PDF")
         export_vid_pdf_btn.setStyleSheet("""
             QPushButton { 
@@ -1568,7 +1527,6 @@ class SteganalysisWindow(QMainWindow):
         """)
         export_vid_pdf_btn.clicked.connect(self.export_charts_pdf)
 
-        # Export report button
         export_vid_report_btn = QPushButton("Export Report")
         export_vid_report_btn.setStyleSheet("""
             QPushButton { 
@@ -1587,14 +1545,16 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
         export_vid_report_btn.clicked.connect(self.export_report)
+        
+        export_buttons_layout.addWidget(export_vid_pdf_btn)
+        export_buttons_layout.addWidget(export_vid_report_btn)
 
         layout.addWidget(title)
         layout.addWidget(self.vid_progress_bar)
         layout.addWidget(vid_results_group)
         layout.addWidget(video_charts_group)
         layout.addWidget(vid_stats_group)
-        layout.addWidget(export_vid_pdf_btn)
-        layout.addWidget(export_vid_report_btn)
+        layout.addLayout(export_buttons_layout)
         layout.addStretch()
         return panel
 

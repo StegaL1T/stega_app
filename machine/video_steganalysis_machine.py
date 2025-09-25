@@ -27,14 +27,12 @@ class VideoSteganalysisMachine:
 
         print("VideoSteganalysisMachine initialized")
 
-    def set_video(self, video_path: str, start_sec: float = 0, end_sec: Optional[float] = None) -> bool:
+    def set_video(self, video_path: str) -> bool:
         """
         Load video frames and metadata using OpenCV.
         
         Args:
             video_path: Path to the video file
-            start_sec: Start time in seconds (default: 0)
-            end_sec: End time in seconds (default: None for full video)
         """
         try:
             import cv2
@@ -73,41 +71,11 @@ class VideoSteganalysisMachine:
                 cap.release()
                 return False
 
-            # Validate time parameters
-            if start_sec < 0:
-                print("Error: Start time cannot be negative")
-                cap.release()
-                return False
-                
-            if end_sec is not None:
-                if end_sec <= start_sec:
-                    print("Error: End time must be greater than start time")
-                    cap.release()
-                    return False
-                if end_sec > self.video_duration:
-                    print(f"Error: End time ({end_sec}s) exceeds video duration ({self.video_duration:.2f}s)")
-                    cap.release()
-                    return False
-            else:
-                end_sec = self.video_duration
-
-            # Calculate frame ranges
-            start_frame = int(start_sec * self.video_fps)
-            end_frame = int(end_sec * self.video_fps)
-            
-            # Ensure we don't exceed total frame count
-            end_frame = min(end_frame, total_frame_count)
-            
-            print(f"Loading frames from {start_sec:.2f}s to {end_sec:.2f}s (frames {start_frame} to {end_frame})")
-
-            # Seek to start frame
-            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-            
             frames = []
-            current_frame = start_frame
+            frames_read = 0
             
-            # Read frames in the specified range
-            while current_frame < end_frame:
+            # Read all frames from the video
+            while True:
                 try:
                     success, frame = cap.read()
                     if not success or frame is None:
@@ -115,10 +83,10 @@ class VideoSteganalysisMachine:
                     
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frames.append(frame_rgb)
-                    current_frame += 1
+                    frames_read += 1
                     
                 except Exception as read_error:
-                    print(f"Warning: Error reading frame {current_frame}: {read_error}")
+                    print(f"Warning: Error reading frame: {read_error}")
                     break
 
             cap.release()
@@ -130,7 +98,7 @@ class VideoSteganalysisMachine:
             self.video_frames = frames
 
             print(f"Video loaded: {video_path}")
-            print(f"Frames loaded: {len(frames)} (from {start_sec:.2f}s to {end_sec:.2f}s), FPS: {self.video_fps}, Total duration: {self.video_duration:.2f}s")
+            print(f"Frames: {len(frames)}, FPS: {self.video_fps}, Duration: {self.video_duration:.2f}s")
             return True
 
         except Exception as e:
