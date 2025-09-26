@@ -1,6 +1,7 @@
 [Test case 1]
 Input file path : asset/output/stega_encode/test_stego.png
 LSB : 2
+Key : 12345
 Secret : Sim Yee stop wearing blush
 
 Output : "You should see a pdf file with the words 'Sim Yee stop wearing blush' "

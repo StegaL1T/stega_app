@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
                              QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-                             QScrollArea, QSlider as QTimeSlider, QToolTip)
+                             QScrollArea, QSlider as QTimeSlider, QToolTip, QApplication)
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage
 import os
@@ -12,6 +12,146 @@ from PIL import Image
 import soundfile as sf
 import cv2
 from datetime import datetime
+import math
+import random
+
+
+class CyberBackgroundWidget(QWidget):
+    """Custom background widget with subtle cybersecurity elements"""
+
+    def __init__(self):
+        super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.update)
+        self.animation_timer.start(50)  # 20 FPS animation
+        self.time = 0
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Base dark background
+        painter.fillRect(self.rect(), QColor("#0e1625"))
+
+        # Subtle grid pattern
+        self.draw_grid(painter)
+
+        # Floating particles (data packets)
+        self.draw_particles(painter)
+
+        # Subtle circuit-like patterns
+        self.draw_circuit_patterns(painter)
+
+        # Cybersecurity scan lines
+        self.draw_scan_lines(painter)
+
+        self.time += 0.02
+
+    def draw_grid(self, painter):
+        """Draw an enhanced grid pattern with cybersecurity elements"""
+        # Main grid lines with better visibility
+        painter.setPen(QPen(QColor(69, 237, 242, 18), 1))  # Increased opacity
+        grid_size = 40
+
+        for x in range(0, self.width(), grid_size):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(0, self.height(), grid_size):
+            painter.drawLine(0, y, self.width(), y)
+
+        # Add some grid intersections with small dots
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 2))  # Increased opacity
+        for x in range(grid_size, self.width(), grid_size * 2):
+            for y in range(grid_size, self.height(), grid_size * 2):
+                painter.drawPoint(x, y)
+
+        # Add some diagonal accent lines for tech feel
+        painter.setPen(QPen(QColor(73, 41, 154, 12), 1))  # Increased opacity
+        for i in range(0, self.width(), grid_size * 3):
+            painter.drawLine(i, 0, i + grid_size, grid_size)
+            painter.drawLine(i, self.height(), i + grid_size,
+                             self.height() - grid_size)
+
+    def draw_particles(self, painter):
+        """Draw floating cybersecurity data packets"""
+        # Main data packets
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 2))
+
+        for i in range(6):
+            x = (self.width() * 0.15 + i * self.width() * 0.12 +
+                 math.sin(self.time + i) * 15) % self.width()
+            y = (self.height() * 0.25 + i * self.height() * 0.12 +
+                 math.cos(self.time * 0.8 + i) * 12) % self.height()
+
+            # Draw data packet squares
+            painter.drawRect(int(x), int(y), 4, 4)
+
+        # Add some smaller security indicators
+        painter.setPen(QPen(QColor(73, 41, 154, 20), 1))
+        for i in range(4):
+            x = (self.width() * 0.1 + i * self.width() * 0.2 +
+                 math.sin(self.time * 1.2 + i) * 25) % self.width()
+            y = (self.height() * 0.3 + i * self.height() * 0.15 +
+                 math.cos(self.time * 0.6 + i) * 18) % self.height()
+
+            # Draw small security dots
+            painter.drawPoint(int(x), int(y))
+
+    def draw_circuit_patterns(self, painter):
+        """Draw subtle circuit-like patterns"""
+        painter.setPen(QPen(QColor(73, 41, 154, 15), 1))
+
+        # Draw some circuit-like lines in corners
+        corner_size = 100
+        # Top-left corner
+        painter.drawLine(20, 20, corner_size, 20)
+        painter.drawLine(20, 20, 20, corner_size)
+        painter.drawLine(20, corner_size, corner_size, corner_size)
+
+        # Top-right corner
+        painter.drawLine(self.width() - 20, 20, self.width() - corner_size, 20)
+        painter.drawLine(self.width() - 20, 20, self.width() - 20, corner_size)
+        painter.drawLine(self.width() - 20, corner_size,
+                         self.width() - corner_size, corner_size)
+
+        # Bottom corners
+        painter.drawLine(20, self.height() - 20,
+                         corner_size, self.height() - 20)
+        painter.drawLine(20, self.height() - 20, 20,
+                         self.height() - corner_size)
+        painter.drawLine(20, self.height() - corner_size,
+                         corner_size, self.height() - corner_size)
+
+        painter.drawLine(self.width() - 20, self.height() - 20,
+                         self.width() - corner_size, self.height() - 20)
+        painter.drawLine(self.width() - 20, self.height() - 20,
+                         self.width() - 20, self.height() - corner_size)
+        painter.drawLine(self.width() - 20, self.height() - corner_size,
+                         self.width() - corner_size, self.height() - corner_size)
+
+    def draw_scan_lines(self, painter):
+        """Draw cybersecurity scan lines effect - maximum 4 lines"""
+        # Two horizontal scan lines
+        painter.setPen(QPen(QColor(69, 237, 242, 45), 2))
+        scan_y = int((self.height() * 0.3 + math.sin(self.time * 2)
+                     * self.height() * 0.4) % self.height())
+        painter.drawLine(0, scan_y, self.width(), scan_y)
+
+        painter.setPen(QPen(QColor(69, 237, 242, 30), 1))
+        scan_y2 = int((self.height() * 0.7 + math.cos(self.time * 1.8)
+                      * self.height() * 0.35) % self.height())
+        painter.drawLine(0, scan_y2, self.width(), scan_y2)
+
+        # Two vertical scan lines
+        painter.setPen(QPen(QColor(69, 237, 242, 40), 2))
+        scan_x = int((self.width() * 0.2 + math.cos(self.time * 1.5)
+                     * self.width() * 0.5) % self.width())
+        painter.drawLine(scan_x, 0, scan_x, self.height())
+
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 1))
+        scan_x2 = int((self.width() * 0.8 + math.sin(self.time * 1.2)
+                      * self.width() * 0.4) % self.width())
+        painter.drawLine(scan_x2, 0, scan_x2, self.height())
 
 
 class MediaDropWidget(QFrame):
@@ -41,15 +181,15 @@ class MediaDropWidget(QFrame):
         self.drop_zone.setMinimumHeight(200)
         self.drop_zone.setStyleSheet("""
             QLabel {
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #7f8c8d;
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
                 font-size: 16px;
             }
             QLabel:hover {
-                border-color: #e67e22;
-                background-color: #fdf2e9;
+                border-color: #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
         """)
         self.drop_zone.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -60,7 +200,7 @@ class MediaDropWidget(QFrame):
         self.file_info = QLabel()
         self.file_info.setStyleSheet("""
             QLabel {
-                color: #2c3e50;
+                color: #e8e8fc;
                 font-weight: bold;
                 padding: 5px;
             }
@@ -72,15 +212,16 @@ class MediaDropWidget(QFrame):
         self.remove_btn = QPushButton("Remove Media")
         self.remove_btn.setStyleSheet("""
             QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
+                background: rgba(231,76,60,0.2);
+                color: #e74c3c;
+                border: 2px solid #e74c3c;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background: rgba(231,76,60,0.4);
+                border: 3px solid #e74c3c;
             }
         """)
         self.remove_btn.clicked.connect(self.remove_media)
@@ -90,15 +231,16 @@ class MediaDropWidget(QFrame):
         self.browse_btn = QPushButton("Browse Files")
         self.browse_btn.setStyleSheet("""
             QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border: none;
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #d35400;
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
             }
         """)
         self.browse_btn.clicked.connect(self.browse_files)
@@ -115,10 +257,10 @@ class MediaDropWidget(QFrame):
             event.acceptProposedAction()
             self.drop_zone.setStyleSheet("""
                 QLabel {
-                    border: 3px dashed #27ae60;
+                    border: 3px dashed #45edf2;
                     border-radius: 15px;
-                    background-color: #d5f4e6;
-                    color: #27ae60;
+                    background-color: rgba(69,237,242,0.2);
+                    color: #45edf2;
                     font-size: 16px;
                     font-weight: bold;
                 }
@@ -129,10 +271,10 @@ class MediaDropWidget(QFrame):
         """Handle drag leave event"""
         self.drop_zone.setStyleSheet("""
             QLabel {
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #7f8c8d;
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
                 font-size: 16px;
             }
         """)
@@ -215,22 +357,40 @@ class StegaDecodeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Steganography - Extract Messages")
-        self.setMinimumSize(1200, 800)
+        
+        # Setup responsive sizing
+        self.setup_responsive_sizing()
 
         # Initialize the steganography decoding machine
         from machine.stega_decode_machine import StegaDecodeMachine
         self.machine = StegaDecodeMachine()
 
-        # Set gradient background
+        # Cybersecurity theme: fonts & background
+        # Colors:
+        #   Background: #0e1625 (very dark navy)
+        #   Headings/accents: #49299a (purple)
+        #   Highlights/buttons: #45edf2 (aqua/cyan)
+        #   Light contrast: #e8e8fc (very light lavender)
         self.setStyleSheet("""
             QMainWindow {
-                background: #fdf2e9;
+                background-color: #0e1625;
+                font-family: 'Syne', 'Segoe UI', 'Arial', sans-serif;
+                color: #e8e8fc;
+            }
+            QWidget {
+                font-family: 'Syne', 'Segoe UI', 'Arial', sans-serif;
+                color: #e8e8fc;
             }
         """)
 
         # Create central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
+
+        # Create background widget
+        self.background_widget = CyberBackgroundWidget()
+        self.background_widget.setParent(central_widget)
+        self.background_widget.lower()  # Put it behind other widgets
 
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(20)
@@ -242,24 +402,70 @@ class StegaDecodeWindow(QMainWindow):
         # Main content area
         self.create_content_area(main_layout)
 
-        # Make the window fullscreen
-        self.showMaximized()
+        # Set window size and position
+        self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
+        self.show()
+
+        # Initialize background widget size
+        self.background_widget.setGeometry(0, 0, self.width(), self.height())
+
+    def resizeEvent(self, event):
+        """Handle window resize to update background"""
+        super().resizeEvent(event)
+        if hasattr(self, 'background_widget'):
+            self.background_widget.setGeometry(
+                0, 0, self.width(), self.height())
+
+    def setup_responsive_sizing(self):
+        """Setup responsive sizing based on screen dimensions"""
+        # Get screen dimensions using modern PyQt6 approach
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication([])
+        screen = app.primaryScreen().geometry()
+        screen_width = screen.width()
+        screen_height = screen.height()
+        
+        # Define responsive scaling factors
+        # For screens between 1200x1080 and 1920x1200
+        if screen_width <= 1366:  # Smaller laptops
+            scale_factor = 0.8
+        elif screen_width <= 1600:  # Medium laptops
+            scale_factor = 0.9
+        else:  # Larger screens
+            scale_factor = 1.0
+        
+        # Calculate window dimensions (leave some margin from screen edges)
+        margin_percent = 0.05  # 5% margin from screen edges
+        self.window_width = int(screen_width * (1 - 2 * margin_percent))
+        self.window_height = int(screen_height * (1 - 2 * margin_percent))
+        
+        # Center the window
+        self.window_x = int(screen_width * margin_percent)
+        self.window_y = int(screen_height * margin_percent)
+        
+        # Set minimum size to ensure usability on smaller screens
+        min_width = 1000
+        min_height = 700
+        self.window_width = max(self.window_width, min_width)
+        self.window_height = max(self.window_height, min_height)
 
     def create_info_button(self, tooltip_text):
-        """Create an orange info button with tooltip"""
+        """Create a cyan info button with tooltip"""
         info_btn = QPushButton("ℹ")
         info_btn.setFixedSize(25, 25)
         info_btn.setStyleSheet("""
             QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.2);
+                color: #45edf2;
+                border: 2px solid #45edf2;
                 border-radius: 12px;
                 font-weight: bold;
                 font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #d35400;
+                background: rgba(69,237,242,0.4);
+                border: 3px solid #45edf2;
             }
         """)
         info_btn.setToolTip(tooltip_text)
@@ -269,31 +475,36 @@ class StegaDecodeWindow(QMainWindow):
         """Create the title and back button section"""
         title_layout = QHBoxLayout()
 
-        # Back button
+        # Back button with cyber theme
         back_button = QPushButton("← Back to Main")
         back_button.setStyleSheet("""
             QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 10px 20px;
-                border-radius: 5px;
+                border-radius: 12px;
                 font-weight: bold;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #d35400;
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QPushButton:pressed {
+                background: rgba(69,237,242,0.3);
             }
         """)
         back_button.clicked.connect(self.go_back)
 
-        # Title
+        # Title with cyber theme
         title_label = QLabel("Steganography - Extract Messages")
         title_font = QFont()
         title_font.setPointSize(28)
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #2c3e50;")
+        title_label.setStyleSheet("color: #45edf2; margin: 10px 0;")
 
         title_layout.addWidget(back_button)
         title_layout.addStretch()
@@ -337,9 +548,9 @@ class StegaDecodeWindow(QMainWindow):
         extract_button.setMinimumHeight(60)
         extract_button.setStyleSheet("""
             QPushButton {
-                background-color: #e67e22;
-                color: white;
-                border: none;
+                background: rgba(255,140,0,0.2);
+                color: #ff8c00;
+                border: 2px solid #ff8c00;
                 padding: 20px 40px;
                 border-radius: 10px;
                 font-size: 18px;
@@ -347,10 +558,12 @@ class StegaDecodeWindow(QMainWindow):
                 min-width: 200px;
             }
             QPushButton:hover {
-                background-color: #d35400;
+                background: rgba(255,140,0,0.4);
+                border: 3px solid #ff8c00;
+                color: #ffffff;
             }
             QPushButton:pressed {
-                background-color: #c0392b;
+                background: rgba(255,140,0,0.4);
             }
         """)
         extract_button.clicked.connect(self.extract_message)
@@ -367,9 +580,9 @@ class StegaDecodeWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: white;
+                background-color: #0e1625;
                 border-radius: 15px;
-                border: none;
+                border: 2px solid rgba(69,237,242,0.6);
             }
         """)
         panel.setGraphicsEffect(self.create_shadow_effect())
@@ -387,7 +600,7 @@ class StegaDecodeWindow(QMainWindow):
         title_font.setPointSize(18)
         title_font.setBold(True)
         title.setFont(title_font)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 15px;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 15px; border: none;")
 
         # Info button
         info_btn = self.create_info_button(
@@ -415,9 +628,9 @@ class StegaDecodeWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: white;
+                background-color: #0e1625;
                 border-radius: 15px;
-                border: none;
+                border: 2px solid rgba(69,237,242,0.6);
             }
         """)
         panel.setGraphicsEffect(self.create_shadow_effect())
@@ -435,7 +648,7 @@ class StegaDecodeWindow(QMainWindow):
         title_font.setPointSize(18)
         title_font.setBold(True)
         title.setFont(title_font)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 15px;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 15px; border: none;")
 
         # Info button
         info_btn = self.create_info_button(
@@ -450,6 +663,22 @@ class StegaDecodeWindow(QMainWindow):
 
         # LSB slider
         lsb_group = QGroupBox("LSB Settings")
+        lsb_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         lsb_layout = QVBoxLayout(lsb_group)
 
         # LSB value display
@@ -459,10 +688,10 @@ class StegaDecodeWindow(QMainWindow):
             QLabel {
                 font-size: 16px;
                 font-weight: bold;
-                color: #2c3e50;
+                color: #e8e8fc;
                 padding: 15px;
-                background-color: #f8f9fa;
-                border: 3px dashed #bdc3c7;
+                background-color: rgba(14,22,37,0.8);
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
                 font-family: 'Segoe UI', sans-serif;
             }
@@ -477,20 +706,21 @@ class StegaDecodeWindow(QMainWindow):
         self.lsb_slider.setTickInterval(1)
         self.lsb_slider.setStyleSheet("""
             QSlider::groove:horizontal {
-                border: 1px solid #bdc3c7;
+                border: 1px solid rgba(69,237,242,0.6);
                 height: 8px;
-                background: #ecf0f1;
+                background: rgba(14,22,37,0.8);
                 border-radius: 4px;
             }
             QSlider::handle:horizontal {
-                background: #e67e22;
-                border: 1px solid #d35400;
+                background: #45edf2;
+                border: 1px solid #45edf2;
                 width: 18px;
                 margin: -5px 0;
                 border-radius: 9px;
             }
             QSlider::handle:horizontal:hover {
-                background: #d35400;
+                background: #45edf2;
+                border: 2px solid #45edf2;
             }
         """)
         self.lsb_slider.valueChanged.connect(self.update_lsb_value)
@@ -502,7 +732,16 @@ class StegaDecodeWindow(QMainWindow):
         for i in range(1, 9):
             lab = QLabel(str(i))
             lab.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lab.setStyleSheet("color: #7f8c8d;")
+            lab.setStyleSheet("""
+                QLabel {
+                    color: #45edf2;
+                    border: 2px solid #49299a;
+                    border-radius: 8px;
+                    padding: 5px 10px;
+                    background-color: rgba(14,22,37,0.8);
+                    font-weight: bold;
+                }
+            """)
             self.lsb_markers.append(lab)
             markers_row.addWidget(lab)
 
@@ -512,6 +751,22 @@ class StegaDecodeWindow(QMainWindow):
 
         # Key input
         key_group = QGroupBox("Decryption Key")
+        key_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         key_layout = QVBoxLayout(key_group)
 
         self.key_input = QLineEdit()
@@ -521,20 +776,20 @@ class StegaDecodeWindow(QMainWindow):
         self.key_input.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #7f8c8d;
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
             }
             QLineEdit:focus {
-                border-color: #e67e22;
-                background-color: #fdf2e9;
+                border: 3px dashed #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
             QLineEdit:hover {
-                border-color: #e67e22;
-                background-color: #fdf2e9;
+                border: 3px dashed #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
         """)
 
@@ -542,6 +797,22 @@ class StegaDecodeWindow(QMainWindow):
 
         # Output path
         output_group = QGroupBox("Output Path")
+        output_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         output_layout = QVBoxLayout(output_group)
 
         self.output_path = QLineEdit()
@@ -550,10 +821,10 @@ class StegaDecodeWindow(QMainWindow):
         self.output_path.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #7f8c8d;
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
             }
@@ -562,15 +833,16 @@ class StegaDecodeWindow(QMainWindow):
         output_button = QPushButton("Choose Output")
         output_button.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
             }
         """)
         output_button.clicked.connect(self.choose_output_path)
@@ -580,8 +852,23 @@ class StegaDecodeWindow(QMainWindow):
 
         # Results display
         results_group = QGroupBox("Extracted Data")
+        results_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         results_layout = QVBoxLayout(results_group)
-
         self.results_text = QTextEdit()
         self.results_text.setPlaceholderText(
             "Extracted data will appear here...")
@@ -589,10 +876,10 @@ class StegaDecodeWindow(QMainWindow):
         self.results_text.setReadOnly(True)
         self.results_text.setStyleSheet("""
             QTextEdit {
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #7f8c8d;
+                background-color: rgba(14,22,37,0.8);
+                color: #e8e8fc;
                 font-size: 14px;
                 padding: 15px;
                 font-family: 'Segoe UI', sans-serif;
@@ -611,13 +898,14 @@ class StegaDecodeWindow(QMainWindow):
         return panel
 
     def create_shadow_effect(self):
-        """Create a shadow effect for panels"""
+        """Create an enhanced shadow effect for panels"""
         from PyQt6.QtWidgets import QGraphicsDropShadowEffect
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
+        shadow.setBlurRadius(35)  # Increased blur for stronger glow
         shadow.setXOffset(0)
-        shadow.setYOffset(5)
-        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setYOffset(8)  # Increased offset for more depth
+        # Enhanced cyan glow with higher opacity
+        shadow.setColor(QColor(69, 237, 242, 80))
         return shadow
 
     def update_lsb_value(self, value):
@@ -630,9 +918,27 @@ class StegaDecodeWindow(QMainWindow):
         if hasattr(self, 'lsb_markers'):
             for i, lab in enumerate(self.lsb_markers, start=1):
                 if i == value:
-                    lab.setStyleSheet("color: #e67e22; font-weight: bold;")
+                    lab.setStyleSheet("""
+                        QLabel {
+                            color: #45edf2;
+                            border: 2px solid #49299a;
+                            border-radius: 8px;
+                            padding: 5px 10px;
+                            background-color: rgba(69,237,242,0.2);
+                            font-weight: bold;
+                        }
+                    """)
                 else:
-                    lab.setStyleSheet("color: #7f8c8d;")
+                    lab.setStyleSheet("""
+                        QLabel {
+                            color: #45edf2;
+                            border: 2px solid #49299a;
+                            border-radius: 8px;
+                            padding: 5px 10px;
+                            background-color: rgba(14,22,37,0.8);
+                            font-weight: bold;
+                        }
+                    """)
 
     def on_media_loaded(self, file_path, media_type):
         """Handle media loaded from drag and drop or browse"""
@@ -656,9 +962,24 @@ class StegaDecodeWindow(QMainWindow):
                 print(f"✅ AUDIO loaded: {os.path.basename(file_path)}")
             else:
                 print(f"❌ Error loading steganographic audio: {file_path}")
+        elif media_type == 'video':
+            if self.machine.set_stego_video(file_path):
+                info = self.machine.get_video_info() or {}
+                frames = info.get('frames', 'n/a')
+                dims = info.get('dimensions') or ('n/a', 'n/a', 'n/a')
+                fps = info.get('fps', 0.0) or 0.0
+                capacity = info.get('max_capacity_bytes', 0)
+                print(f"✅ VIDEO loaded: {os.path.basename(file_path)}")
+                if isinstance(dims, tuple) and len(dims) == 3:
+                    height, width, _ = dims
+                else:
+                    height = width = 'n/a'
+                print(f"Frames: {frames}, resolution: {width}x{height}, fps: {fps:.2f}")
+                print(f"Capacity (approx.): {capacity} bytes at {self.machine.lsb_bits} LSBs")
+            else:
+                print(f"❌ Error loading steganographic video: {file_path}")
         else:
-            # For video, we'll need to extend the machine
-            print(f"✅ {media_type.upper()} loaded: {os.path.basename(file_path)}")
+            print(f"❌ Unsupported media type: {media_type}")
 
     def choose_output_path(self):
         """Choose output folder; file will be auto-named (datetime.<header_filename>)."""
@@ -680,7 +1001,9 @@ class StegaDecodeWindow(QMainWindow):
 
         # Set default output path if none specified
         if not self.output_path.text().strip():
-            stego_source = self.machine.stego_image_path or self.machine.stego_audio_path
+            stego_source = (self.machine.stego_image_path or
+                            self.machine.stego_audio_path or
+                            self.machine.stego_video_path)
             base_dir = os.path.dirname(stego_source) if stego_source else os.path.join(os.getcwd(), 'extracted_payloads')
             if not os.path.exists(base_dir):
                 os.makedirs(base_dir, exist_ok=True)
