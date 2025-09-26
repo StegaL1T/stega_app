@@ -135,6 +135,10 @@ class VideoSteganalysisWindow(QWidget):
         # Set selected analysis method
         method = self.main_gui.video_method_combo.currentText()
         
+        # Set sensitivity level from GUI
+        sensitivity_level = self.main_gui.get_sensitivity_level("video")
+        self.machine.set_sensitivity_level(sensitivity_level)
+        
         # Run analysis
         if self.machine.analyze_video(method):
             results = self.machine.get_results()
