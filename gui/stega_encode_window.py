@@ -1925,6 +1925,22 @@ class StegaEncodeWindow(QMainWindow):
 
         # LSB slider
         lsb_group = QGroupBox("LSB Settings")
+        lsb_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         lsb_layout = QVBoxLayout(lsb_group)
 
         # LSB value display
@@ -1936,8 +1952,8 @@ class StegaEncodeWindow(QMainWindow):
                 font-weight: bold;
                 color: #e8e8fc;
                 padding: 15px;
-                background-color: #0e1625;
-                border: 3px dashed #45edf2;
+                background-color: rgba(14,22,37,0.8);
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
                 font-family: 'Segoe UI', sans-serif;
             }
@@ -1959,14 +1975,14 @@ class StegaEncodeWindow(QMainWindow):
                 border-radius: 4px;
             }
             QSlider::handle:horizontal {
-                background: #3498db;
-                border: 1px solid #2980b9;
+                background: #45edf2;
+                border: 1px solid #45edf2;
                 width: 18px;
                 margin: -5px 0;
                 border-radius: 9px;
             }
             QSlider::handle:horizontal:hover {
-                background: #2980b9;
+                background: #45edf2;
             }
         """)
         self.lsb_slider.valueChanged.connect(self.update_lsb_value)
@@ -1979,15 +1995,18 @@ class StegaEncodeWindow(QMainWindow):
         key_group = QGroupBox("Key (numeric, required)")
         key_group.setStyleSheet("""
             QGroupBox {
-                background-color: rgba(14,22,37,0.8);
-                border: 2px solid rgba(69,237,242,0.6);
-                border-radius: 12px;
                 color: #e8e8fc;
-                font-weight: 600;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
             }
             QGroupBox::title {
-                color: #e8e8fc;
-                background-color: transparent;
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
             }
             QCheckBox {
                 color: #e8e8fc;
@@ -2014,19 +2033,19 @@ class StegaEncodeWindow(QMainWindow):
         self.key_input.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
-                border: 3px dashed #45edf2;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #0e1625;
+                background-color: rgba(14,22,37,0.8);
                 color: #e8e8fc;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
             }
             QLineEdit:focus {
-                border-color: #45edf2;
+                border: 3px dashed #45edf2;
                 background-color: rgba(69,237,242,0.1);
             }
             QLineEdit:hover {
-                border-color: #45edf2;
+                border: 3px dashed #45edf2;
                 background-color: rgba(69,237,242,0.1);
             }
         """)
@@ -2063,6 +2082,22 @@ class StegaEncodeWindow(QMainWindow):
 
         # Capacity group
         capacity_group = QGroupBox("Capacity")
+        capacity_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         cap_layout = QVBoxLayout(capacity_group)
         self.cap_dims = QLabel("Cover: -")
         self.cap_payload = QLabel("Payload: -")
@@ -2072,7 +2107,7 @@ class StegaEncodeWindow(QMainWindow):
         self.cap_max = QLabel("Capacity (bytes): -")
         self.cap_avail = QLabel("Available bytes: -")
         for lbl in [self.cap_dims, self.cap_payload, self.cap_lsb, self.cap_header, self.cap_startbits, self.cap_max, self.cap_avail]:
-            lbl.setStyleSheet("color:#e8e8fc;")
+            lbl.setStyleSheet("color:#e8e8fc;border:none;background:transparent;")
             cap_layout.addWidget(lbl)
         # Capacity usage bar
         self.cap_usage_bar = QProgressBar()
@@ -2096,6 +2131,22 @@ class StegaEncodeWindow(QMainWindow):
 
         # Output path
         output_group = QGroupBox("Output Path")
+        output_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         output_layout = QVBoxLayout(output_group)
 
         self.output_path = QLineEdit()
@@ -2104,9 +2155,9 @@ class StegaEncodeWindow(QMainWindow):
         self.output_path.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
-                border: 3px dashed #45edf2;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #0e1625;
+                background-color: rgba(14,22,37,0.8);
                 color: #e8e8fc;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
@@ -2116,16 +2167,16 @@ class StegaEncodeWindow(QMainWindow):
         output_button = QPushButton("Choose Output")
         output_button.setStyleSheet("""
             QPushButton {
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
             }
         """)
         output_button.clicked.connect(self.choose_output_path)
