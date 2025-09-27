@@ -1,17 +1,10 @@
 # gui/stega_decode_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
-                             QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
-                             QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-                             QScrollArea, QSlider as QTimeSlider, QToolTip, QApplication)
+                             QGroupBox, QLineEdit, QSlider, QToolTip, QApplication)
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage
+from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QCursor
 import os
-import numpy as np
-from PIL import Image
-import soundfile as sf
-import cv2
-from datetime import datetime
 import math
 import random
 
@@ -913,21 +906,36 @@ class StegaDecodeWindow(QMainWindow):
         return panel
 
 
-    def set_status(self, message: str, severity: str = 'info'):
-        """Update the status badge with contextual colours."""
-        if self.status_label is None:
-            print(f'[STATUS:{severity}] {message}')
-            return
-        styles = {
-            'info': "QLabel { background: rgba(69,237,242,0.12); color: #45edf2; border: 1px solid rgba(69,237,242,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
-            'success': "QLabel { background: rgba(34,197,94,0.18); color: #4ade80; border: 1px solid rgba(34,197,94,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
-            'warning': "QLabel { background: rgba(234,179,8,0.2); color: #facc15; border: 1px solid rgba(234,179,8,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
-            'error': "QLabel { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.6); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
-        }
-        style = styles.get(severity, styles['info'])
-        self.status_label.setText(message)
-        self.status_label.setStyleSheet(style)
-
+    def set_status(self, message: str, severity: str = 'info'):
+
+        """Update the status badge with contextual colours."""
+
+        if self.status_label is None:
+
+            print(f'[STATUS:{severity}] {message}')
+
+            return
+
+        styles = {
+
+            'info': "QLabel { background: rgba(69,237,242,0.12); color: #45edf2; border: 1px solid rgba(69,237,242,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
+
+            'success': "QLabel { background: rgba(34,197,94,0.18); color: #4ade80; border: 1px solid rgba(34,197,94,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
+
+            'warning': "QLabel { background: rgba(234,179,8,0.2); color: #facc15; border: 1px solid rgba(234,179,8,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
+
+            'error': "QLabel { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.6); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
+
+        }
+
+        style = styles.get(severity, styles['info'])
+
+        self.status_label.setText(message)
+
+        self.status_label.setStyleSheet(style)
+
+
+
     def create_shadow_effect(self):
         """Create an enhanced shadow effect for panels"""
         from PyQt6.QtWidgets import QGraphicsDropShadowEffect

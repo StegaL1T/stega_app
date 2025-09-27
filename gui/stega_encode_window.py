@@ -2,11 +2,11 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
-                             QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
+                             QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
                              QScrollArea, QSlider as QTimeSlider, QToolTip, QProgressBar,
                              QCheckBox, QToolButton, QSizePolicy)
-from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal, QRegularExpression
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QIntValidator, QRegularExpressionValidator, QCursor
+from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QCursor
 import os
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor

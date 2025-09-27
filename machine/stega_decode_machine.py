@@ -14,10 +14,6 @@ import wave
 from pathlib import Path
 
 try:
-    import cv2
-except ImportError:  # pragma: no cover - optional dependency for video handling
-    cv2 = None
-try:
     from stegano import lsb
 except Exception:
     lsb = None
