@@ -22,6 +22,8 @@ try:
 except Exception:
     lsb = None
 
+from crypto_honey import HoneyFormatError, he_decrypt
+
 from machine.stega_spec import (
     FLAG_PAYLOAD_ENCRYPTED,
     MAX_FILENAME_LEN,
@@ -61,6 +63,10 @@ class StegaDecodeMachine:
         self.last_error: Optional[str] = None
         self.header_info: Optional[dict] = None
         self.last_output_path: Optional[str] = None
+        self.last_payload_raw: Optional[bytes] = None
+        self.honey_detected: bool = False
+        self.honey_info: Optional[dict] = None
+        self.honey_error: Optional[str] = None
 
         print("StegaDecodeMachine initialized")
 
@@ -552,12 +558,47 @@ class StegaDecodeMachine:
         else:
             payload_plain = payload_encrypted
 
+        self.last_payload_raw = payload_plain
+
         # CRC32 check: warn but continue
         if header_valid:
             actual_crc32 = crc32(payload_plain)
             print(f"[DEBUG] CRC32 expected: 0x{expected_crc32:08X}, actual: 0x{actual_crc32:08X}")
             if actual_crc32 != expected_crc32:
                 print(f"[WARN] CRC32 mismatch. Wrong key or corrupted stego. (proceeding with output)")
+
+        self.honey_detected = False
+        self.honey_info = None
+        self.honey_error = None
+        payload_to_save = payload_plain
+        honey_display_text = None
+
+        if payload_plain.startswith(b'HONEY1'):
+            self.honey_detected = True
+            try:
+                meta = self._parse_honey_blob_meta(payload_plain)
+            except HoneyFormatError as exc:
+                self.honey_error = str(exc)
+                self.last_error = f"Honey payload parse error: {exc}"
+                return False
+            meta['key'] = None
+            try:
+                key_int = int(self.encryption_key or '0')
+            except (TypeError, ValueError):
+                self.honey_error = "Honey payload detected but numeric key is required."
+                self.honey_info = meta
+            else:
+                try:
+                    honey_message = he_decrypt(payload_plain, key_int)
+                except HoneyFormatError as exc:
+                    self.honey_error = str(exc)
+                    self.last_error = f"Honey payload parse error: {exc}"
+                    return False
+                meta['key'] = key_int
+                meta['message'] = honey_message
+                self.honey_info = meta
+                honey_display_text = honey_message
+                payload_to_save = honey_message.encode('utf-8')
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -604,7 +645,7 @@ class StegaDecodeMachine:
             os.makedirs(output_dir, exist_ok=True)
 
         with open(output_path, 'wb') as f:
-            f.write(payload_plain)
+            f.write(payload_to_save)
 
         self.last_output_path = output_path
 
@@ -617,29 +658,32 @@ class StegaDecodeMachine:
         else:
             self.output_path = os.path.dirname(output_path)
 
-        try:
-            self.extracted_data = payload_plain.decode('utf-8')
-        except Exception:
-            self.extracted_data = None
+        if honey_display_text is not None:
+            self.extracted_data = honey_display_text
+        else:
             try:
-                if output_path.lower().endswith('.pdf'):
-                    with open(output_path, 'rb') as pf:
-                        reader = PdfReader(pf)
-                        texts = []
-                        for page in reader.pages:
-                            try:
-                                t = page.extract_text() or ''
-                            except Exception:
-                                t = ''
-                            if t:
-                                texts.append(t)
-                        preview = "\n".join(texts).strip()
-                        if preview:
-                            self.extracted_data = preview
+                self.extracted_data = payload_to_save.decode('utf-8')
             except Exception:
-                pass
-            if self.extracted_data is None:
-                self.extracted_data = f"Binary payload extracted ({len(payload_plain)} bytes) -> {output_path}"
+                self.extracted_data = None
+                try:
+                    if output_path.lower().endswith('.pdf'):
+                        with open(output_path, 'rb') as pf:
+                            reader = PdfReader(pf)
+                            texts = []
+                            for page in reader.pages:
+                                try:
+                                    t = page.extract_text() or ''
+                                except Exception:
+                                    t = ''
+                                if t:
+                                    texts.append(t)
+                            preview = "\n".join(texts).strip()
+                            if preview:
+                                self.extracted_data = preview
+                except Exception:
+                    pass
+                if self.extracted_data is None:
+                    self.extracted_data = f"Binary payload extracted ({len(payload_to_save)} bytes) -> {output_path}"
 
         print("Steganography decoding completed (output may be incorrect if LSB/key is wrong)")
         print(f"Extracted data saved to: {output_path}")
@@ -700,6 +744,46 @@ class StegaDecodeMachine:
         """Return the full path of the most recent decode output."""
         return self.last_output_path
 
+    def get_honey_context(self) -> Optional[dict]:
+        """Return details about the last Honey payload, if any."""
+        if not self.honey_detected:
+            return None
+        return {
+            'info': self.honey_info,
+            'error': self.honey_error,
+        }
+
+    def simulate_honey_with_key(self, key_int: int) -> str:
+        """Decrypt the last Honey payload with an alternate key."""
+        if not self.last_payload_raw or not self.last_payload_raw.startswith(b'HONEY1'):
+            raise HoneyFormatError('No Honey payload available for simulation')
+        return he_decrypt(self.last_payload_raw, int(key_int))
+
+    @staticmethod
+    def _parse_honey_blob_meta(blob: bytes) -> dict:
+        if not isinstance(blob, (bytes, bytearray, memoryview)):
+            raise HoneyFormatError('Honey payload must be bytes-like')
+        data = memoryview(bytes(blob))
+        if len(data) < 6 + 4 + 8 + 1 + 4:
+            raise HoneyFormatError('Honey payload is too short')
+        if bytes(data[:6]) != b'HONEY1':
+            raise HoneyFormatError('Missing HONEY1 magic header')
+        offset = 6
+        resolution = int.from_bytes(data[offset:offset + 4], 'big')
+        offset += 4
+        nonce = bytes(data[offset:offset + 8])
+        offset += 8
+        univ_len = data[offset]
+        offset += 1
+        if len(data) < offset + univ_len + 4:
+            raise HoneyFormatError('Honey payload truncated while reading universe')
+        universe = bytes(data[offset:offset + univ_len]).decode('ascii', errors='strict')
+        return {
+            'universe': universe,
+            'resolution': resolution,
+            'nonce': nonce.hex(),
+        }
+
     def cleanup(self):
         # ... (existing code, no changes needed)
         self.stego_image = None
@@ -716,6 +800,10 @@ class StegaDecodeMachine:
         self.last_error = None
         self.header_info = None
         self.last_output_path = None
+        self.last_payload_raw = None
+        self.honey_detected = False
+        self.honey_info = None
+        self.honey_error = None
         print("StegaDecodeMachine cleaned up")
 
     def get_last_error(self) -> Optional[str]:
