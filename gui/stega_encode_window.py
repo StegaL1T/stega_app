@@ -2217,7 +2217,7 @@ class StegaEncodeWindow(QMainWindow):
             lbl = QLabel(f"{label}:")
             lbl.setStyleSheet("color:#e8e8fc;font-weight:600;background:rgba(14,22,37,0.8);border:none;")
             value_lbl = QLabel("-")
-            value_lbl.setStyleSheet("color:#e8e8fc;background:rgba(14,22,37,0.8);border:none;")
+            value_lbl.setStyleSheet("color:#e8e8fc;background:transparent;border:none;")
             value_lbl.setWordWrap(True)
             cap_layout.addWidget(lbl, row, 0)
             cap_layout.addWidget(value_lbl, row, 1)
@@ -3395,10 +3395,10 @@ class StegaEncodeWindow(QMainWindow):
             info = getattr(self.machine, 'last_embed_info', None)
             if info:
                 encrypted_flag = info.get('encrypted')
-                self.proof_lsb.setText(f"LSB bits: {info.get('lsb_bits')} | encrypted: {'yes' if encrypted_flag else 'no'}")
-                self.proof_start.setText(f"Start bit: {info.get('start_bit')}")
+                self.proof_lsb.setText(f"{info.get('lsb_bits')} | encrypted: {'yes' if encrypted_flag else 'no'}")
+                self.proof_start.setText(f"{info.get('start_bit')}")
                 perm = info.get('perm', [])
-                self.proof_perm.setText(f"Perm [0:8]: {perm[:8]}")
+                self.proof_perm.setText(f"{perm[:8]}")
                 hdr = info.get('header', {}) or {}
                 flags_val = hdr.get('flags', info.get('flags'))
                 try:
@@ -3822,12 +3822,12 @@ class StegaEncodeWindow(QMainWindow):
 
     def _format_payload_summary(self, raw_len: int, effective_len: int) -> str:
         if raw_len <= 0 and effective_len <= 0:
-            return 'Payload: -'
+            return '-'
         if getattr(self.machine, 'honey_enabled', False) and raw_len != effective_len:
-            return f'Payload: Raw {raw_len} B -> Honey blob {effective_len} B'
+            return f'Raw {raw_len} B -> Honey blob {effective_len} B'
         if raw_len != effective_len:
-            return f'Payload: Raw {raw_len} B -> Effective {effective_len} B'
-        return f'Payload: {effective_len} B'
+            return f'Raw {raw_len} B -> Effective {effective_len} B'
+        return f'{effective_len} B'
 
     def update_capacity_panel(self):
         raw_payload = 0
@@ -3867,13 +3867,13 @@ class StegaEncodeWindow(QMainWindow):
                     h = self.video_meta.get('h', 0)
                     start_bit = ((f * (w * h) + y * w + x) * 3 * max(1, lsb)) if (w and h) else 0
                     if f == 0 and x == 0 and y == 0 and header_bits:
-                        self.cap_startbits.setText(f"Start bit offset: {header_bits} (header reserved)")
+                        self.cap_startbits.setText(f"{header_bits} (header reserved)")
                     else:
-                        self.cap_startbits.setText(f"Start bit offset: {start_bit}")
-                self.cap_lsb.setText(f"LSB bits: {lsb}")
-                self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
-                self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
-                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                        self.cap_startbits.setText(f"{start_bit}")
+                self.cap_lsb.setText(f"{lsb}")
+                self.cap_header.setText(f"{len(header_bytes)}")
+                self.cap_max.setText(f"{max_bytes}")
+                self.cap_avail.setText(f"{self.available_bytes}")
                 try:
                     self._update_capacity_visuals(max_bytes, self.available_bytes)
                 except Exception:
@@ -3890,8 +3890,8 @@ class StegaEncodeWindow(QMainWindow):
                         pass
                     try:
                         self.cap_avail.setToolTip(msg)
-                        self.cap_avail.setStyleSheet("color:#e74c3c;")
-                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+                        self.cap_avail.setStyleSheet("color:#e74c3c;background:transparent;border:none;")
+                        self.cap_avail.setText(f"{self.available_bytes}  (Too large)")
                     except Exception:
                         pass
                     # Persistent banner
@@ -3902,8 +3902,8 @@ class StegaEncodeWindow(QMainWindow):
                 else:
                     try:
                         self.cap_avail.setToolTip("")
-                        self.cap_avail.setStyleSheet("color:#e8e8fc;")
-                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                        self.cap_avail.setStyleSheet("color:#e8e8fc;background:transparent;border:none;")
+                        self.cap_avail.setText(f"{self.available_bytes}")
                     except Exception:
                         pass
                     try:
@@ -3915,10 +3915,10 @@ class StegaEncodeWindow(QMainWindow):
             return
         # Default reset
         self.cap_dims.setText("Cover: -")
-        self.cap_lsb.setText(f"LSB bits: {self.lsb_slider.value()}")
-        self.cap_header.setText("Header bytes: -")
-        self.cap_max.setText("Capacity (bytes): -")
-        self.cap_avail.setText("Available bytes: -")
+        self.cap_lsb.setText(f"{self.lsb_slider.value()}")
+        self.cap_header.setText("-")
+        self.cap_max.setText("-")
+        self.cap_avail.setText("-")
         try:
             self._update_capacity_visuals(0, 0)
         except Exception:
@@ -3958,17 +3958,17 @@ class StegaEncodeWindow(QMainWindow):
                 bytes_per_frame = max(1, channels * max(1, samp_bits // 8))
                 start_bit_offset = start_sample * bytes_per_frame * max(1, lsb)
                 if start_sample == 0 and header_bits:
-                    self.cap_startbits.setText(f"Start bit offset: {header_bits} (header reserved)")
+                    self.cap_startbits.setText(f"{header_bits} (header reserved)")
                 else:
-                    self.cap_startbits.setText(f"Start bit offset: {start_bit_offset}")
+                    self.cap_startbits.setText(f"{start_bit_offset}")
                 total_bits = self.machine.estimate_capacity_bits(self.media_drop_widget.media_path, 'audio', lsb, start_sample)
                 max_bytes = total_bits // 8
                 available_bits = max(0, total_bits - header_bits) if start_sample == 0 else max(0, total_bits)
                 self.available_bytes = available_bits // 8
-                self.cap_lsb.setText(f"LSB bits: {lsb}")
-                self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
-                self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
-                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                self.cap_lsb.setText(f"{lsb}")
+                self.cap_header.setText(f"{len(header_bytes)}")
+                self.cap_max.setText(f"{max_bytes}")
+                self.cap_avail.setText(f"{self.available_bytes}")
                 try:
                     self._update_capacity_visuals(max_bytes, self.available_bytes)
                 except Exception:
@@ -3984,8 +3984,8 @@ class StegaEncodeWindow(QMainWindow):
                         pass
                     try:
                         self.cap_avail.setToolTip(msg)
-                        self.cap_avail.setStyleSheet("color:#e74c3c;")
-                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+                        self.cap_avail.setStyleSheet("color:#e74c3c;background:transparent;border:none;")
+                        self.cap_avail.setText(f"{self.available_bytes}  (Too large)")
                     except Exception:
                         pass
                     try:
@@ -3995,8 +3995,8 @@ class StegaEncodeWindow(QMainWindow):
                 else:
                     try:
                         self.cap_avail.setToolTip("")
-                        self.cap_avail.setStyleSheet("color:#e8e8fc;")
-                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                        self.cap_avail.setStyleSheet("color:#e8e8fc;background:transparent;border:none;")
+                        self.cap_avail.setText(f"{self.available_bytes}")
                     except Exception:
                         pass
                     try:
@@ -4030,12 +4030,12 @@ class StegaEncodeWindow(QMainWindow):
             pixel_index = y * w + x
             start_bit = pixel_index * channels * lsb
             if header_bits and start_bit < header_bits:
-                self.cap_startbits.setText(f"Start bit offset: {start_bit} (overlaps header)")
+                self.cap_startbits.setText(f"{start_bit} (overlaps header)")
             else:
-                self.cap_startbits.setText(f"Start bit offset: {start_bit}")
+                self.cap_startbits.setText(f"{start_bit}")
         else:
             start_bit = header_bits
-            self.cap_startbits.setText(f"Start bit offset: {header_bits}")
+            self.cap_startbits.setText(f"{header_bits}")
 
         payload_start = max(start_bit, header_bits)
         usable_bits = max(0, total_bits - payload_start)
@@ -4043,10 +4043,10 @@ class StegaEncodeWindow(QMainWindow):
         self.available_bytes = max_bytes
 
         self.cap_dims.setText(f"Cover: {w}x{h}x{channels}")
-        self.cap_lsb.setText(f"LSB bits: {lsb}")
-        self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
-        self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
-        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+        self.cap_lsb.setText(f"{lsb}")
+        self.cap_header.setText(f"{len(header_bytes)}")
+        self.cap_max.setText(f"{max_bytes}")
+        self.cap_avail.setText(f"{self.available_bytes}")
         try:
             self._update_capacity_visuals(max_bytes, self.available_bytes)
         except Exception:
@@ -4064,8 +4064,8 @@ class StegaEncodeWindow(QMainWindow):
                 pass
             try:
                 self.cap_avail.setToolTip(msg)
-                self.cap_avail.setStyleSheet("color:#e74c3c;")
-                self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+                self.cap_avail.setStyleSheet("color:#e74c3c;background:transparent;border:none;")
+                self.cap_avail.setText(f"{self.available_bytes}  (Too large)")
             except Exception:
                 pass
             try:
@@ -4075,8 +4075,8 @@ class StegaEncodeWindow(QMainWindow):
         else:
             try:
                 self.cap_avail.setToolTip("")
-                self.cap_avail.setStyleSheet("color:#e8e8fc;")
-                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                self.cap_avail.setStyleSheet("color:#e8e8fc;background:transparent;border:none;")
+                self.cap_avail.setText(f"{self.available_bytes}")
             except Exception:
                 pass
             try:
@@ -4290,7 +4290,7 @@ class StegaEncodeWindow(QMainWindow):
                     enc_enabled = bool(int(flags_val) & FLAG_PAYLOAD_ENCRYPTED)
             except Exception:
                 pass
-            status_text = f"Encrypted: {'yes' if enc_enabled else 'no'} (flags {flags_text})"
+            status_text = f"{'yes' if enc_enabled else 'no'} (flags {flags_text})"
             if 'status' in labels:
                 labels['status'].setText(status_text)
             nonce_bytes = header.get('nonce')
@@ -4301,17 +4301,17 @@ class StegaEncodeWindow(QMainWindow):
             if not nonce_hex:
                 nonce_hex = 'none'
             if 'nonce' in labels:
-                labels['nonce'].setText(f"Nonce: {nonce_hex}")
+                labels['nonce'].setText(f"{nonce_hex}")
             crc_val_info = info.get('crc32')
-            match_text = 'CRC32 match: -'
+            match_text = '-'
             if header.get('crc32') is not None:
                 try:
                     header_crc = int(header.get('crc32')) & 0xFFFFFFFF
                     info_crc = int(crc_val_info) & 0xFFFFFFFF if crc_val_info is not None else None
                     match_ok = info_crc is None or header_crc == info_crc
-                    match_text = f"CRC32 match: {'ok' if match_ok else 'mismatch'} (0x{header_crc:08X})"
+                    match_text = f"{'ok' if match_ok else 'mismatch'} (0x{header_crc:08X})"
                 except Exception:
-                    match_text = f"CRC32: {header.get('crc32')}"
+                    match_text = f"{header.get('crc32')}"
             if 'crc' in labels:
                 labels['crc'].setText(match_text)
             if 'note' in labels:
