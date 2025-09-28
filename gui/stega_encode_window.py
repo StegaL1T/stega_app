@@ -447,16 +447,16 @@ class MediaDropWidget(QFrame):
         self.browse_btn = QPushButton("Browse Files")
         self.browse_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
             }
         """)
         self.browse_btn.clicked.connect(self.browse_files)
@@ -1238,16 +1238,16 @@ class PayloadDropWidget(QFrame):
         self.browse_btn = QPushButton("Browse File")
         self.browse_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(69,237,242,0.1);
-                color: #45edf2;
-                border: 2px solid rgba(69,237,242,0.6);
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background: rgba(69,237,242,0.3);
-                border: 3px solid rgba(69,237,242,1.0);
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
             }
         """)
         self.browse_btn.clicked.connect(self.browse_files)
@@ -1525,6 +1525,27 @@ class StegaEncodeWindow(QMainWindow):
         min_height = 700
         self.window_width = max(self.window_width, min_width)
         self.window_height = max(self.window_height, min_height)
+        
+        # Responsive layout parameters
+        self.margins = int(40 * scale_factor)  # Responsive margins
+        self.spacing = int(30 * scale_factor)  # Responsive spacing
+        
+        # Responsive font sizes
+        self.title_font_size = int(28 * scale_factor)
+        self.subtitle_font_size = int(14 * scale_factor)
+        self.card_title_font_size = int(18 * scale_factor)
+        self.card_desc_font_size = int(10 * scale_factor)
+        self.button_font_size = int(12 * scale_factor)
+        
+        # Responsive card dimensions
+        self.card_min_width = int(280 * scale_factor)
+        self.card_max_width = int(350 * scale_factor)
+        self.card_min_height = int(320 * scale_factor)
+        self.card_max_height = int(400 * scale_factor)
+        self.card_spacing = int(30 * scale_factor)
+        
+        # Responsive icon size
+        self.icon_size = int(100 * scale_factor)
 
     def create_quickstart_panel(self, layout):
         """Create the top quick-start guidance panel."""
@@ -2620,17 +2641,17 @@ class StegaEncodeWindow(QMainWindow):
         self.hide_button.setMinimumHeight(52)
         self.hide_button.setStyleSheet(
             "QPushButton {"
-            "    background: rgba(69,237,242,0.1);"
-            "    color: #45edf2;"
-            "    border: 2px solid rgba(69,237,242,0.6);"
+            "    background: rgba(255,140,0,0.2);"
+            "    color: #ff8c00;"
+            "    border: 2px solid #ff8c00;"
             "    padding: 16px 32px;"
             "    border-radius: 10px;"
             "    font-size: 16px;"
             "    font-weight: bold;"
             "    min-width: 180px;"
             "}"
-            "QPushButton:hover { background: rgba(69,237,242,0.3); border: 3px solid rgba(69,237,242,1.0); }"
-            "QPushButton:pressed { background: rgba(69,237,242,0.3); }"
+            "QPushButton:hover { background: rgba(255,140,0,0.4); border: 3px solid #ff8c00; color: #ffffff; }"
+            "QPushButton:pressed { background: rgba(255,140,0,0.4); }"
             "QPushButton:disabled {"
             "    background: rgba(128,128,128,0.1);"
             "    color: #808080;"
