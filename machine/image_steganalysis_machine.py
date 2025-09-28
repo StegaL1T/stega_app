@@ -21,6 +21,7 @@ class ImageSteganalysisMachine:
         self.analysis_method: str = "LSB Analysis"
         self.image: Optional[Image.Image] = None
         self.image_array: Optional[np.ndarray] = None
+        self.sensitivity_level: str = "ultra"  # Default to ultra-sensitive
         
         # Analysis results
         self.results: Dict = {}
@@ -28,6 +29,44 @@ class ImageSteganalysisMachine:
         self.confidence_level: float = 0.0
 
         print("ImageSteganalysisMachine initialized")
+
+    def set_sensitivity_level(self, level: str):
+        """Set the sensitivity level for analysis"""
+        self.sensitivity_level = level.lower()
+        print(f"Image sensitivity level set to: {self.sensitivity_level}")
+
+    def get_sensitivity_thresholds(self) -> Dict[str, float]:
+        """Get sensitivity thresholds based on current level"""
+        thresholds = {
+            "ultra": {
+                "lsb_primary": 0.05,      # 5% deviation
+                "lsb_secondary": 0.08,    # 8% max deviation
+                "lsb_avg": 0.04,          # 4% avg deviation
+                "lsb_special": 0.025,     # 2.5% special case
+                "chi_square": 0.25,       # 25% chi-square threshold
+                "comprehensive": 0.15,    # 15% weighted voting
+                "advanced": 0.15          # 15% advanced weighted voting
+            },
+            "medium": {
+                "lsb_primary": 0.10,      # 10% deviation
+                "lsb_secondary": 0.15,    # 15% max deviation
+                "lsb_avg": 0.08,          # 8% avg deviation
+                "lsb_special": 0.05,      # 5% special case
+                "chi_square": 0.30,       # 30% chi-square threshold
+                "comprehensive": 0.25,    # 25% weighted voting
+                "advanced": 0.25          # 25% advanced weighted voting
+            },
+            "low": {
+                "lsb_primary": 0.20,      # 20% deviation
+                "lsb_secondary": 0.25,    # 25% max deviation
+                "lsb_avg": 0.15,          # 15% avg deviation
+                "lsb_special": 0.10,      # 10% special case
+                "chi_square": 0.40,       # 40% chi-square threshold
+                "comprehensive": 0.35,    # 35% weighted voting
+                "advanced": 0.35          # 35% advanced weighted voting
+            }
+        }
+        return thresholds.get(self.sensitivity_level, thresholds["ultra"])
 
     def set_image(self, image_path: str) -> bool:
         """
@@ -173,11 +212,11 @@ class ImageSteganalysisMachine:
         avg_deviation = np.mean(channel_deviations)
         
         # Suspicious if: high average deviation OR multiple channels show significant deviation
-        # Ultra-sensitive thresholds: catch very subtle steganography like your encoded image
-        # Primary threshold: very low deviation (5% instead of 10%) to catch 2.6% cases
-        # Secondary threshold: multiple channels showing consistent deviation
-        # Special case: if any channel shows deviation > 2%, flag as suspicious
-        suspicious = (abs(avg_lsb_ratio - 0.5) > 0.05) or (max_deviation > 0.08 and avg_deviation > 0.04) or (max_deviation > 0.025)
+        # Configurable image LSB thresholds based on sensitivity level
+        thresholds = self.get_sensitivity_thresholds()
+        suspicious = (abs(avg_lsb_ratio - 0.5) > thresholds["lsb_primary"]) or \
+                    (max_deviation > thresholds["lsb_secondary"] and avg_deviation > thresholds["lsb_avg"]) or \
+                    (max_deviation > thresholds["lsb_special"])
         
         end_time = time.time()
         execution_time = end_time - start_time
@@ -222,7 +261,9 @@ class ImageSteganalysisMachine:
         # Balanced chi-square thresholds: catch subtle statistical anomalies
         # Primary threshold: moderate chi-square (0.25 instead of 0.3)
         # Secondary threshold: multiple channels showing consistent anomalies
-        suspicious = (avg_chi2 > 0.25) or (max_chi2 > 0.4 and avg_chi2 > 0.15)
+        # Configurable chi-square thresholds based on sensitivity level
+        thresholds = self.get_sensitivity_thresholds()
+        suspicious = (avg_chi2 > thresholds["chi_square"]) or (max_chi2 > 0.4 and avg_chi2 > 0.15)
         
         end_time = time.time()
         execution_time = end_time - start_time
@@ -423,9 +464,9 @@ class ImageSteganalysisMachine:
                     weighted_score += weight
                 total_weight += weight
         
-        # Balanced weighted voting: catch subtle steganography while avoiding false positives
-        # Lower threshold (0.25 instead of 0.3) to catch more subtle cases
-        suspicious_flag = (weighted_score / max(total_weight, 0.1)) > 0.25
+        # Configurable comprehensive thresholds based on sensitivity level
+        thresholds = self.get_sensitivity_thresholds()
+        suspicious_flag = (weighted_score / max(total_weight, 0.1)) > thresholds["comprehensive"]
 
         end_time = time.time()
         execution_time = end_time - start_time
@@ -590,9 +631,9 @@ class ImageSteganalysisMachine:
                     weighted_score += weight
                 total_weight += weight
         
-        # More sensitive advanced comprehensive: catch subtle steganography
-        # Lower threshold (0.15 instead of 0.2) to catch cases like your encoded image
-        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > 0.15
+        # Configurable advanced comprehensive thresholds based on sensitivity level
+        thresholds = self.get_sensitivity_thresholds()
+        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > thresholds["advanced"]
         
         self.results = {
             'method': 'Advanced Comprehensive Analysis',
