@@ -1,17 +1,10 @@
 # gui/stega_decode_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
-                             QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
-                             QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
-                             QScrollArea, QSlider as QTimeSlider, QToolTip, QApplication)
+                             QGroupBox, QLineEdit, QSlider, QToolTip, QApplication)
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage
+from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QCursor
 import os
-import numpy as np
-from PIL import Image
-import soundfile as sf
-import cv2
-from datetime import datetime
 import math
 import random
 
@@ -365,6 +358,7 @@ class StegaDecodeWindow(QMainWindow):
         from machine.stega_decode_machine import StegaDecodeMachine
         self.machine = StegaDecodeMachine()
 
+        self.status_label = None
         # Cybersecurity theme: fonts & background
         # Colors:
         #   Background: #0e1625 (very dark navy)
@@ -795,6 +789,11 @@ class StegaDecodeWindow(QMainWindow):
 
         key_layout.addWidget(self.key_input)
 
+        self.honey_random_button = QPushButton('Honey: Try random key')
+        self.honey_random_button.setEnabled(False)
+        self.honey_random_button.clicked.connect(self.on_honey_random_key)
+        key_layout.addWidget(self.honey_random_button)
+
         # Output path
         output_group = QGroupBox("Output Path")
         output_group.setStyleSheet("""
@@ -869,6 +868,15 @@ class StegaDecodeWindow(QMainWindow):
             }
         """)
         results_layout = QVBoxLayout(results_group)
+
+        self.status_label = QLabel('Status: Ready')
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setWordWrap(True)
+        self.status_label.setStyleSheet("QLabel { background: rgba(69,237,242,0.12); color: #45edf2; border: 1px solid rgba(69,237,242,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }")
+        results_layout.addWidget(self.status_label)
+
+        self.set_status('Ready to decode.', 'info')
+
         self.results_text = QTextEdit()
         self.results_text.setPlaceholderText(
             "Extracted data will appear here...")
@@ -896,6 +904,37 @@ class StegaDecodeWindow(QMainWindow):
         layout.addStretch()
 
         return panel
+
+
+    def set_status(self, message: str, severity: str = 'info'):
+
+        """Update the status badge with contextual colours."""
+
+        if self.status_label is None:
+
+            print(f'[STATUS:{severity}] {message}')
+
+            return
+
+        styles = {
+
+            'info': "QLabel { background: rgba(69,237,242,0.12); color: #45edf2; border: 1px solid rgba(69,237,242,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
+
+            'success': "QLabel { background: rgba(34,197,94,0.18); color: #4ade80; border: 1px solid rgba(34,197,94,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
+
+            'warning': "QLabel { background: rgba(234,179,8,0.2); color: #facc15; border: 1px solid rgba(234,179,8,0.5); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
+
+            'error': "QLabel { background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.6); border-radius: 10px; padding: 8px 14px; font-weight: 600; }",
+
+        }
+
+        style = styles.get(severity, styles['info'])
+
+        self.status_label.setText(message)
+
+        self.status_label.setStyleSheet(style)
+
+
 
     def create_shadow_effect(self):
         """Create an enhanced shadow effect for panels"""
@@ -1011,58 +1050,132 @@ class StegaDecodeWindow(QMainWindow):
             self.machine.set_output_path(base_dir)
         # Perform steganography extraction
         if self.machine.extract_message():
-            print("✅ Steganography extraction completed successfully!")
-            # Display extracted data and header info in results text area
+            print('[OK] Steganography extraction completed successfully!')
             extracted_data = self.machine.get_extracted_data()
             header_info = self.machine.get_header_info() or {}
-            out_path = self.machine.get_last_output_path() or "(unknown)"
+            out_path = self.machine.get_last_output_path() or '(unknown)'
+
+            honey_context = None
+            if hasattr(self.machine, 'get_honey_context'):
+                try:
+                    honey_context = self.machine.get_honey_context()
+                except Exception as exc:
+                    print(f"[WARN] Honey context unavailable: {exc}")
+                    honey_context = None
+            honey_info = None
+            honey_error = None
+            if isinstance(honey_context, dict):
+                honey_info = honey_context.get('info')
+                honey_error = honey_context.get('error')
 
             lines = []
-            lines.append("=== Decode Success ===")
+            lines.append('=== Decode Success ===')
             if header_info:
                 lines.append(f"Version: {header_info.get('version')}")
                 lines.append(f"LSB bits: {header_info.get('lsb_bits')}")
                 if header_info.get('start_offset') is not None:
                     lines.append(f"Header start offset: {header_info.get('start_offset')}")
                 lines.append(f"Computed start: {header_info.get('computed_start')}")
-                lines.append(f"Payload length: {header_info.get('payload_length')} bytes")
+                payload_length = header_info.get('payload_length')
+                if payload_length is not None:
+                    lines.append(f"Payload length: {payload_length} bytes")
                 if header_info.get('filename'):
                     lines.append(f"Filename: {header_info.get('filename')}")
+                if 'crc32_ok' in header_info:
+                    lines.append(f"CRC OK: {header_info.get('crc32_ok')}")
             lines.append(f"Saved to: {out_path}")
 
-            # Always show some message in results pane
+            if honey_error:
+                lines.append('')
+                lines.append(f"Honey warning: {honey_error}")
+            if honey_info and honey_info.get('message'):
+                universe = honey_info.get('universe', 'unknown')
+                key_used = honey_info.get('key')
+                lines.append('')
+                lines.append(f"Honey mode: message consistent with universe '{universe}'.")
+                if key_used is not None:
+                    lines.append(f"Key used: {key_used}")
+                lines.append('Try a different key to see another plausible decoy.')
+
             if extracted_data and isinstance(extracted_data, str):
-                # Limit overly long text previews
                 preview = extracted_data
                 if len(preview) > 5000:
                     preview = preview[:5000] + "\n...[truncated]"
-                lines.append("")
+                lines.append('')
                 lines.append(preview)
 
             self.results_text.setPlainText("\n".join(lines))
 
-            # Show success dialog with option to open file
+            if hasattr(self, 'honey_random_button'):
+                self.honey_random_button.setEnabled(bool(honey_info and honey_info.get('message')))
+            if honey_error:
+                self.set_status(f"Honey warning: {honey_error}", 'warning')
+            elif honey_info and honey_info.get('message'):
+                self.set_status('Honey mode: integrity verified.', 'success')
+            elif header_info.get('crc32_ok'):
+                self.set_status('Decryption OK (integrity verified).', 'success')
+            else:
+                self.set_status('Decode succeeded (checksum mismatch).', 'warning')
+
             from PyQt6.QtWidgets import QMessageBox
             msg = QMessageBox(self)
             msg.setIcon(QMessageBox.Icon.Information)
-            msg.setWindowTitle("Decode Successful")
-            out_path = self.machine.get_last_output_path() or "saved file"
-            msg.setText(f"Payload extracted successfully.\nSaved to: {out_path}")
-            open_btn = msg.addButton("Open file", QMessageBox.ButtonRole.AcceptRole)
-            msg.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+            msg.setWindowTitle('Decode Successful')
+            out_path_display = self.machine.get_last_output_path() or 'saved file'
+            msg.setText(f"Payload extracted successfully.\nSaved to: {out_path_display}")
+            open_btn = msg.addButton('Open file', QMessageBox.ButtonRole.AcceptRole)
+            msg.addButton('Close', QMessageBox.ButtonRole.RejectRole)
             msg.exec()
             if msg.clickedButton() == open_btn and self.machine.get_last_output_path():
                 from PyQt6.QtGui import QDesktopServices
                 from PyQt6.QtCore import QUrl
                 QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.get_last_output_path()))
         else:
-            print("❌ Steganography extraction failed!")
+            print('[ERR] Steganography extraction failed!')
             error_msg = self.machine.get_last_error() or "Extraction failed. Please check your settings and try again."
             self.results_text.setPlainText(error_msg)
+            if hasattr(self, 'honey_random_button'):
+                self.honey_random_button.setEnabled(False)
+            self.set_status(error_msg, 'error')
 
             # Show error popup
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Decode Failed", error_msg)
+
+    def on_honey_random_key(self):
+        if not hasattr(self.machine, 'simulate_honey_with_key'):
+            QToolTip.showText(QCursor.pos(), 'Honey simulation unavailable.', self.honey_random_button)
+            return
+        try:
+            honey_context = self.machine.get_honey_context() if hasattr(self.machine, 'get_honey_context') else None
+        except Exception as exc:
+            print(f'Honey context unavailable: {exc}')
+            honey_context = None
+        honey_info = honey_context.get('info') if isinstance(honey_context, dict) else None
+        if not honey_info or not honey_info.get('message'):
+            QToolTip.showText(QCursor.pos(), 'No Honey payload available to simulate.', self.honey_random_button)
+            return
+        current_key = None
+        current_text = self.key_input.text().strip() if hasattr(self, 'key_input') else ''
+        try:
+            current_key = int(current_text) if current_text else None
+        except ValueError:
+            current_key = None
+        attempts = 0
+        random_key = current_key
+        while random_key == current_key:
+            random_key = random.randint(0, 999999)
+            attempts += 1
+            if attempts > 1000:
+                break
+        try:
+            decoy_message = self.machine.simulate_honey_with_key(random_key)
+        except Exception as exc:
+            QToolTip.showText(QCursor.pos(), f'Honey simulation failed: {exc}', self.honey_random_button)
+            return
+        if hasattr(self, 'results_text'):
+            self.results_text.append(f"\n[Honey demo] Key {random_key}: {decoy_message}")
+        self.set_status(f'Honey demo: key {random_key} produced a plausible decoy.', 'info')
 
     def go_back(self):
         """Go back to main window"""

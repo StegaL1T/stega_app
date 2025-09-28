@@ -26,6 +26,7 @@ class AudioSteganalysisMachine:
         self.audio_sample_width: Optional[int] = None  # bytes per sample
         self.audio_num_frames: Optional[int] = None
         self.audio_samples: Optional[np.ndarray] = None  # int16/int8 numpy array, shape (n,) or (n, channels)
+        self.sensitivity_level: str = "ultra"  # Default to ultra-sensitive
 
         # Analysis results
         self.results: Dict = {}
@@ -33,6 +34,50 @@ class AudioSteganalysisMachine:
         self.confidence_level: float = 0.0
 
         print("AudioSteganalysisMachine initialized")
+
+    def set_sensitivity_level(self, level: str):
+        """Set the sensitivity level for analysis"""
+        self.sensitivity_level = level.lower()
+        print(f"Audio sensitivity level set to: {self.sensitivity_level}")
+
+    def get_sensitivity_thresholds(self) -> Dict[str, float]:
+        """Get sensitivity thresholds based on current level"""
+        thresholds = {
+            "ultra": {
+                "lsb_primary": 0.05,      # 5% deviation
+                "lsb_secondary": 0.08,    # 8% max deviation
+                "lsb_avg": 0.04,          # 4% avg deviation
+                "lsb_special": 0.025,     # 2.5% special case
+                "spectral_hf": 0.3,       # 30% high frequency ratio
+                "spectral_flatness": 0.08, # 8% spectral flatness
+                "entropy_low": 0.7,       # 70% entropy low threshold
+                "entropy_high": 0.99,     # 99% entropy high threshold
+                "comprehensive": 0.15     # 15% weighted voting
+            },
+            "medium": {
+                "lsb_primary": 0.10,      # 10% deviation
+                "lsb_secondary": 0.15,    # 15% max deviation
+                "lsb_avg": 0.08,          # 8% avg deviation
+                "lsb_special": 0.05,      # 5% special case
+                "spectral_hf": 0.4,       # 40% high frequency ratio
+                "spectral_flatness": 0.05, # 5% spectral flatness
+                "entropy_low": 0.6,       # 60% entropy low threshold
+                "entropy_high": 0.995,    # 99.5% entropy high threshold
+                "comprehensive": 0.25     # 25% weighted voting
+            },
+            "low": {
+                "lsb_primary": 0.20,      # 20% deviation
+                "lsb_secondary": 0.25,    # 25% max deviation
+                "lsb_avg": 0.15,          # 15% avg deviation
+                "lsb_special": 0.10,      # 10% special case
+                "spectral_hf": 0.5,       # 50% high frequency ratio
+                "spectral_flatness": 0.03, # 3% spectral flatness
+                "entropy_low": 0.5,       # 50% entropy low threshold
+                "entropy_high": 0.98,     # 98% entropy high threshold
+                "comprehensive": 0.35     # 35% weighted voting
+            }
+        }
+        return thresholds.get(self.sensitivity_level, thresholds["ultra"])
 
     def set_audio(self, audio_path: str) -> bool:
         """
@@ -179,11 +224,11 @@ class AudioSteganalysisMachine:
             max_deviation = max(channel_deviations)
             avg_deviation = np.mean(channel_deviations)
             
-            # Ultra-sensitive audio LSB thresholds: catch very subtle steganography
-            # Primary threshold: very low deviation (5% instead of 12%) to catch 2.6% cases
-            # Secondary threshold: multiple channels showing consistent deviation
-            # Special case: if any channel shows deviation > 2%, flag as suspicious
-            suspicious = (abs(avg_lsb - 0.5) > 0.05) or (max_deviation > 0.08 and avg_deviation > 0.04) or (max_deviation > 0.025)
+            # Configurable audio LSB thresholds based on sensitivity level
+            thresholds = self.get_sensitivity_thresholds()
+            suspicious = (abs(avg_lsb - 0.5) > thresholds["lsb_primary"]) or \
+                        (max_deviation > thresholds["lsb_secondary"] and avg_deviation > thresholds["lsb_avg"]) or \
+                        (max_deviation > thresholds["lsb_special"])
             
             end_time = time.time()
             execution_time = end_time - start_time
@@ -202,9 +247,9 @@ class AudioSteganalysisMachine:
         else:
             lsb_ratio = float(np.mean((samples & 1) != 0))
             deviation = abs(lsb_ratio - 0.5)
-            # Ultra-sensitive threshold for mono audio: catch very subtle steganography
-            # Special case: if deviation > 2%, flag as suspicious (like your encoded image)
-            suspicious = deviation > 0.025
+            # Configurable threshold for mono audio based on sensitivity level
+            thresholds = self.get_sensitivity_thresholds()
+            suspicious = deviation > thresholds["lsb_special"]
             
             end_time = time.time()
             execution_time = end_time - start_time
@@ -304,9 +349,11 @@ class AudioSteganalysisMachine:
         arithmetic_mean = np.mean(psd)
         spectral_flatness = geometric_mean / (arithmetic_mean + 1e-10)
         
-        # Ultra-sensitive thresholds for spectral analysis: catch very subtle steganography
-        # Lower thresholds to catch more subtle spectral anomalies
-        suspicious = (hf_ratio > 0.3) or (spectral_flatness < 0.08) or (hf_ratio > 0.2 and spectral_flatness < 0.2)
+        # Configurable spectral analysis thresholds based on sensitivity level
+        thresholds = self.get_sensitivity_thresholds()
+        suspicious = (hf_ratio > thresholds["spectral_hf"]) or \
+                    (spectral_flatness < thresholds["spectral_flatness"]) or \
+                    (hf_ratio > 0.2 and spectral_flatness < 0.2)
         
         self.results = {
             'method': 'Audio Spectral Analysis',
@@ -378,9 +425,9 @@ class AudioSteganalysisMachine:
         max_entropy = np.log2(256)
         entropy_ratio = entropy / max_entropy
         
-        # Ultra-sensitive entropy analysis: catch very subtle steganography
-        # Lower thresholds to catch more subtle entropy anomalies
-        suspicious = entropy_ratio < 0.7 or entropy_ratio > 0.99
+        # Configurable entropy analysis thresholds based on sensitivity level
+        thresholds = self.get_sensitivity_thresholds()
+        suspicious = entropy_ratio < thresholds["entropy_low"] or entropy_ratio > thresholds["entropy_high"]
         
         self.results = {
             'method': 'Audio Entropy Analysis',
@@ -437,9 +484,9 @@ class AudioSteganalysisMachine:
                     weighted_score += weight
                 total_weight += weight
         
-        # Ultra-sensitive audio comprehensive: catch very subtle steganography
-        # Lower threshold (0.15 instead of 0.25) to match image sensitivity
-        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > 0.15
+        # Configurable audio comprehensive thresholds based on sensitivity level
+        thresholds = self.get_sensitivity_thresholds()
+        overall_suspicious = (weighted_score / max(total_weight, 0.1)) > thresholds["comprehensive"]
         
         self.results = {
             'method': 'Audio Advanced Comprehensive Analysis',

@@ -630,6 +630,7 @@ class SteganalysisWindow(QMainWindow):
         self.image_window.update_method_description(
             "LSB Analysis", self.image_method_description)
 
+
         layout.addWidget(title)
         layout.addWidget(image_group)
         layout.addWidget(method_group)
@@ -644,6 +645,9 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
+        # Create header row with title and sensitivity level
+        header_layout = QHBoxLayout()
+        
         title = QLabel("📊 Image Analysis Results")
         f = QFont()
         f.setPointSize(20)
@@ -651,6 +655,72 @@ class SteganalysisWindow(QMainWindow):
         title.setFont(f)
         title.setStyleSheet(
             "color: #e8e8fc; margin-bottom: 10px; border: none;")
+        
+        # Add spacer to push sensitivity to the right
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        
+        # Create narrow sensitivity level control with border and label
+        sensitivity_group = QGroupBox("⚙️ Sensitivity")
+        sensitivity_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 12px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                margin-top: 5px;
+                padding-top: 5px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+        sensitivity_layout = QVBoxLayout(sensitivity_group)
+        sensitivity_layout.setContentsMargins(8, 5, 8, 8)
+        
+        self.image_sensitivity_combo = QComboBox()
+        self.image_sensitivity_combo.addItems([
+            "🔴 Ultra (2.5%)",
+            "🟡 Medium (5%)", 
+            "🟢 Low (10%)"
+        ])
+        self.image_sensitivity_combo.setCurrentIndex(0)  # Default to Ultra
+        self.image_sensitivity_combo.setMaximumWidth(140)  # Make it narrow
+        self.image_sensitivity_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #0e1625;
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 6px;
+                padding: 4px;
+                font-size: 11px;
+            }
+            QComboBox:focus {
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 3px solid transparent;
+                border-right: 3px solid transparent;
+                border-top: 3px solid #45edf2;
+                margin-right: 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #0e1625;
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                selection-background-color: rgba(69,237,242,0.3);
+            }
+        """)
+        sensitivity_layout.addWidget(self.image_sensitivity_combo)
+        
+        header_layout.addWidget(sensitivity_group)
 
         self.img_progress_bar = QProgressBar()
         self.img_progress_bar.setVisible(False)
@@ -866,7 +936,7 @@ class SteganalysisWindow(QMainWindow):
         image_charts_layout = QVBoxLayout(image_charts_group)
         image_charts_layout.addWidget(charts_scroll)
         
-        layout.addWidget(title)
+        layout.addLayout(header_layout)
         layout.addWidget(self.img_progress_bar)
         
         # Create side-by-side layout for detection results and statistics (50:50)
@@ -1141,6 +1211,7 @@ class SteganalysisWindow(QMainWindow):
         self.audio_window.update_method_description(
             "Audio LSB Analysis", self.audio_method_description)
 
+
         layout.addWidget(title)
         layout.addWidget(audio_group)
         layout.addWidget(audio_method_group)
@@ -1155,6 +1226,9 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
+        # Create header row with title and sensitivity level
+        header_layout = QHBoxLayout()
+        
         title = QLabel("📈 Audio Analysis Results")
         f = QFont()
         f.setPointSize(20)
@@ -1162,6 +1236,72 @@ class SteganalysisWindow(QMainWindow):
         title.setFont(f)
         title.setStyleSheet(
             "color: #e8e8fc; margin-bottom: 10px; border: none;")
+        
+        # Add spacer to push sensitivity to the right
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        
+        # Create narrow sensitivity level control with border and label
+        sensitivity_group = QGroupBox("⚙️ Sensitivity")
+        sensitivity_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 12px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                margin-top: 5px;
+                padding-top: 5px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+        sensitivity_layout = QVBoxLayout(sensitivity_group)
+        sensitivity_layout.setContentsMargins(8, 5, 8, 8)
+        
+        self.audio_sensitivity_combo = QComboBox()
+        self.audio_sensitivity_combo.addItems([
+            "🔴 Ultra (2.5%)",
+            "🟡 Medium (5%)", 
+            "🟢 Low (10%)"
+        ])
+        self.audio_sensitivity_combo.setCurrentIndex(0)  # Default to Ultra
+        self.audio_sensitivity_combo.setMaximumWidth(140)  # Make it narrow
+        self.audio_sensitivity_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #0e1625;
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 6px;
+                padding: 4px;
+                font-size: 11px;
+            }
+            QComboBox:focus {
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 3px solid transparent;
+                border-right: 3px solid transparent;
+                border-top: 3px solid #45edf2;
+                margin-right: 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #0e1625;
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                selection-background-color: rgba(69,237,242,0.3);
+            }
+        """)
+        sensitivity_layout.addWidget(self.audio_sensitivity_combo)
+        
+        header_layout.addWidget(sensitivity_group)
 
         self.aud_progress_bar = QProgressBar()
         self.aud_progress_bar.setVisible(False)
@@ -1381,7 +1521,7 @@ class SteganalysisWindow(QMainWindow):
         export_buttons_layout.addWidget(export_aud_pdf_btn)
         export_buttons_layout.addWidget(export_button)
 
-        layout.addWidget(title)
+        layout.addLayout(header_layout)
         layout.addWidget(self.aud_progress_bar)
         
         # Create side-by-side layout for detection results and statistics (50:50)
@@ -1524,7 +1664,23 @@ class SteganalysisWindow(QMainWindow):
             }
         """)
 
-        video_method_group = QGroupBox("Video Analysis Method")
+        video_method_group = QGroupBox("⚙️ Video Analysis Method")
+        video_method_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         video_method_layout = QVBoxLayout(video_method_group)
         self.video_method_combo = QComboBox()
         self.video_method_combo.addItems([
@@ -1593,6 +1749,7 @@ class SteganalysisWindow(QMainWindow):
         self.video_window.update_method_description(
             "Video LSB Analysis", self.video_method_description)
 
+
         self.vid_analyze_btn = QPushButton("Analyze Video")
         self.vid_analyze_btn.setStyleSheet("""
             QPushButton { 
@@ -1629,6 +1786,9 @@ class SteganalysisWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
 
+        # Create header row with title and sensitivity level
+        header_layout = QHBoxLayout()
+        
         title = QLabel("📹 Video Analysis Results")
         f = QFont()
         f.setPointSize(20)
@@ -1636,6 +1796,72 @@ class SteganalysisWindow(QMainWindow):
         title.setFont(f)
         title.setStyleSheet(
             "color: #e8e8fc; margin-bottom: 10px; border: none;")
+        
+        # Add spacer to push sensitivity to the right
+        header_layout.addWidget(title)
+        header_layout.addStretch()
+        
+        # Create narrow sensitivity level control with border and label
+        sensitivity_group = QGroupBox("⚙️ Sensitivity")
+        sensitivity_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 12px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                margin-top: 5px;
+                padding-top: 5px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+        sensitivity_layout = QVBoxLayout(sensitivity_group)
+        sensitivity_layout.setContentsMargins(8, 5, 8, 8)
+        
+        self.video_sensitivity_combo = QComboBox()
+        self.video_sensitivity_combo.addItems([
+            "🔴 Ultra (2.5%)",
+            "🟡 Medium (5%)", 
+            "🟢 Low (10%)"
+        ])
+        self.video_sensitivity_combo.setCurrentIndex(0)  # Default to Ultra
+        self.video_sensitivity_combo.setMaximumWidth(140)  # Make it narrow
+        self.video_sensitivity_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #0e1625;
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 6px;
+                padding: 4px;
+                font-size: 11px;
+            }
+            QComboBox:focus {
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 3px solid transparent;
+                border-right: 3px solid transparent;
+                border-top: 3px solid #45edf2;
+                margin-right: 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #0e1625;
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
+                selection-background-color: rgba(69,237,242,0.3);
+            }
+        """)
+        sensitivity_layout.addWidget(self.video_sensitivity_combo)
+        
+        header_layout.addWidget(sensitivity_group)
 
         self.vid_progress_bar = QProgressBar()
         self.vid_progress_bar.setVisible(False)
@@ -1856,7 +2082,7 @@ class SteganalysisWindow(QMainWindow):
         export_buttons_layout.addWidget(export_vid_pdf_btn)
         export_buttons_layout.addWidget(export_vid_report_btn)
 
-        layout.addWidget(title)
+        layout.addLayout(header_layout)
         layout.addWidget(self.vid_progress_bar)
         
         # Create side-by-side layout for detection results and statistics (50:50)
@@ -1911,6 +2137,27 @@ class SteganalysisWindow(QMainWindow):
         description = self.method_descriptions.get(
             method_name, "No description available for this method.")
         description_widget.setText(description)
+
+    def get_sensitivity_level(self, media_type: str) -> str:
+        """Get the selected sensitivity level for the specified media type"""
+        if media_type == "image":
+            combo = self.image_sensitivity_combo
+        elif media_type == "audio":
+            combo = self.audio_sensitivity_combo
+        elif media_type == "video":
+            combo = self.video_sensitivity_combo
+        else:
+            return "ultra"  # Default fallback
+        
+        current_text = combo.currentText()
+        if "Ultra" in current_text:
+            return "ultra"
+        elif "Medium" in current_text:
+            return "medium"
+        elif "Low" in current_text:
+            return "low"
+        else:
+            return "ultra"  # Default fallback
 
     def export_report(self):
         """Export analysis report"""
