@@ -1125,6 +1125,10 @@ class StegaDecodeWindow(QMainWindow):
             msg.setText(f"Payload extracted successfully.\nSaved to: {out_path_display}")
             open_btn = msg.addButton('Open file', QMessageBox.ButtonRole.AcceptRole)
             msg.addButton('Close', QMessageBox.ButtonRole.RejectRole)
+            
+            # Apply dark theme styling for better text visibility
+            self._style_message_box(msg, 'info')
+            
             msg.exec()
             if msg.clickedButton() == open_btn and self.machine.get_last_output_path():
                 from PyQt6.QtGui import QDesktopServices
@@ -1140,7 +1144,50 @@ class StegaDecodeWindow(QMainWindow):
 
             # Show error popup
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Decode Failed", error_msg)
+            error_msg_box = QMessageBox.critical(self, "Decode Failed", error_msg)
+            self._style_message_box(error_msg_box, 'error')
+
+    def _style_message_box(self, msg_box, button_style='default'):
+        """Apply dark theme styling to QMessageBox for better text visibility"""
+        if button_style == 'error':
+            button_bg = "rgba(231,76,60,0.1)"
+            button_color = "#e74c3c"
+            button_border = "rgba(231,76,60,0.6)"
+            button_hover_bg = "rgba(231,76,60,0.3)"
+            button_pressed_bg = "rgba(231,76,60,0.5)"
+        else:  # default/info
+            button_bg = "rgba(69,237,242,0.1)"
+            button_color = "#45edf2"
+            button_border = "rgba(69,237,242,0.6)"
+            button_hover_bg = "rgba(69,237,242,0.3)"
+            button_pressed_bg = "rgba(69,237,242,0.5)"
+            
+        msg_box.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: #0e1625;
+                color: #e8e8fc;
+            }}
+            QMessageBox QLabel {{
+                color: #e8e8fc;
+                background-color: transparent;
+            }}
+            QMessageBox QPushButton {{
+                background-color: {button_bg};
+                color: {button_color};
+                border: 2px solid {button_border};
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 80px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: {button_hover_bg};
+                border: 2px solid {button_color};
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: {button_pressed_bg};
+            }}
+        """)
 
     def on_honey_random_key(self):
         if not hasattr(self.machine, 'simulate_honey_with_key'):

@@ -30,6 +30,71 @@ def _human_size(num: int) -> str:
     return f"{num:.1f} PB"
 
 
+class CustomCheckBox(QCheckBox):
+    """Custom checkbox with visible checkmark"""
+    
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setStyleSheet("""
+            QCheckBox {
+                color: #e8e8fc;
+                font-weight: 500;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 4px;
+                background-color: #0e1625;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #45edf2;
+                border: 2px solid #45edf2;
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #45edf2;
+                background-color: rgba(69,237,242,0.1);
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: #45edf2;
+                border: 2px solid #45edf2;
+            }
+        """)
+    
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.isChecked():
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            
+            # Calculate indicator rect manually (18x18px checkbox)
+            checkbox_size = 18
+            spacing = 8  # spacing between checkbox and text
+            checkbox_x = 0
+            checkbox_y = (self.height() - checkbox_size) // 2
+            
+            # Draw checkmark
+            painter.setPen(QPen(QColor("#0d1625"), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            
+            # Draw checkmark path - bigger and centered
+            center_x = checkbox_x + checkbox_size // 2
+            center_y = checkbox_y + checkbox_size // 2
+            scale = checkbox_size * 0.6  # Increased from 0.4 to 0.6 for bigger checkmark
+            
+            # Checkmark coordinates (convert to integers) - better centered
+            painter.drawLine(
+                int(center_x - scale*0.4), int(center_y + scale*0.1),
+                int(center_x - scale*0.1), int(center_y + scale*0.4)
+            )
+            painter.drawLine(
+                int(center_x - scale*0.1), int(center_y + scale*0.4),
+                int(center_x + scale*0.4), int(center_y - scale*0.3)
+            )
+            
+            painter.end()
+
+
 class CyberBackgroundWidget(QWidget):
     """Custom background widget with subtle cybersecurity elements"""
 
@@ -1467,7 +1532,7 @@ class StegaEncodeWindow(QMainWindow):
         frame.setObjectName("quickStartFrame")
         frame.setStyleSheet("""
             QFrame#quickStartFrame {
-                background-color: transparent;
+                background-color: #0e1625;
                 border-radius: 18px;
                 border: 2px solid rgba(69,237,242,0.6);
                 padding: 12px 18px;
@@ -1748,8 +1813,12 @@ class StegaEncodeWindow(QMainWindow):
         content_scroll.setWidgetResizable(True)
         content_scroll.setFrameShape(QFrame.Shape.NoFrame)
         content_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Make scroll area transparent to show page background
+        content_scroll.setStyleSheet("QScrollArea { background-color: transparent; }")
 
         content_container = QWidget()
+        # Make container transparent to show page background
+        content_container.setStyleSheet("QWidget { background-color: transparent; }")
         columns_layout = QHBoxLayout(content_container)
         columns_layout.setContentsMargins(0, 0, 0, 0)
         columns_layout.setSpacing(16)
@@ -1772,12 +1841,11 @@ class StegaEncodeWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 border-radius: 15px;
                 border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
 
         layout = QVBoxLayout(panel)
         layout.setSpacing(16)
@@ -1829,12 +1897,11 @@ class StegaEncodeWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 border-radius: 15px;
                 border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
 
         layout = QVBoxLayout(panel)
         layout.setSpacing(16)
@@ -1928,12 +1995,11 @@ class StegaEncodeWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 border-radius: 15px;
                 border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
 
         layout = QVBoxLayout(panel)
         layout.setSpacing(16)
@@ -1990,7 +2056,7 @@ class StegaEncodeWindow(QMainWindow):
                 font-weight: bold;
                 color: #e8e8fc;
                 padding: 15px;
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
                 font-family: 'Segoe UI', sans-serif;
@@ -2073,7 +2139,7 @@ class StegaEncodeWindow(QMainWindow):
                 padding: 15px;
                 border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
@@ -2092,16 +2158,14 @@ class StegaEncodeWindow(QMainWindow):
         key_layout.addWidget(self.key_input)
 
 
-        self.encrypt_checkbox = QCheckBox("Encrypt payload before embedding (recommended)")
+        self.encrypt_checkbox = CustomCheckBox("Encrypt payload before embedding (recommended)")
         self.encrypt_checkbox.setToolTip('Use the numeric key to derive an XOR keystream before embedding the payload.')
         self.encrypt_checkbox.setChecked(True)
-        self.encrypt_checkbox.setStyleSheet("color:#e8e8fc;font-weight:500;")
         self.encrypt_checkbox.toggled.connect(self.on_encrypt_toggle)
         key_layout.addWidget(self.encrypt_checkbox)
 
-        self.honey_checkbox = QCheckBox("Honey Encryption (Demo)")
+        self.honey_checkbox = CustomCheckBox("Honey Encryption (Demo)")
         self.honey_checkbox.setToolTip('Enable the Honey Encryption demo (text payloads only).')
-        self.honey_checkbox.setStyleSheet("color:#e8e8fc;font-weight:500;")
         self.honey_checkbox.toggled.connect(self.on_honey_toggle)
         key_layout.addWidget(self.honey_checkbox)
 
@@ -2215,7 +2279,7 @@ class StegaEncodeWindow(QMainWindow):
                 padding: 15px;
                 border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: rgba(14,22,37,0.8);
+                background-color: #0e1625;
                 color: #e8e8fc;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
@@ -2567,6 +2631,11 @@ class StegaEncodeWindow(QMainWindow):
             "}"
             "QPushButton:hover { background: rgba(69,237,242,0.3); border: 3px solid rgba(69,237,242,1.0); }"
             "QPushButton:pressed { background: rgba(69,237,242,0.3); }"
+            "QPushButton:disabled {"
+            "    background: rgba(128,128,128,0.1);"
+            "    color: #808080;"
+            "    border: 2px solid rgba(128,128,128,0.3);"
+            "}"
         )
         self.hide_button.clicked.connect(self.hide_message)
 
@@ -2688,6 +2757,48 @@ class StegaEncodeWindow(QMainWindow):
         except Exception as e:
             print(f"Failed to show banner: {e}")
 
+    def _style_message_box(self, msg_box, button_style='default'):
+        """Apply dark theme styling to QMessageBox for better text visibility"""
+        if button_style == 'error':
+            button_bg = "rgba(231,76,60,0.1)"
+            button_color = "#e74c3c"
+            button_border = "rgba(231,76,60,0.6)"
+            button_hover_bg = "rgba(231,76,60,0.3)"
+            button_pressed_bg = "rgba(231,76,60,0.5)"
+        else:  # default/info
+            button_bg = "rgba(69,237,242,0.1)"
+            button_color = "#45edf2"
+            button_border = "rgba(69,237,242,0.6)"
+            button_hover_bg = "rgba(69,237,242,0.3)"
+            button_pressed_bg = "rgba(69,237,242,0.5)"
+            
+        msg_box.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: #0e1625;
+                color: #e8e8fc;
+            }}
+            QMessageBox QLabel {{
+                color: #e8e8fc;
+                background-color: transparent;
+            }}
+            QMessageBox QPushButton {{
+                background-color: {button_bg};
+                color: {button_color};
+                border: 2px solid {button_border};
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 80px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: {button_hover_bg};
+                border: 2px solid {button_color};
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: {button_pressed_bg};
+            }}
+        """)
+
     def _set_overflow_banner(self, message: str | None):
         """Create/update/clear the capacity overflow persistent banner."""
         try:
@@ -2772,10 +2883,17 @@ class StegaEncodeWindow(QMainWindow):
             ext = os.path.splitext(file_path)[1].lower()
             if ext in ['.jpg', '.jpeg']:
                 from PyQt6.QtWidgets import QMessageBox
-                resp = QMessageBox.question(self, 'Convert JPEG to PNG?',
-                                            'JPEG is lossy and will not preserve LSBs reliably. Convert to PNG for lossless embedding?',
-                                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                            QMessageBox.StandardButton.Yes)
+                msg_box = QMessageBox(self)
+                msg_box.setIcon(QMessageBox.Icon.Question)
+                msg_box.setWindowTitle('Convert JPEG to PNG?')
+                msg_box.setText('JPEG is lossy and will not preserve LSBs reliably. Convert to PNG for lossless embedding?')
+                msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
+                
+                # Apply dark theme styling for better text visibility
+                self._style_message_box(msg_box, 'info')
+                
+                resp = msg_box.exec()
                 if resp == QMessageBox.StandardButton.Yes:
                     try:
                         img = Image.open(file_path)
@@ -3255,6 +3373,25 @@ class StegaEncodeWindow(QMainWindow):
             print("Steganography completed successfully!")
             self.set_status(f"Stego saved: {self.machine.output_path}", 'success')
             self.update_helper_step(5, "Step 5: Review the proof & diagnostics panel.")
+            
+            # Show success popup matching decoding style
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle('Encode Successful')
+            out_path_display = self.machine.output_path or 'saved file'
+            msg.setText(f"Message hidden successfully.\nSaved to: {out_path_display}")
+            open_btn = msg.addButton('Open file', QMessageBox.ButtonRole.AcceptRole)
+            msg.addButton('Close', QMessageBox.ButtonRole.RejectRole)
+            
+            # Apply dark theme styling for better text visibility
+            self._style_message_box(msg, 'info')
+            
+            msg.exec()
+            if msg.clickedButton() == open_btn and self.machine.output_path:
+                from PyQt6.QtGui import QDesktopServices
+                from PyQt6.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.output_path))
             info = getattr(self.machine, 'last_embed_info', None)
             if info:
                 encrypted_flag = info.get('encrypted')
