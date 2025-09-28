@@ -53,6 +53,7 @@ from PIL import Image
 import numpy as np
 from pathlib import Path
 
+from crypto_honey import HoneyFormatError, he_encrypt
 from machine.stega_spec import (
     FLAG_PAYLOAD_ENCRYPTED,
     HeaderMeta,
@@ -96,12 +97,19 @@ class StegaEncodeMachine:
         self.cover_audio_path = None
         # Payload (bytes). If text was provided, this is UTF-8 bytes of that text.
         self.payload_data = None
+        self.payload_text: Optional[str] = None
         self.payload_file_path = None
         self.lsb_bits = 1
         # Numeric key (string of digits enforced at GUI); stored as string
         self.encryption_key = None
         self.encrypt_payload = True
         self.output_path = None
+
+        # Honey / transformation state
+        self.honey_enabled = False
+        self.honey_universe = 'office_msgs'
+        self._encrypt_preference = True
+        self._last_transform_info: Optional[Dict[str, Any]] = None
 
         # Internal state
         self.cover_image = None
@@ -180,12 +188,15 @@ class StegaEncodeMachine:
         Returns:
             bool: True if successful, False otherwise
         """
-        if not text.strip():
+        trimmed = text.strip()
+        if not trimmed:
             print("Error: Payload text cannot be empty")
             return False
 
-        self.payload_data = text.strip().encode('utf-8')
+        self.payload_text = trimmed
+        self.payload_data = trimmed.encode('utf-8')
         self.payload_file_path = None  # Clear file path if text is set
+        self._invalidate_transform_cache()
 
         print(f"Payload text set: {len(self.payload_data)} bytes")
         return True
@@ -211,6 +222,8 @@ class StegaEncodeMachine:
             # Store raw bytes
             self.payload_data = file_data
             self.payload_file_path = file_path
+            self.payload_text = None
+            self._invalidate_transform_cache()
 
             print(f"Payload file loaded: {file_path}")
             print(f"File size: {len(file_data)} bytes")
@@ -255,10 +268,119 @@ class StegaEncodeMachine:
             print("Key cleared or invalid (numeric required)")
 
     def set_encrypt_payload(self, enabled: bool) -> None:
-        """Toggle payload encryption (innovation feature)."""
-        self.encrypt_payload = bool(enabled)
+        """Toggle XOR payload encryption."""
+        self._encrypt_preference = bool(enabled)
+        if self.honey_enabled:
+            self.encrypt_payload = False
+        else:
+            self.encrypt_payload = self._encrypt_preference
         state = 'enabled' if self.encrypt_payload else 'disabled'
         print(f"Payload encryption {state}")
+        self._invalidate_transform_cache()
+
+    def _invalidate_transform_cache(self) -> None:
+        """Reset cached payload transform metadata."""
+        self._last_transform_info = None
+
+    def set_honey_enabled(self, enabled: bool) -> None:
+        """Enable or disable the Honey Encryption demo mode."""
+        self.honey_enabled = bool(enabled)
+        if self.honey_enabled:
+            self.encrypt_payload = False
+        else:
+            self.encrypt_payload = bool(self._encrypt_preference)
+        state = 'enabled' if self.honey_enabled else 'disabled'
+        print(f"Honey encryption {state}")
+        self._invalidate_transform_cache()
+
+    def set_honey_universe(self, universe: str) -> None:
+        """Record the active Honey Encryption universe."""
+        name = (universe or '').strip()
+        if not name:
+            raise ValidationError("Honey universe cannot be empty")
+        self.honey_universe = name
+        self._invalidate_transform_cache()
+
+    def get_payload_lengths(self) -> Tuple[int, int]:
+        """Return (raw_len, effective_len) for the current payload."""
+        raw_len = len(self.payload_data) if self.payload_data else 0
+        effective_len = self.get_effective_payload_length()
+        return raw_len, effective_len
+
+    def get_effective_payload_length(self) -> int:
+        """Return the number of bytes that will actually be embedded."""
+        if not self.payload_data:
+            return 0
+        if self.honey_enabled:
+            try:
+                universe_bytes = self.honey_universe.encode('ascii')
+            except UnicodeEncodeError:
+                return 0
+            return 6 + 4 + 8 + 1 + len(universe_bytes) + 4
+        return len(self.payload_data)
+
+    def get_transform_summary(self) -> Dict[str, Any]:
+        """Expose a summary of the most recent payload transform."""
+        if self._last_transform_info is not None:
+            return dict(self._last_transform_info)
+        raw_len, effective_len = self.get_payload_lengths()
+        if self.honey_enabled:
+            return {
+                'mode': 'honey',
+                'raw_len': raw_len,
+                'embed_len': effective_len,
+                'universe': self.honey_universe,
+            }
+        mode = 'xor' if self.encrypt_payload else 'plain'
+        return {'mode': mode, 'raw_len': raw_len, 'embed_len': effective_len}
+
+    def _prepare_payload_for_embedding(self, payload_bytes: bytes, key: str, fname_bytes: bytes) -> Dict[str, Any]:
+        """Apply the configured transform (plain/xor/honey) to the payload."""
+        summary = {
+            'mode': 'plain',
+            'raw_len': len(payload_bytes),
+            'embed_len': len(payload_bytes),
+        }
+        flags = 0
+        nonce = b''
+        payload_for_embed = payload_bytes
+        crc_source = payload_bytes
+
+        if self.honey_enabled:
+            if self.payload_file_path:
+                raise ValidationError("Honey mode supports short text payloads only.")
+            if self.payload_text is not None:
+                text_value = self.payload_text
+            else:
+                try:
+                    text_value = payload_bytes.decode('utf-8')
+                except UnicodeDecodeError as exc:
+                    raise ValidationError("Honey mode requires UTF-8 text payloads.") from exc
+            try:
+                honey_blob = he_encrypt(text_value, int(key), self.honey_universe)
+            except (ValueError, HoneyFormatError) as exc:
+                raise ValidationError(f"Honey encryption failed: {exc}") from exc
+            payload_for_embed = honey_blob
+            crc_source = honey_blob
+            summary.update({
+                'mode': 'honey',
+                'embed_len': len(honey_blob),
+                'universe': self.honey_universe,
+            })
+        elif self.encrypt_payload:
+            nonce = generate_nonce()
+            payload_for_embed = encrypt_payload(key, nonce, payload_bytes, fname_bytes)
+            flags = FLAG_PAYLOAD_ENCRYPTED
+            summary['mode'] = 'xor'
+
+        self._last_transform_info = dict(summary)
+        return {
+            'payload': payload_for_embed,
+            'flags': flags,
+            'nonce': nonce,
+            'crc_payload': crc_source,
+            'summary': summary,
+        }
 
     def set_output_path(self, output_path: str) -> bool:
         """
@@ -305,9 +427,11 @@ class StegaEncodeMachine:
         if self.cover_image is None:
             return False, "Cover image not loaded properly"
 
-        # Calculate maximum payload capacity (image only at the moment)
+        if self.honey_enabled and self.payload_file_path:
+            return False, "Honey mode supports text payloads only"
+
         max_capacity = (self.image_array.size * self.lsb_bits) // 8
-        payload_size = len(self.payload_data)
+        payload_size = self.get_effective_payload_length()
 
         if payload_size > max_capacity:
             return False, f"Payload too large. Max capacity: {max_capacity} bytes, Payload: {payload_size} bytes"
@@ -523,21 +647,16 @@ class StegaEncodeMachine:
         fname_bytes = filename.encode('utf-8')[:MAX_FILENAME_LEN]
         rng = rng_from_key_and_filename(key, b'')
         perm = perm_for_lsb_bits(rng, lsb_bits)
-
-        flags = 0
-        nonce = b''
-        payload_for_embed = payload_bytes
-        if self.encrypt_payload:
-            nonce = generate_nonce()
-            payload_for_embed = encrypt_payload(
-                key, nonce, payload_bytes, fname_bytes)
-            flags |= FLAG_PAYLOAD_ENCRYPTED
-
-        payload_crc = crc32(payload_bytes)
+        transform = self._prepare_payload_for_embedding(payload_bytes, key, fname_bytes)
+        payload_for_embed = transform['payload']
+        flags = transform['flags']
+        nonce = transform['nonce']
+        payload_crc = crc32(transform['crc_payload'])
+        payload_len = len(payload_for_embed)
         header_placeholder = HeaderMeta(
             lsb_bits=lsb_bits,
             start_bit_offset=0,
-            payload_len=len(payload_bytes),
+            payload_len=payload_len,
             filename=filename,
             crc32=payload_crc,
             flags=flags,
@@ -571,7 +690,7 @@ class StegaEncodeMachine:
         header_actual = HeaderMeta(
             lsb_bits=lsb_bits,
             start_bit_offset=start_bit,
-            payload_len=len(payload_bytes),
+            payload_len=payload_len,
             filename=filename,
             crc32=payload_crc,
             flags=flags,
@@ -603,6 +722,8 @@ class StegaEncodeMachine:
             'nonce': nonce.hex() if nonce else '',
             'encrypted': bool(flags & FLAG_PAYLOAD_ENCRYPTED),
             'crc32': payload_crc,
+            'transform': self.get_transform_summary(),
+            'honey_enabled': self.honey_enabled,
         }
 
         return stego_img, parsed
@@ -726,6 +847,8 @@ class StegaEncodeMachine:
             'nonce': nonce.hex() if nonce else '',
             'encrypted': bool(flags & FLAG_PAYLOAD_ENCRYPTED),
             'crc32': payload_crc,
+            'transform': self.get_transform_summary(),
+            'honey_enabled': self.honey_enabled,
         }
 
         return audio_bytes
@@ -818,6 +941,8 @@ class StegaEncodeMachine:
     def encode_video(self, cover_video_path: str, payload_bytes: bytes, filename: str, lsb_bits: int, key: str, start_fxy: Optional[Tuple[int, int, int]] = None, out_path: Optional[str] = None) -> str:
         if not os.path.exists(cover_video_path):
             raise ValidationError(f"Cover video not found: {cover_video_path}")
+        if self.honey_enabled:
+            raise ValidationError("Honey Encryption demo is available for image and audio payloads only right now.")
 
         temp_dir = Path(tempfile.mkdtemp(prefix="stego_video_"))
         frames_dir = temp_dir / "frames"

@@ -2,11 +2,11 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
-                             QSpinBox, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
+                             QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
                              QScrollArea, QSlider as QTimeSlider, QToolTip, QProgressBar,
                              QCheckBox, QToolButton, QSizePolicy)
-from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal, QRegularExpression
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QIntValidator, QRegularExpressionValidator, QCursor
+from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QCursor
 import os
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
@@ -16,6 +16,7 @@ import soundfile as sf
 import cv2
 from datetime import datetime
 from machine.stega_spec import (HeaderMeta, FLAG_PAYLOAD_ENCRYPTED, pack_header, HEADER_MAGIC, HEADER_VERSION)
+from crypto_honey import list_universes
 
 
 def _human_size(num: int) -> str:
@@ -53,7 +54,7 @@ class NotificationBanner(QFrame):
         self.setStyleSheet(
             f"#notificationBanner {{ background-color:{bg}; border:1px solid {border}; border-radius:8px; }}"
             f"QLabel {{ color:{fg}; font-weight:bold; }}"
-            "QPushButton { background: transparent; color: #7f8c8d; border: none; font-size: 16px; }"
+            "QPushButton { background: transparent; color: #34495e; border: none; font-size: 16px; }"
             "QPushButton:hover { color: #2c3e50; }"
         )
 
@@ -184,7 +185,7 @@ class MediaDropWidget(QFrame):
                 border: 3px dashed #bdc3c7;
                 border-radius: 15px;
                 background-color: #f8f9fa;
-                color: #7f8c8d;
+                color: #34495e;
                 font-size: 16px;
             }
             QLabel:hover {
@@ -273,7 +274,7 @@ class MediaDropWidget(QFrame):
                 border: 3px dashed #bdc3c7;
                 border-radius: 15px;
                 background-color: #f8f9fa;
-                color: #7f8c8d;
+                color: #34495e;
                 font-size: 16px;
             }
         """)
@@ -974,7 +975,7 @@ class PayloadDropWidget(QFrame):
                 border: 3px dashed #bdc3c7;
                 border-radius: 15px;
                 background-color: #f8f9fa;
-                color: #7f8c8d;
+                color: #34495e;
                 font-size: 16px;
             }
             QLabel:hover {
@@ -1066,7 +1067,7 @@ class PayloadDropWidget(QFrame):
                 border: 3px dashed #bdc3c7;
                 border-radius: 15px;
                 background-color: #f8f9fa;
-                color: #7f8c8d;
+                color: #34495e;
                 font-size: 16px;
             }
             """
@@ -1152,6 +1153,7 @@ class PayloadDropWidget(QFrame):
 class StegaEncodeWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.setObjectName('StegaEncodeWindow')
         self.setWindowTitle("Steganography - Hide Messages")
         self.setMinimumSize(1200, 800)
 
@@ -1195,7 +1197,6 @@ class StegaEncodeWindow(QMainWindow):
                 background: #e3f2fd;
             }
         """)
-
         # Create central widget and main layout
         central_widget = QWidget()
         # Transparent background so the window gradient shows cleanly (avoids dark corners)
@@ -1276,7 +1277,7 @@ class StegaEncodeWindow(QMainWindow):
                 font-weight: 600;
             }
             QLabel[class="stepDetail"] {
-                color: #5d6d7e;
+                color: #2c3e50;
                 font-size: 12px;
             }
         """)
@@ -1564,7 +1565,7 @@ class StegaEncodeWindow(QMainWindow):
             pass
         layout.addWidget(self.media_drop_widget)
         self.cover_info_label = QLabel('Drop a cover file to begin. Supported: PNG/BMP/GIF images, WAV audio, MOV/MP4 video.')
-        self.cover_info_label.setStyleSheet('color:#5d6d7e;')
+        self.cover_info_label.setStyleSheet('color:#2c3e50;')
         self.cover_info_label.setWordWrap(True)
         layout.addWidget(self.cover_info_label)
         layout.addStretch()
@@ -1623,7 +1624,7 @@ class StegaEncodeWindow(QMainWindow):
                 border: 3px dashed #bdc3c7;
                 border-radius: 15px;
                 background-color: #f8f9fa;
-                color: #7f8c8d;
+                color: #34495e;
                 font-size: 14px;
                 padding: 15px;
                 font-family: 'Segoe UI', sans-serif;
@@ -1644,7 +1645,7 @@ class StegaEncodeWindow(QMainWindow):
         or_separator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         or_separator.setStyleSheet("""
             QLabel {
-                color: #7f8c8d;
+                color: #34495e;
                 font-size: 14px;
                 font-weight: bold;
                 margin: 5px 0;
@@ -1760,21 +1761,47 @@ class StegaEncodeWindow(QMainWindow):
 
         # Key input
         key_group = QGroupBox("Key (numeric, required)")
+        key_group.setStyleSheet("""
+            QGroupBox {
+                background-color: rgba(255, 255, 255, 0.9);
+                border: 1px solid #bbdefb;
+                border-radius: 12px;
+                color: #1c2833;
+                font-weight: 600;
+            }
+            QGroupBox::title {
+                color: #1c2833;
+                background-color: transparent;
+            }
+            QCheckBox {
+                color: #1c2833;
+                font-weight: 500;
+            }
+            QComboBox {
+                color: #1c2833;
+                background-color: #ffffff;
+                border: 1px solid #90caf9;
+                border-radius: 6px;
+                padding: 4px 6px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #ffffff;
+                color: #1c2833;
+            }
+        """)
         key_layout = QVBoxLayout(key_group)
 
         self.key_input = QLineEdit()
         self.key_input.setPlaceholderText("Enter numeric key, e.g. 123456")
         self.key_input.setToolTip('Step 3: This numeric key is required for both encoding and decoding.')
         self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        # Use regex validator to allow long numeric keys without 32-bit limits
-        self.key_input.setValidator(QRegularExpressionValidator(QRegularExpression(r"^\d{1,32}$")))
         self.key_input.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
                 border: 3px dashed #bdc3c7;
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #7f8c8d;
+                background-color: #ffffff;
+                color: #1c2833;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
             }
@@ -1791,22 +1818,44 @@ class StegaEncodeWindow(QMainWindow):
         self.key_input.textChanged.connect(self._handle_key_changed)
         key_layout.addWidget(self.key_input)
 
+
         self.encrypt_checkbox = QCheckBox("Encrypt payload before embedding (recommended)")
         self.encrypt_checkbox.setToolTip('Use the numeric key to derive an XOR keystream before embedding the payload.')
         self.encrypt_checkbox.setChecked(True)
+        self.encrypt_checkbox.setStyleSheet("color:#1c2833;font-weight:500;")
         self.encrypt_checkbox.toggled.connect(self.on_encrypt_toggle)
         key_layout.addWidget(self.encrypt_checkbox)
+
+        self.honey_checkbox = QCheckBox("Honey Encryption (Demo)")
+        self.honey_checkbox.setToolTip('Enable the Honey Encryption demo (text payloads only).')
+        self.honey_checkbox.setStyleSheet("color:#1c2833;font-weight:500;")
+        self.honey_checkbox.toggled.connect(self.on_honey_toggle)
+        key_layout.addWidget(self.honey_checkbox)
+
+        self.honey_universe_combo = QComboBox()
+        self.honey_universe_combo.addItems(list_universes())
+        default_universe = 'office_msgs'
+        idx = self.honey_universe_combo.findText(default_universe)
+        if idx >= 0:
+            self.honey_universe_combo.setCurrentIndex(idx)
+        self.honey_universe_combo.setEnabled(False)
+        self.honey_universe_combo.setStyleSheet("color:#1c2833;background-color:#ffffff;border:1px solid #90caf9;border-radius:6px;padding:4px 6px;")
+        self.honey_universe_combo.currentTextChanged.connect(self.on_honey_universe_changed)
+        key_layout.addWidget(self.honey_universe_combo)
+
+        self._sync_honey_availability()
 
         # Capacity group
         capacity_group = QGroupBox("Capacity")
         cap_layout = QVBoxLayout(capacity_group)
         self.cap_dims = QLabel("Cover: -")
+        self.cap_payload = QLabel("Payload: -")
         self.cap_lsb = QLabel("LSB bits: 1")
         self.cap_header = QLabel("Header bytes: -")
         self.cap_startbits = QLabel("Start bit offset: 0")
         self.cap_max = QLabel("Capacity (bytes): -")
         self.cap_avail = QLabel("Available bytes: -")
-        for lbl in [self.cap_dims, self.cap_lsb, self.cap_header, self.cap_startbits, self.cap_max, self.cap_avail]:
+        for lbl in [self.cap_dims, self.cap_payload, self.cap_lsb, self.cap_header, self.cap_startbits, self.cap_max, self.cap_avail]:
             lbl.setStyleSheet("color:#2c3e50;")
             cap_layout.addWidget(lbl)
         # Capacity usage bar
@@ -1842,7 +1891,7 @@ class StegaEncodeWindow(QMainWindow):
                 border: 3px dashed #bdc3c7;
                 border-radius: 15px;
                 background-color: #f8f9fa;
-                color: #7f8c8d;
+                color: #34495e;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
             }
@@ -1892,7 +1941,7 @@ class StegaEncodeWindow(QMainWindow):
         proof_layout.addWidget(self.perm_vis)
 
         legend = QLabel('Legend: coloured squares show the per-byte LSB permutation order; LSB stats compare the percentage of ones in cover vs stego for each bit.')
-        legend.setStyleSheet('color:#5d6d7e;font-size:12px;')
+        legend.setStyleSheet('color:#2c3e50;font-size:12px;')
         legend.setWordWrap(True)
         proof_layout.addWidget(legend)
 
@@ -1915,7 +1964,7 @@ class StegaEncodeWindow(QMainWindow):
         self.header_detail_labels = {}
         for row, (label, key) in enumerate(header_fields):
             lbl = QLabel(f"{label}:")
-            lbl.setStyleSheet("color:#5d6d7e;font-weight:600;")
+            lbl.setStyleSheet("color:#2c3e50;font-weight:600;")
             value_lbl = QLabel("-")
             value_lbl.setStyleSheet("color:#2c3e50;")
             value_lbl.setWordWrap(True)
@@ -1959,7 +2008,7 @@ class StegaEncodeWindow(QMainWindow):
         ]
         for row, (label, key) in enumerate(summary_fields):
             lbl = QLabel(f"{label}:")
-            lbl.setStyleSheet("color:#5d6d7e;font-weight:600;")
+            lbl.setStyleSheet("color:#2c3e50;font-weight:600;")
             value_lbl = QLabel("-")
             value_lbl.setStyleSheet("color:#2c3e50;")
             value_lbl.setWordWrap(True)
@@ -2446,6 +2495,75 @@ class StegaEncodeWindow(QMainWindow):
             _set_cover_info(cover_message)
         self.update_step_progress()
 
+    def on_honey_toggle(self, checked: bool):
+        if not hasattr(self, 'honey_checkbox'):
+            return
+        checked = bool(checked)
+        if checked and getattr(self.machine, 'payload_file_path', None):
+            QToolTip.showText(QCursor.pos(), 'Honey mode supports short text payloads for demo.', self.honey_checkbox)
+            self.honey_checkbox.blockSignals(True)
+            self.honey_checkbox.setChecked(False)
+            self.honey_checkbox.blockSignals(False)
+            checked = False
+        try:
+            self.machine.set_honey_enabled(checked)
+        except Exception as exc:
+            print(f'Failed to toggle honey mode: {exc}')
+            checked = False
+            self.honey_checkbox.blockSignals(True)
+            self.honey_checkbox.setChecked(False)
+            self.honey_checkbox.blockSignals(False)
+        if checked and hasattr(self, 'encrypt_checkbox'):
+            self.encrypt_checkbox.blockSignals(True)
+            self.encrypt_checkbox.setChecked(False)
+            self.encrypt_checkbox.blockSignals(False)
+            try:
+                self.machine.set_encrypt_payload(False)
+            except Exception as exc:
+                print(f'Failed to disable encryption when enabling honey: {exc}')
+        if hasattr(self, 'honey_universe_combo'):
+            self.honey_universe_combo.setEnabled(checked and self.honey_checkbox.isEnabled())
+            if checked:
+                try:
+                    self.machine.set_honey_universe(self.honey_universe_combo.currentText())
+                except Exception as exc:
+                    print(f'Failed to set honey universe: {exc}')
+        self._sync_honey_availability()
+        try:
+            self.update_capacity_panel()
+        except Exception:
+            pass
+        self._schedule_live_preview('honey-toggle')
+
+    def on_honey_universe_changed(self, universe: str):
+        try:
+            self.machine.set_honey_universe(universe)
+        except Exception as exc:
+            print(f'Failed to set honey universe: {exc}')
+        try:
+            self.update_capacity_panel()
+        except Exception:
+            pass
+        self._schedule_live_preview('honey-universe')
+
+    def _sync_honey_availability(self):
+        if not hasattr(self, 'honey_checkbox'):
+            return
+        text_only = not bool(getattr(self.machine, 'payload_file_path', None))
+        tooltip = 'Honey mode supports short text payloads for demo.' if not text_only else 'Enable the Honey Encryption demo (text payloads only).'
+        self.honey_checkbox.setToolTip(tooltip)
+        self.honey_checkbox.setEnabled(text_only or self.honey_checkbox.isChecked())
+        if not text_only and self.honey_checkbox.isChecked():
+            self.honey_checkbox.blockSignals(True)
+            self.honey_checkbox.setChecked(False)
+            self.honey_checkbox.blockSignals(False)
+            try:
+                self.machine.set_honey_enabled(False)
+            except Exception as exc:
+                print(f'Failed to disable honey mode: {exc}')
+        if hasattr(self, 'honey_universe_combo'):
+            self.honey_universe_combo.setEnabled(text_only and self.honey_checkbox.isChecked())
+
     def on_payload_text_changed(self):
         text_value = self.message_text.toPlainText() if hasattr(self, 'message_text') else ''
         trimmed = text_value.strip()
@@ -2455,6 +2573,7 @@ class StegaEncodeWindow(QMainWindow):
                 if self.machine.set_payload_text(text_value):
                     self.update_helper_step(3, "Step 3: Enter your numeric key to secure the payload.")
                     self.set_status('Payload text ready. Enter your numeric key next.', 'success')
+                    self._sync_honey_availability()
                     try:
                         self.update_capacity_panel()
                     except Exception:
@@ -2469,6 +2588,7 @@ class StegaEncodeWindow(QMainWindow):
             self.machine.payload_data = None
             self.update_helper_step(2, "Step 2: Add a payload file or type a message.")
             self.set_status('Add a payload file or type a secret message.', 'info')
+            self._sync_honey_availability()
             try:
                 self.update_capacity_panel()
             except Exception:
@@ -2505,6 +2625,7 @@ class StegaEncodeWindow(QMainWindow):
             print("Payload file removed")
             self.machine.payload_file_path = None
             self.machine.payload_data = None
+            self._sync_honey_availability()
             if not (hasattr(self, 'message_text') and self.message_text.toPlainText().strip()):
                 self.update_helper_step(2, 'Step 2: Add a payload file or type a message.')
             self.set_status('Payload removed. Add a new payload to continue.', 'info')
@@ -2522,6 +2643,7 @@ class StegaEncodeWindow(QMainWindow):
             print(f"Payload file ready: {os.path.basename(file_path)}")
             self.update_helper_step(3, 'Step 3: Enter your numeric key to secure the payload.')
             self.set_status(f'Payload ready: {os.path.basename(file_path)}', 'success')
+            self._sync_honey_availability()
             try:
                 self.update_capacity_panel()
             except Exception:
@@ -2577,6 +2699,14 @@ class StegaEncodeWindow(QMainWindow):
                 self.machine.set_encrypt_payload(self.encrypt_checkbox.isChecked())
             except Exception as exc:
                 print(f"Failed to sync encryption toggle: {exc}")
+
+        if hasattr(self, 'honey_checkbox'):
+            try:
+                self.machine.set_honey_enabled(self.honey_checkbox.isChecked())
+                if self.honey_checkbox.isChecked() and hasattr(self, 'honey_universe_combo'):
+                    self.machine.set_honey_universe(self.honey_universe_combo.currentText())
+            except Exception as exc:
+                print(f"Failed to sync honey toggle: {exc}")
 
         key_value = self.key_input.text().strip()
         if not key_value.isdigit():
@@ -2751,6 +2881,19 @@ class StegaEncodeWindow(QMainWindow):
             self.machine.set_encrypt_payload(bool(checked))
         except Exception as e:
             print(f"Failed to toggle encryption: {e}")
+
+        if checked and hasattr(self, 'honey_checkbox'):
+            if self.honey_checkbox.isChecked():
+                self.honey_checkbox.blockSignals(True)
+                self.honey_checkbox.setChecked(False)
+                self.honey_checkbox.blockSignals(False)
+                try:
+                    self.machine.set_honey_enabled(False)
+                except Exception as exc:
+                    print(f"Failed to disable honey mode: {exc}")
+            if hasattr(self, 'honey_universe_combo'):
+                self.honey_universe_combo.setEnabled(False)
+        self._sync_honey_availability()
 
         if not hasattr(self, 'media_drop_widget') or not self.media_drop_widget.media_path:
             return
@@ -3062,12 +3205,41 @@ class StegaEncodeWindow(QMainWindow):
             self.reset_lsb_stats()
 
     def current_payload_len(self) -> int:
+        if hasattr(self.machine, 'get_effective_payload_length'):
+            try:
+                return int(self.machine.get_effective_payload_length())
+            except Exception:
+                pass
         if self.machine.payload_data:
             return len(self.machine.payload_data)
         txt = self.message_text.toPlainText().encode('utf-8') if self.message_text.toPlainText() else b""
         return len(txt)
 
+    def _format_payload_summary(self, raw_len: int, effective_len: int) -> str:
+        if raw_len <= 0 and effective_len <= 0:
+            return 'Payload: -'
+        if getattr(self.machine, 'honey_enabled', False) and raw_len != effective_len:
+            return f'Payload: Raw {raw_len} B -> Honey blob {effective_len} B'
+        if raw_len != effective_len:
+            return f'Payload: Raw {raw_len} B -> Effective {effective_len} B'
+        return f'Payload: {effective_len} B'
+
     def update_capacity_panel(self):
+        raw_payload = 0
+        effective_payload = self.current_payload_len()
+        if hasattr(self.machine, 'get_payload_lengths'):
+            try:
+                raw_payload, effective_payload = self.machine.get_payload_lengths()
+            except Exception:
+                raw_payload = effective_payload
+        elif self.machine.payload_data:
+            raw_payload = len(self.machine.payload_data)
+        if hasattr(self, 'cap_payload'):
+            try:
+                self.cap_payload.setText(self._format_payload_summary(int(raw_payload), int(effective_payload)))
+            except Exception:
+                self.cap_payload.setText(self._format_payload_summary(0, int(effective_payload)))
+
         if self.media_type == 'video' and hasattr(self.media_drop_widget, 'media_path') and self.media_drop_widget.media_path:
             try:
                 lsb = self.lsb_slider.value()
