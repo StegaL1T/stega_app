@@ -122,6 +122,11 @@ class AudioSteganalysisWindow(QWidget):
         QApplication.processEvents()
 
         method = self.main_gui.audio_method_combo.currentText()
+        
+        # Set sensitivity level from GUI
+        sensitivity_level = self.main_gui.get_sensitivity_level("audio")
+        self.machine.set_sensitivity_level(sensitivity_level)
+        
         ok = self.machine.analyze_audio(method)
 
         self.main_gui.aud_results_text.append("\n=== AUDIO ANALYSIS ===")

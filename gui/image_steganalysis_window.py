@@ -128,6 +128,10 @@ class ImageSteganalysisWindow(QWidget):
         # Set selected analysis method
         method = self.main_gui.method_combo.currentText()
         self.machine.set_analysis_method(method)
+        
+        # Set sensitivity level from GUI
+        sensitivity_level = self.main_gui.get_sensitivity_level("image")
+        self.machine.set_sensitivity_level(sensitivity_level)
 
         # Run analysis
         if self.machine.analyze_image():
