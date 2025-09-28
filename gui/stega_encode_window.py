@@ -985,7 +985,7 @@ class PayloadDropWidget(QFrame):
         """)
         self.drop_zone.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.drop_zone.setText(
-            "Drag & Drop File Here\n\nSupported: .txt, .pdf, .exe, .wav, .mp3, .mov, .mp4")
+            "Drag & Drop File Here\n\nSupported: .txt, .pdf, .png, .jpg, .jpeg, .bmp, .exe, .wav, .mp3, .mov, .mp4")
 
         # File info
         self.file_info = QLabel()
@@ -1072,7 +1072,7 @@ class PayloadDropWidget(QFrame):
             }
             """
         )
-        self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .exe, .wav, .mp3, .mov, .mp4")
+        self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .png, .jpg, .jpeg, .bmp, .exe, .wav, .mp3, .mov, .mp4")
 
     def dropEvent(self, event: QDropEvent):
         """Handle drop event"""
@@ -1084,8 +1084,9 @@ class PayloadDropWidget(QFrame):
         """Browse for files"""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select Payload File", "",
-            "All Supported (*.txt *.pdf *.exe *.wav *.mp3 *.mov *.mp4);;"
+            "All Supported (*.txt *.pdf *.exe *.wav *.mp3 *.mov *.mp4 *.png *.jpg *.jpeg *.bmp);;"
             "Text Files (*.txt);;PDF Files (*.pdf);;Executable Files (*.exe);;"
+            "Image Files (*.png *.jpg *.jpeg *.bmp);;"
             "Audio Files (*.wav *.mp3);;Video Files (*.mov *.mp4);;All Files (*)"
         )
         if file_path:
@@ -1098,7 +1099,7 @@ class PayloadDropWidget(QFrame):
 
         # Check file extension
         ext = os.path.splitext(file_path)[1].lower()
-        supported_extensions = ['.txt', '.pdf',
+        supported_extensions = ['.txt', '.pdf', '.png', '.jpg', '.jpeg', '.bmp',
                                 '.exe', '.wav', '.mp3', '.mov', '.mp4']
 
         if ext not in supported_extensions:
@@ -1110,7 +1111,7 @@ class PayloadDropWidget(QFrame):
                 pass
             # Brief inline hint
             self.drop_zone.setText("Unsupported file type")
-            QTimer.singleShot(1500, lambda: self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .exe, .wav, .mp3, .mov, .mp4"))
+            QTimer.singleShot(1500, lambda: self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .png, .jpg, .jpeg, .bmp, .exe, .wav, .mp3, .mov, .mp4"))
             return
 
         self.file_path = file_path
