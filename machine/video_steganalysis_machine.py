@@ -32,6 +32,7 @@ class VideoSteganalysisMachine:
     def set_sensitivity_level(self, level: str):
         """Set the sensitivity level for analysis"""
         self.sensitivity_level = level.lower()
+        self.current_sensitivity = level  # Store for report generation
         print(f"Video sensitivity level set to: {self.sensitivity_level}")
 
     def get_sensitivity_thresholds(self) -> Dict[str, float]:

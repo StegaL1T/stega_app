@@ -33,6 +33,7 @@ class ImageSteganalysisMachine:
     def set_sensitivity_level(self, level: str):
         """Set the sensitivity level for analysis"""
         self.sensitivity_level = level.lower()
+        self.current_sensitivity = level  # Store for report generation
         print(f"Image sensitivity level set to: {self.sensitivity_level}")
 
     def get_sensitivity_thresholds(self) -> Dict[str, float]:
@@ -366,21 +367,34 @@ class ImageSteganalysisMachine:
 
             regular, singular = 0, 0
 
-            # Iterate over rows in 2-pixel groups
-            for row in channel:
-                for i in range(0, len(row) - 1, 2):
-                    block = row[i:i+2]
-                    if len(block) < 2:
-                        continue
-
-                    d_original = discriminant(block)
-                    block_flipped = flip_lsb(block)
-                    d_flipped = discriminant(block_flipped)
-
-                    if d_flipped > d_original:
-                        regular += 1
-                    elif d_flipped < d_original:
-                        singular += 1
+            # Vectorized RS analysis - much faster than nested loops
+            height, width = channel.shape
+            
+            # Process in chunks to avoid memory issues
+            chunk_size = min(1000, width)
+            
+            for start_col in range(0, width - 1, chunk_size):
+                end_col = min(start_col + chunk_size, width - 1)
+                chunk = channel[:, start_col:end_col]
+                
+                # Ensure even number of columns for pairs
+                if chunk.shape[1] % 2 == 1:
+                    chunk = chunk[:, :-1]
+                
+                if chunk.shape[1] == 0:
+                    continue
+                
+                # Reshape to pairs and calculate differences
+                pairs = chunk.reshape(chunk.shape[0], chunk.shape[1]//2, 2)
+                diff_original = np.abs(pairs[:, :, 1] - pairs[:, :, 0])
+                
+                # Flip LSBs and calculate differences
+                pairs_flipped = pairs ^ 1
+                diff_flipped = np.abs(pairs_flipped[:, :, 1] - pairs_flipped[:, :, 0])
+                
+                # Count regular and singular
+                regular += np.sum(diff_flipped > diff_original)
+                singular += np.sum(diff_flipped < diff_original)
 
             total = max(regular + singular, 1)
             rs_ratio = regular / total
@@ -454,7 +468,8 @@ class ImageSteganalysisMachine:
         self.results = {
             'method': 'Sample Pairs Analysis',
             'channels': results_per_channel,
-            'suspicious': suspicious_flag
+            'suspicious': suspicious_flag,
+            'execution_time_ms': 0.0
         }
 
     def _perform_comprehensive_analysis(self):
@@ -623,12 +638,18 @@ class ImageSteganalysisMachine:
         """Perform advanced comprehensive analysis using multiple methods"""
         print("Performing advanced comprehensive analysis...")
         
-        # Run all basic methods
+        # Run all available methods
         self._perform_lsb_analysis()
         lsb_results = self.results.copy()
         
         self._perform_chi_square_test()
         chi2_results = self.results.copy()
+        
+        self._perform_rs_analysis()
+        rs_results = self.results.copy()
+        
+        self._perform_sample_pairs_analysis()
+        sample_pairs_results = self.results.copy()
         
         self._perform_dct_analysis()
         dct_results = self.results.copy()
@@ -641,11 +662,13 @@ class ImageSteganalysisMachine:
         
         # Weighted voting system for advanced comprehensive analysis
         method_weights = {
-            'lsb_analysis': 0.35,      # High weight - most reliable
-            'chi_square_test': 0.25,   # Medium weight
-            'dct_analysis': 0.2,       # Medium weight
-            'wavelet_analysis': 0.15,  # Lower weight
-            'histogram_analysis': 0.05  # Lowest weight - most prone to false positives
+            'lsb_analysis': 0.25,           # High weight - most reliable
+            'chi_square_test': 0.20,        # Medium weight
+            'rs_analysis': 0.20,            # Medium weight - good for LSB detection
+            'sample_pairs_analysis': 0.15,  # Medium weight
+            'dct_analysis': 0.10,           # Lower weight
+            'wavelet_analysis': 0.05,       # Lower weight - can be noisy
+            'histogram_analysis': 0.05      # Lowest weight - least reliable
         }
         
         weighted_score = 0.0
@@ -654,10 +677,13 @@ class ImageSteganalysisMachine:
         all_results = {
             'lsb_analysis': lsb_results,
             'chi_square_test': chi2_results,
+            'rs_analysis': rs_results,
+            'sample_pairs_analysis': sample_pairs_results,
             'dct_analysis': dct_results,
             'wavelet_analysis': wavelet_results,
             'histogram_analysis': hist_results
         }
+        
         
         for method, results in all_results.items():
             if method in method_weights:
@@ -674,6 +700,8 @@ class ImageSteganalysisMachine:
             'method': 'Advanced Comprehensive Analysis',
             'lsb_analysis': lsb_results,
             'chi_square_test': chi2_results,
+            'rs_analysis': rs_results,
+            'sample_pairs_analysis': sample_pairs_results,
             'dct_analysis': dct_results,
             'wavelet_analysis': wavelet_results,
             'histogram_analysis': hist_results,

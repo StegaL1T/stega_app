@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import cv2
 import math
 import random
+import os
 
 
 # gui/steganalysis_window.py
@@ -204,7 +205,6 @@ class SteganalysisWindow(QMainWindow):
             "DCT Analysis": "Discrete Cosine Transform analysis examines frequency domain characteristics to detect steganography in JPEG images.",
             "Wavelet Analysis": "Analyzes image using wavelet transforms to detect steganographic artifacts in different frequency bands.",
             "Histogram Analysis": "Examines pixel value histograms for unusual patterns that may indicate hidden information.",
-            "Comprehensive Analysis": "Combines multiple basic detection methods for a thorough analysis of potential steganographic content.",
             "Advanced Comprehensive": "Uses all available detection methods with advanced algorithms for the most thorough steganalysis possible.",
 
             # Audio analysis methods
@@ -220,7 +220,6 @@ class SteganalysisWindow(QMainWindow):
             "Video LSB Analysis": "Analyzes least significant bits in video frames to detect hidden data embedded in video files.",
             "Video Frame Analysis": "Examines individual video frames for anomalies and statistical irregularities that may indicate steganography.",
             "Video Motion Analysis": "Analyzes motion vectors and temporal patterns between frames to detect hidden information.",
-            "Video Comprehensive Analysis": "Combines multiple video detection methods for thorough analysis of potential steganographic content.",
             "Video Advanced Comprehensive": "Uses all available video analysis techniques for the most comprehensive steganalysis possible."
         }
 
@@ -519,6 +518,11 @@ class SteganalysisWindow(QMainWindow):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.image_preview.setText("No image selected")
         self.image_preview.setScaledContents(False)
+        self.image_preview.setAcceptDrops(True)  # Enable drag and drop directly on the preview
+        # Connect drag and drop events
+        self.image_preview.dragEnterEvent = self.image_preview_drag_enter_event
+        self.image_preview.dragLeaveEvent = self.image_preview_drag_leave_event
+        self.image_preview.dropEvent = self.image_preview_drop_event
         image_layout.addWidget(self.image_preview)
 
         method_group = QGroupBox("Image Analysis Method")
@@ -542,7 +546,7 @@ class SteganalysisWindow(QMainWindow):
         self.method_combo = QComboBox()
         self.method_combo.addItems([
             "LSB Analysis", "Chi-Square Test", "RS Analysis", "Sample Pairs Analysis",
-            "DCT Analysis", "Wavelet Analysis", "Histogram Analysis", "Comprehensive Analysis", "Advanced Comprehensive"
+            "DCT Analysis", "Wavelet Analysis", "Histogram Analysis", "Advanced Comprehensive"
         ])
         self.method_combo.setStyleSheet("""
             QComboBox { 
@@ -681,9 +685,9 @@ class SteganalysisWindow(QMainWindow):
         
         self.image_sensitivity_combo = QComboBox()
         self.image_sensitivity_combo.addItems([
-            "🔴 Ultra (2.5%)",
-            "🟡 Medium (5%)", 
-            "🟢 Low (10%)"
+            "🔴 Ultra",
+            "🟡 Medium", 
+            "🟢 Low"
         ])
         self.image_sensitivity_combo.setCurrentIndex(0)  # Default to Ultra
         self.image_sensitivity_combo.setMaximumWidth(140)  # Make it narrow
@@ -1100,6 +1104,11 @@ class SteganalysisWindow(QMainWindow):
         self.audio_preview.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.audio_preview.setText("No audio selected")
+        self.audio_preview.setAcceptDrops(True)  # Enable drag and drop directly on the preview
+        # Connect drag and drop events
+        self.audio_preview.dragEnterEvent = self.audio_preview_drag_enter_event
+        self.audio_preview.dragLeaveEvent = self.audio_preview_drag_leave_event
+        self.audio_preview.dropEvent = self.audio_preview_drop_event
         audio_layout.addWidget(self.audio_preview)
 
         audio_method_group = QGroupBox("Audio Analysis Method")
@@ -1262,9 +1271,9 @@ class SteganalysisWindow(QMainWindow):
         
         self.audio_sensitivity_combo = QComboBox()
         self.audio_sensitivity_combo.addItems([
-            "🔴 Ultra (2.5%)",
-            "🟡 Medium (5%)", 
-            "🟢 Low (10%)"
+            "🔴 Ultra",
+            "🟡 Medium", 
+            "🟢 Low"
         ])
         self.audio_sensitivity_combo.setCurrentIndex(0)  # Default to Ultra
         self.audio_sensitivity_combo.setMaximumWidth(140)  # Make it narrow
@@ -1642,6 +1651,11 @@ class SteganalysisWindow(QMainWindow):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.video_preview.setText("No video selected")
         self.video_preview.setScaledContents(False)
+        self.video_preview.setAcceptDrops(True)  # Enable drag and drop directly on the preview
+        # Connect drag and drop events
+        self.video_preview.dragEnterEvent = self.video_preview_drag_enter_event
+        self.video_preview.dragLeaveEvent = self.video_preview_drag_leave_event
+        self.video_preview.dropEvent = self.video_preview_drop_event
         video_layout.addWidget(self.video_preview)
 
         video_method_group = QGroupBox("Video Analysis Method")
@@ -1683,7 +1697,7 @@ class SteganalysisWindow(QMainWindow):
         self.video_method_combo = QComboBox()
         self.video_method_combo.addItems([
             "Video LSB Analysis", "Video Frame Analysis", "Video Motion Analysis",
-            "Video Comprehensive Analysis", "Video Advanced Comprehensive"
+            "Video Advanced Comprehensive"
         ])
         self.video_method_combo.setStyleSheet("""
             QComboBox { 
@@ -1822,9 +1836,9 @@ class SteganalysisWindow(QMainWindow):
         
         self.video_sensitivity_combo = QComboBox()
         self.video_sensitivity_combo.addItems([
-            "🔴 Ultra (2.5%)",
-            "🟡 Medium (5%)", 
-            "🟢 Low (10%)"
+            "🔴 Ultra",
+            "🟡 Medium", 
+            "🟢 Low"
         ])
         self.video_sensitivity_combo.setCurrentIndex(0)  # Default to Ultra
         self.video_sensitivity_combo.setMaximumWidth(140)  # Make it narrow
@@ -2116,7 +2130,11 @@ class SteganalysisWindow(QMainWindow):
         layout.addWidget(video_charts_group)
         layout.addLayout(export_buttons_layout)
         layout.addStretch()
+        
+        # Drag and drop is now handled directly by preview widgets
+        
         return panel
+
 
     def create_shadow_effect(self):
         """Create an enhanced shadow effect for panels"""
@@ -2176,6 +2194,269 @@ class SteganalysisWindow(QMainWindow):
                 # Export failed - could show error message in appropriate tab
                 pass
 
+    def on_image_files_dropped(self, file_paths):
+        """Handle dropped image files"""
+        if file_paths:
+            file_path = file_paths[0]  # Take the first file
+            self.image_path.setText(file_path)  # Set the path for compatibility
+            if self.machine.set_image(file_path):
+                self.image_window.create_image_preview(file_path)
+                if hasattr(self, 'img_results_text'):
+                    self.img_results_text.append(f"Image selected: {file_path}")
+            else:
+                if hasattr(self, 'img_results_text'):
+                    self.img_results_text.append(f"Error loading image: {file_path}")
+
+    def image_preview_drag_enter_event(self, event):
+        """Handle drag enter event for image preview"""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            for url in urls:
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    if file_ext in ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp']:
+                        event.acceptProposedAction()
+                        # Change text and add visual feedback
+                        self.image_preview.setText("Drop here!")
+                        self.image_preview.setStyleSheet("""
+                            QLabel {
+                                border: 4px dashed #45edf2;
+                                border-radius: 8px;
+                                background-color: rgba(69,237,242,0.4);
+                                color: #e8e8fc;
+                                min-height: 150px;
+                                max-height: 200px;
+                            }
+                        """)
+                        return
+        event.ignore()
+
+    def image_preview_drag_leave_event(self, event):
+        """Handle drag leave event for image preview"""
+        # Restore original text and remove visual feedback
+        self.image_preview.setText("No image selected")
+        self.image_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                min-height: 150px;
+                max-height: 200px;
+            }
+        """)
+        event.accept()
+
+    def image_preview_drop_event(self, event):
+        """Handle drop event for image preview"""
+        # Remove visual feedback
+        self.image_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                min-height: 150px;
+                max-height: 200px;
+            }
+        """)
+        
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            valid_files = []
+            for url in urls:
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    if file_ext in ['.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.webp']:
+                        valid_files.append(file_path)
+            
+            if valid_files:
+                event.acceptProposedAction()
+                self.on_image_files_dropped(valid_files)
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+
+    def on_audio_files_dropped(self, file_paths):
+        """Handle dropped audio files"""
+        if file_paths:
+            file_path = file_paths[0]  # Take the first file
+            self.audio_path.setText(file_path)  # Set the path for compatibility
+            if self.machine.set_audio(file_path):
+                self.audio_window.create_audio_preview(file_path)
+                if hasattr(self, 'aud_results_text'):
+                    self.aud_results_text.append(f"Audio selected: {file_path}")
+            else:
+                if hasattr(self, 'aud_results_text'):
+                    self.aud_results_text.append(f"Error loading audio: {file_path}")
+
+    def audio_preview_drag_enter_event(self, event):
+        """Handle drag enter event for audio preview"""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            for url in urls:
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    if file_ext in ['.wav', '.mp3', '.flac', '.aac', '.ogg', '.m4a']:
+                        event.acceptProposedAction()
+                        # Change text and add visual feedback
+                        self.audio_preview.setText("Drop here!")
+                        self.audio_preview.setStyleSheet("""
+                            QLabel {
+                                border: 4px dashed #45edf2;
+                                border-radius: 8px;
+                                background-color: rgba(69,237,242,0.4);
+                                color: #e8e8fc;
+                                min-height: 100px;
+                                max-height: 150px;
+                            }
+                        """)
+                        return
+        event.ignore()
+
+    def audio_preview_drag_leave_event(self, event):
+        """Handle drag leave event for audio preview"""
+        # Restore original text and remove visual feedback
+        self.audio_preview.setText("No audio selected")
+        self.audio_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                min-height: 100px;
+                max-height: 150px;
+            }
+        """)
+        event.accept()
+
+    def audio_preview_drop_event(self, event):
+        """Handle drop event for audio preview"""
+        # Remove visual feedback
+        self.audio_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                min-height: 100px;
+                max-height: 150px;
+            }
+        """)
+        
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            valid_files = []
+            for url in urls:
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    if file_ext in ['.wav', '.mp3', '.flac', '.aac', '.ogg', '.m4a']:
+                        valid_files.append(file_path)
+            
+            if valid_files:
+                event.acceptProposedAction()
+                self.on_audio_files_dropped(valid_files)
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+
+    def on_video_files_dropped(self, file_paths):
+        """Handle dropped video files"""
+        if file_paths:
+            file_path = file_paths[0]  # Take the first file
+            self.video_path.setText(file_path)  # Set the path for compatibility
+            if self.machine.set_video(file_path):
+                self.video_window.create_video_preview(file_path)
+                if hasattr(self, 'vid_results_text'):
+                    self.vid_results_text.append(f"Video selected: {file_path}")
+            else:
+                if hasattr(self, 'vid_results_text'):
+                    self.vid_results_text.append(f"Error loading video: {file_path}")
+
+    def video_preview_drag_enter_event(self, event):
+        """Handle drag enter event for video preview"""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            for url in urls:
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    if file_ext in ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']:
+                        event.acceptProposedAction()
+                        # Change text and add visual feedback
+                        self.video_preview.setText("Drop here!")
+                        self.video_preview.setStyleSheet("""
+                            QLabel {
+                                border: 4px dashed #45edf2;
+                                border-radius: 8px;
+                                background-color: rgba(69,237,242,0.4);
+                                color: #e8e8fc;
+                                min-height: 120px;
+                                max-height: 180px;
+                            }
+                        """)
+                        return
+        event.ignore()
+
+    def video_preview_drag_leave_event(self, event):
+        """Handle drag leave event for video preview"""
+        # Restore original text and remove visual feedback
+        self.video_preview.setText("No video selected")
+        self.video_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                min-height: 120px;
+                max-height: 180px;
+            }
+        """)
+        event.accept()
+
+    def video_preview_drop_event(self, event):
+        """Handle drop event for video preview"""
+        # Remove visual feedback
+        self.video_preview.setStyleSheet("""
+            QLabel {
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 8px;
+                background-color: #0e1625;
+                color: #e8e8fc;
+                min-height: 120px;
+                max-height: 180px;
+            }
+        """)
+        
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            valid_files = []
+            for url in urls:
+                if url.isLocalFile():
+                    file_path = url.toLocalFile()
+                    file_ext = os.path.splitext(file_path)[1].lower()
+                    if file_ext in ['.mp4', '.avi', '.mov', '.mkv', '.wmv', '.flv', '.webm']:
+                        valid_files.append(file_path)
+            
+            if valid_files:
+                event.acceptProposedAction()
+                self.on_video_files_dropped(valid_files)
+            else:
+                event.ignore()
+        else:
+            event.ignore()
+
+    def resizeEvent(self, event):
+        """Handle window resize events"""
+        super().resizeEvent(event)
+        # Drag and drop is now handled directly by preview widgets, no positioning needed
+
     def go_back(self):
         """Go back to main window"""
         # Clean up machine resources
@@ -2206,13 +2487,12 @@ class SteganalysisWindow(QMainWindow):
                 axc = fig_cover.subplots(1, 1)
                 axc.axis('off')
                 lines = []
-                # Basic summary details
-                if getattr(self.machine, 'image_path', None):
-                    lines.append(f"Image: {self.machine.image_path}")
-                if getattr(self.machine, 'audio_path', None):
-                    lines.append(f"Audio: {self.machine.audio_path}")
-                if getattr(self.machine, 'video_path', None):
-                    lines.append(f"Video: {self.machine.video_path}")
+                # Basic summary details - show only the last analyzed file
+                if hasattr(self.machine, 'last_analyzed_path') and self.machine.last_analyzed_path:
+                    file_path = self.machine.last_analyzed_path
+                    file_ext = file_path.lower().split('.')[-1] if '.' in file_path else ''
+                    file_type = file_ext.upper()
+                    lines.append(f"{file_type}: {file_path}")
                 # Get confidence from the main machine (which delegates to specialized machines)
                 confidence = self.machine.get_confidence_level()
                 lines.append(f"Confidence: {confidence:.2%}")
