@@ -1,7 +1,7 @@
 # gui/stega_decode_window.py
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QPushButton, QFrame, QFileDialog, QTextEdit,
-                             QGroupBox, QLineEdit, QSlider, QToolTip, QApplication)
+                             QGroupBox, QLineEdit, QSlider, QToolTip, QApplication, QScrollArea, QSizePolicy)
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QCursor
 import os
@@ -443,6 +443,27 @@ class StegaDecodeWindow(QMainWindow):
         min_height = 700
         self.window_width = max(self.window_width, min_width)
         self.window_height = max(self.window_height, min_height)
+        
+        # Responsive layout parameters
+        self.margins = int(40 * scale_factor)  # Responsive margins
+        self.spacing = int(30 * scale_factor)  # Responsive spacing
+        
+        # Responsive font sizes
+        self.title_font_size = int(28 * scale_factor)
+        self.subtitle_font_size = int(14 * scale_factor)
+        self.card_title_font_size = int(18 * scale_factor)
+        self.card_desc_font_size = int(10 * scale_factor)
+        self.button_font_size = int(12 * scale_factor)
+        
+        # Responsive card dimensions
+        self.card_min_width = int(280 * scale_factor)
+        self.card_max_width = int(350 * scale_factor)
+        self.card_min_height = int(320 * scale_factor)
+        self.card_max_height = int(400 * scale_factor)
+        self.card_spacing = int(30 * scale_factor)
+        
+        # Responsive icon size
+        self.icon_size = int(100 * scale_factor)
 
     def create_info_button(self, tooltip_text):
         """Create a cyan info button with tooltip"""
@@ -508,8 +529,20 @@ class StegaDecodeWindow(QMainWindow):
         layout.addLayout(title_layout)
 
     def create_content_area(self, layout):
-        """Create the main content area with two columns"""
-        content_layout = QHBoxLayout()
+        """Create the main content area with scrollable two columns"""
+        # Create scroll area for the main content
+        content_scroll = QScrollArea()
+        content_scroll.setWidgetResizable(True)
+        content_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        content_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Make scroll area transparent to show page background
+        content_scroll.setStyleSheet("QScrollArea { background-color: transparent; }")
+
+        # Create container for the content
+        content_container = QWidget()
+        content_container.setStyleSheet("QWidget { background-color: transparent; }")
+        content_layout = QHBoxLayout(content_container)
+        content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(20)
 
         # Left column - Steganographic Media (fixed width)
@@ -522,7 +555,9 @@ class StegaDecodeWindow(QMainWindow):
         controls_panel.setFixedWidth(500)
         content_layout.addWidget(controls_panel)
 
-        layout.addLayout(content_layout)
+        # Set the container as the scroll area's widget
+        content_scroll.setWidget(content_container)
+        layout.addWidget(content_scroll)
 
         # Add Extract Message button below all columns
         self.create_extract_button(layout)
@@ -539,17 +574,17 @@ class StegaDecodeWindow(QMainWindow):
 
         # Extract Message button
         extract_button = QPushButton("Extract Message")
-        extract_button.setMinimumHeight(60)
+        extract_button.setMinimumHeight(45)
         extract_button.setStyleSheet("""
             QPushButton {
                 background: rgba(255,140,0,0.2);
                 color: #ff8c00;
                 border: 2px solid #ff8c00;
-                padding: 20px 40px;
-                border-radius: 10px;
-                font-size: 18px;
+                padding: 12px 30px;
+                border-radius: 8px;
+                font-size: 16px;
                 font-weight: bold;
-                min-width: 200px;
+                min-width: 160px;
             }
             QPushButton:hover {
                 background: rgba(255,140,0,0.4);
@@ -579,7 +614,6 @@ class StegaDecodeWindow(QMainWindow):
                 border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
 
         layout = QVBoxLayout(panel)
         layout.setSpacing(20)
@@ -627,7 +661,6 @@ class StegaDecodeWindow(QMainWindow):
                 border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
 
         layout = QVBoxLayout(panel)
         layout.setSpacing(20)
@@ -719,29 +752,8 @@ class StegaDecodeWindow(QMainWindow):
         """)
         self.lsb_slider.valueChanged.connect(self.update_lsb_value)
 
-        # LSB markers 1..8 with highlight for selected value
-        markers_row = QHBoxLayout()
-        markers_row.setSpacing(8)
-        self.lsb_markers = []
-        for i in range(1, 9):
-            lab = QLabel(str(i))
-            lab.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lab.setStyleSheet("""
-                QLabel {
-                    color: #45edf2;
-                    border: 2px solid #49299a;
-                    border-radius: 8px;
-                    padding: 5px 10px;
-                    background-color: rgba(14,22,37,0.8);
-                    font-weight: bold;
-                }
-            """)
-            self.lsb_markers.append(lab)
-            markers_row.addWidget(lab)
-
         lsb_layout.addWidget(self.lsb_value_label)
         lsb_layout.addWidget(self.lsb_slider)
-        lsb_layout.addLayout(markers_row)
 
         # Key input
         key_group = QGroupBox("Decryption Key")
@@ -790,7 +802,27 @@ class StegaDecodeWindow(QMainWindow):
         key_layout.addWidget(self.key_input)
 
         self.honey_random_button = QPushButton('Honey: Try random key')
-        self.honey_random_button.setEnabled(False)
+        self.honey_random_button.setStyleSheet("""
+            QPushButton {
+                background: rgba(69,237,242,0.15);
+                color: #6b7280;
+                border: 2px solid #45edf2;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background: rgba(69,237,242,0.25);
+                border: 3px solid #45edf2;
+                color: #45edf2;
+            }
+            QPushButton:pressed {
+                background: rgba(69,237,242,0.3);
+                border: 3px solid #45edf2;
+                color: #45edf2;
+            }
+        """)
         self.honey_random_button.clicked.connect(self.on_honey_random_key)
         key_layout.addWidget(self.honey_random_button)
 
@@ -936,48 +968,12 @@ class StegaDecodeWindow(QMainWindow):
 
 
 
-    def create_shadow_effect(self):
-        """Create an enhanced shadow effect for panels"""
-        from PyQt6.QtWidgets import QGraphicsDropShadowEffect
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(35)  # Increased blur for stronger glow
-        shadow.setXOffset(0)
-        shadow.setYOffset(8)  # Increased offset for more depth
-        # Enhanced cyan glow with higher opacity
-        shadow.setColor(QColor(69, 237, 242, 80))
-        return shadow
 
     def update_lsb_value(self, value):
         """Update LSB value display"""
         self.lsb_value_label.setText(f"LSB Bits: {value}")
         # Update machine with new LSB value
         self.machine.set_lsb_bits(value)
-
-        # Update marker highlight
-        if hasattr(self, 'lsb_markers'):
-            for i, lab in enumerate(self.lsb_markers, start=1):
-                if i == value:
-                    lab.setStyleSheet("""
-                        QLabel {
-                            color: #45edf2;
-                            border: 2px solid #49299a;
-                            border-radius: 8px;
-                            padding: 5px 10px;
-                            background-color: rgba(69,237,242,0.2);
-                            font-weight: bold;
-                        }
-                    """)
-                else:
-                    lab.setStyleSheet("""
-                        QLabel {
-                            color: #45edf2;
-                            border: 2px solid #49299a;
-                            border-radius: 8px;
-                            padding: 5px 10px;
-                            background-color: rgba(14,22,37,0.8);
-                            font-weight: bold;
-                        }
-                    """)
 
     def on_media_loaded(self, file_path, media_type):
         """Handle media loaded from drag and drop or browse"""
@@ -1125,6 +1121,10 @@ class StegaDecodeWindow(QMainWindow):
             msg.setText(f"Payload extracted successfully.\nSaved to: {out_path_display}")
             open_btn = msg.addButton('Open file', QMessageBox.ButtonRole.AcceptRole)
             msg.addButton('Close', QMessageBox.ButtonRole.RejectRole)
+            
+            # Apply dark theme styling for better text visibility
+            self._style_message_box(msg, 'info')
+            
             msg.exec()
             if msg.clickedButton() == open_btn and self.machine.get_last_output_path():
                 from PyQt6.QtGui import QDesktopServices
@@ -1140,7 +1140,50 @@ class StegaDecodeWindow(QMainWindow):
 
             # Show error popup
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Decode Failed", error_msg)
+            error_msg_box = QMessageBox.critical(self, "Decode Failed", error_msg)
+            self._style_message_box(error_msg_box, 'error')
+
+    def _style_message_box(self, msg_box, button_style='default'):
+        """Apply dark theme styling to QMessageBox for better text visibility"""
+        if button_style == 'error':
+            button_bg = "rgba(231,76,60,0.1)"
+            button_color = "#e74c3c"
+            button_border = "rgba(231,76,60,0.6)"
+            button_hover_bg = "rgba(231,76,60,0.3)"
+            button_pressed_bg = "rgba(231,76,60,0.5)"
+        else:  # default/info
+            button_bg = "rgba(69,237,242,0.1)"
+            button_color = "#45edf2"
+            button_border = "rgba(69,237,242,0.6)"
+            button_hover_bg = "rgba(69,237,242,0.3)"
+            button_pressed_bg = "rgba(69,237,242,0.5)"
+            
+        msg_box.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: #0e1625;
+                color: #e8e8fc;
+            }}
+            QMessageBox QLabel {{
+                color: #e8e8fc;
+                background-color: transparent;
+            }}
+            QMessageBox QPushButton {{
+                background-color: {button_bg};
+                color: {button_color};
+                border: 2px solid {button_border};
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 80px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: {button_hover_bg};
+                border: 2px solid {button_color};
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: {button_pressed_bg};
+            }}
+        """)
 
     def on_honey_random_key(self):
         if not hasattr(self.machine, 'simulate_honey_with_key'):

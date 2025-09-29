@@ -171,7 +171,7 @@ class MainWindow(QMainWindow):
         self.setup_responsive_sizing()
 
         # Cybersecurity theme: fonts & background
-        # Colors:
+        #  Colors:
         #   Background: #0e1625 (very dark navy)
         #   Headings/accents: #49299a (purple)
         #   Highlights/buttons: #45edf2 (aqua/cyan)

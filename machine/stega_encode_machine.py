@@ -53,6 +53,11 @@ from PIL import Image
 import numpy as np
 from pathlib import Path
 
+try:
+    from stegano import lsb
+except Exception:  # pragma: no cover - optional dependency for video handling
+    lsb = None
+
 from crypto_honey import HoneyFormatError, he_encrypt
 from machine.stega_spec import (
     FLAG_PAYLOAD_ENCRYPTED,
@@ -868,6 +873,13 @@ class StegaEncodeMachine:
         return [message[i:i + chunk_size] for i in range(0, len(message), chunk_size)]
 
     @staticmethod
+    def _stegano_required_bits(message_length: int) -> int:
+        """Return the number of bits stegano.lsb needs to encode a message of given length."""
+        header_chars = len(str(message_length)) + 1 + message_length
+        bits = header_chars * 8
+        return bits + ((3 - (bits % 3)) % 3)
+
+    @staticmethod
     def _extract_frames_to_directory(video_path: str, target_dir: Path) -> float:
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
@@ -943,6 +955,8 @@ class StegaEncodeMachine:
             raise ValidationError(f"Cover video not found: {cover_video_path}")
         if self.honey_enabled:
             raise ValidationError("Honey Encryption demo is available for image and audio payloads only right now.")
+        if lsb is None:
+            raise UnsupportedFormatError("Python package 'stegano' is required for video encoding.")
 
         temp_dir = Path(tempfile.mkdtemp(prefix="stego_video_"))
         frames_dir = temp_dir / "frames"
@@ -994,29 +1008,39 @@ class StegaEncodeMachine:
             start_frame = 0
             if start_fxy is not None:
                 sf, _, _ = start_fxy
-                if 0 <= sf < total_frames:
-                    start_frame = sf
-            if start_fxy is not None:
-                segments = [message]
-                if start_frame >= total_frames:
+                if sf < 0:
+                    sf = 0
+                if sf >= total_frames:
                     raise CapacityError(
                         'Selected start frame is beyond the end of the video')
-                frame_index = start_frame
+                start_frame = int(sf)
+
+            usable_frames = total_frames - start_frame
+            if usable_frames <= 0:
+                raise CapacityError('Video does not have enough frames to store the payload')
+
+            if not frame_files:
+                raise UnsupportedFormatError('Video frame extraction failed (no frames found)')
+            with Image.open(frame_files[0]) as sample_frame:
+                frame_width, frame_height = sample_frame.size
+            frame_capacity_bits = frame_width * frame_height * 3
+
+            segments = self._split_message_for_frames(message, usable_frames)
+            if len(segments) > usable_frames:
+                raise CapacityError(
+                    'Video does not have enough frames to store the payload')
+
+            # Embed sequentially from the chosen start frame forward
+            for idx, segment in enumerate(segments):
+                frame_index = start_frame + idx
                 frame_path = frames_dir / f"{frame_index:06d}.png"
-                secret = lsb.hide(str(frame_path), segments[0])
-                secret.save(str(frame_path))
-            else:
-                segments = self._split_message_for_frames(
-                    message, total_frames)
-                if len(segments) > total_frames:
+                required_bits = self._stegano_required_bits(len(segment))
+                if required_bits > frame_capacity_bits:
                     raise CapacityError(
-                        'Video does not have enough frames to store the payload')
-                # Embed sequentially from frame 0
-                for idx, segment in enumerate(segments):
-                    frame_index = idx
-                    frame_path = frames_dir / f"{frame_index:06d}.png"
-                    secret = lsb.hide(str(frame_path), segment)
-                    secret.save(str(frame_path))
+                        f'Segment {idx + 1} exceeds per-frame LSB capacity ({required_bits} > {frame_capacity_bits} bits).'
+                    )
+                secret = lsb.hide(str(frame_path), segment, auto_convert_rgb=True)
+                secret.save(str(frame_path))
 
             cover_root = os.path.splitext(cover_video_path)[0]
             target_path = out_path or f"{cover_root}_stego.avi"

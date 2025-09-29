@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QGroupBox, QGridLayout, QLineEdit, QComboBox, QSlider,
                              QGraphicsView, QGraphicsScene, QGraphicsPixmapItem,
                              QScrollArea, QSlider as QTimeSlider, QToolTip, QProgressBar,
-                             QCheckBox, QToolButton, QSizePolicy)
+                             QCheckBox, QToolButton, QSizePolicy, QApplication)
 from PyQt6.QtCore import Qt, QUrl, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor, QPen, QDragEnterEvent, QDropEvent, QImage, QCursor
 import os
@@ -17,6 +17,8 @@ import cv2
 from datetime import datetime
 from machine.stega_spec import (HeaderMeta, FLAG_PAYLOAD_ENCRYPTED, pack_header, HEADER_MAGIC, HEADER_VERSION)
 from crypto_honey import list_universes
+import math
+import random
 
 
 def _human_size(num: int) -> str:
@@ -28,17 +30,222 @@ def _human_size(num: int) -> str:
     return f"{num:.1f} PB"
 
 
+class CustomCheckBox(QCheckBox):
+    """Custom checkbox with visible checkmark"""
+    
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setStyleSheet("""
+            QCheckBox {
+                color: #e8e8fc;
+                font-weight: 500;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 4px;
+                background-color: #0e1625;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #45edf2;
+                border: 2px solid #45edf2;
+            }
+            QCheckBox::indicator:hover {
+                border: 2px solid #45edf2;
+                background-color: rgba(69,237,242,0.1);
+            }
+            QCheckBox::indicator:checked:hover {
+                background-color: #45edf2;
+                border: 2px solid #45edf2;
+            }
+        """)
+    
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if self.isChecked():
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            
+            # Calculate indicator rect manually (18x18px checkbox)
+            checkbox_size = 18
+            spacing = 8  # spacing between checkbox and text
+            checkbox_x = 0
+            checkbox_y = (self.height() - checkbox_size) // 2
+            
+            # Draw checkmark
+            painter.setPen(QPen(QColor("#0d1625"), 2, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            
+            # Draw checkmark path - bigger and centered
+            center_x = checkbox_x + checkbox_size // 2
+            center_y = checkbox_y + checkbox_size // 2
+            scale = checkbox_size * 0.6  # Increased from 0.4 to 0.6 for bigger checkmark
+            
+            # Checkmark coordinates (convert to integers) - better centered
+            painter.drawLine(
+                int(center_x - scale*0.4), int(center_y + scale*0.1),
+                int(center_x - scale*0.1), int(center_y + scale*0.4)
+            )
+            painter.drawLine(
+                int(center_x - scale*0.1), int(center_y + scale*0.4),
+                int(center_x + scale*0.4), int(center_y - scale*0.3)
+            )
+            
+            painter.end()
+
+
+class CyberBackgroundWidget(QWidget):
+    """Custom background widget with subtle cybersecurity elements"""
+
+    def __init__(self):
+        super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.update)
+        self.animation_timer.start(50)  # 20 FPS animation
+        self.time = 0
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Base dark background
+        painter.fillRect(self.rect(), QColor("#0e1625"))
+
+        # Subtle grid pattern
+        self.draw_grid(painter)
+
+        # Floating particles (data packets)
+        self.draw_particles(painter)
+
+        # Subtle circuit-like patterns
+        self.draw_circuit_patterns(painter)
+
+        # Cybersecurity scan lines
+        self.draw_scan_lines(painter)
+
+        self.time += 0.02
+
+    def draw_grid(self, painter):
+        """Draw an enhanced grid pattern with cybersecurity elements"""
+        # Main grid lines with better visibility
+        painter.setPen(QPen(QColor(69, 237, 242, 18), 1))  # Increased opacity
+        grid_size = 40
+
+        for x in range(0, self.width(), grid_size):
+            painter.drawLine(x, 0, x, self.height())
+        for y in range(0, self.height(), grid_size):
+            painter.drawLine(0, y, self.width(), y)
+
+        # Add some grid intersections with small dots
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 2))  # Increased opacity
+        for x in range(grid_size, self.width(), grid_size * 2):
+            for y in range(grid_size, self.height(), grid_size * 2):
+                painter.drawPoint(x, y)
+
+        # Add some diagonal accent lines for tech feel
+        painter.setPen(QPen(QColor(73, 41, 154, 12), 1))  # Increased opacity
+        for i in range(0, self.width(), grid_size * 3):
+            painter.drawLine(i, 0, i + grid_size, grid_size)
+            painter.drawLine(i, self.height(), i + grid_size,
+                             self.height() - grid_size)
+
+    def draw_particles(self, painter):
+        """Draw floating cybersecurity data packets"""
+        # Main data packets
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 2))
+
+        for i in range(6):
+            x = (self.width() * 0.15 + i * self.width() * 0.12 +
+                 math.sin(self.time + i) * 15) % self.width()
+            y = (self.height() * 0.25 + i * self.height() * 0.12 +
+                 math.cos(self.time * 0.8 + i) * 12) % self.height()
+
+            # Draw data packet squares
+            painter.drawRect(int(x), int(y), 4, 4)
+
+        # Add some smaller security indicators
+        painter.setPen(QPen(QColor(73, 41, 154, 20), 1))
+        for i in range(4):
+            x = (self.width() * 0.1 + i * self.width() * 0.2 +
+                 math.sin(self.time * 1.2 + i) * 25) % self.width()
+            y = (self.height() * 0.3 + i * self.height() * 0.15 +
+                 math.cos(self.time * 0.6 + i) * 18) % self.height()
+
+            # Draw small security dots
+            painter.drawPoint(int(x), int(y))
+
+    def draw_circuit_patterns(self, painter):
+        """Draw subtle circuit-like patterns"""
+        painter.setPen(QPen(QColor(73, 41, 154, 15), 1))
+
+        # Draw some circuit-like lines in corners
+        corner_size = 100
+        # Top-left corner
+        painter.drawLine(20, 20, corner_size, 20)
+        painter.drawLine(20, 20, 20, corner_size)
+        painter.drawLine(20, corner_size, corner_size, corner_size)
+
+        # Top-right corner
+        painter.drawLine(self.width() - 20, 20, self.width() - corner_size, 20)
+        painter.drawLine(self.width() - 20, 20, self.width() - 20, corner_size)
+        painter.drawLine(self.width() - 20, corner_size,
+                         self.width() - corner_size, corner_size)
+
+        # Bottom corners
+        painter.drawLine(20, self.height() - 20,
+                         corner_size, self.height() - 20)
+        painter.drawLine(20, self.height() - 20, 20,
+                         self.height() - corner_size)
+        painter.drawLine(20, self.height() - corner_size,
+                         corner_size, self.height() - corner_size)
+
+        painter.drawLine(self.width() - 20, self.height() - 20,
+                         self.width() - corner_size, self.height() - 20)
+        painter.drawLine(self.width() - 20, self.height() - 20,
+                         self.width() - 20, self.height() - corner_size)
+        painter.drawLine(self.width() - 20, self.height() - corner_size,
+                         self.width() - corner_size, self.height() - corner_size)
+
+    def draw_scan_lines(self, painter):
+        """Draw cybersecurity scan lines effect - maximum 4 lines"""
+        # Two horizontal scan lines
+        painter.setPen(QPen(QColor(69, 237, 242, 45), 2))
+        scan_y = int((self.height() * 0.3 + math.sin(self.time * 2)
+                     * self.height() * 0.4) % self.height())
+        painter.drawLine(0, scan_y, self.width(), scan_y)
+
+        painter.setPen(QPen(QColor(69, 237, 242, 30), 1))
+        scan_y2 = int((self.height() * 0.7 + math.cos(self.time * 1.8)
+                      * self.height() * 0.35) % self.height())
+        painter.drawLine(0, scan_y2, self.width(), scan_y2)
+
+        # Two vertical scan lines
+        painter.setPen(QPen(QColor(69, 237, 242, 40), 2))
+        scan_x = int((self.width() * 0.2 + math.cos(self.time * 1.5)
+                     * self.width() * 0.5) % self.width())
+        painter.drawLine(scan_x, 0, scan_x, self.height())
+
+        painter.setPen(QPen(QColor(69, 237, 242, 25), 1))
+        scan_x2 = int((self.width() * 0.8 + math.sin(self.time * 1.2)
+                      * self.width() * 0.4) % self.width())
+        painter.drawLine(scan_x2, 0, scan_x2, self.height())
+
+
 class NotificationBanner(QFrame):
     """Persistent, dismissible banner for inline notifications."""
     closed = pyqtSignal()
 
-    def __init__(self, message: str, severity: str = 'info', parent: QWidget | None = None):
+    def __init__(self, message: str, severity: str = 'info', parent: QWidget | None = None, show_close_button: bool = True):
         super().__init__(parent)
         self._message_label = QLabel()
-        self._close_btn = QPushButton("Ã—")
-        self._close_btn.setFixedWidth(24)
-        self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._close_btn.clicked.connect(self._on_close)
+        self._close_btn = None
+        if show_close_button:
+            self._close_btn = QPushButton("Ã—")
+            self._close_btn.setFixedWidth(24)
+            self._close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._close_btn.clicked.connect(self._on_close)
 
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setFrameShadow(QFrame.Shadow.Raised)
@@ -50,12 +257,12 @@ class NotificationBanner(QFrame):
         elif severity == 'warning':
             bg = "#fff4e5"; fg = "#8e5b00"; border = "#f5c16c"
         else:
-            bg = "#eef5ff"; fg = "#2c3e50"; border = "#a9c8ff"
+            bg = "rgba(14,22,37,0.8)"; fg = "#e8e8fc"; border = "#45edf2"
         self.setStyleSheet(
             f"#notificationBanner {{ background-color:{bg}; border:1px solid {border}; border-radius:8px; }}"
             f"QLabel {{ color:{fg}; font-weight:bold; }}"
-            "QPushButton { background: transparent; color: #34495e; border: none; font-size: 16px; }"
-            "QPushButton:hover { color: #2c3e50; }"
+            "QPushButton { background: transparent; color: #e8e8fc; border: none; font-size: 16px; }"
+            "QPushButton:hover { color: #45edf2; }"
         )
 
         lay = QHBoxLayout(self)
@@ -65,7 +272,8 @@ class NotificationBanner(QFrame):
         self._message_label.setText(message)
         lay.addWidget(self._message_label)
         lay.addStretch()
-        lay.addWidget(self._close_btn)
+        if self._close_btn:
+            lay.addWidget(self._close_btn)
 
     def setText(self, message: str):
         self._message_label.setText(message)
@@ -86,6 +294,12 @@ class CollapsibleSection(QFrame):
     def __init__(self, title: str, parent: QWidget | None = None, *, start_collapsed: bool = False, info_tooltip: str | None = None):
         super().__init__(parent)
         self.setObjectName('collapsibleSection')
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setStyleSheet("""
+            QFrame#collapsibleSection {
+                border: none;
+            }
+        """)
 
         self._toggle = QToolButton()
         self._toggle.setObjectName('collapsibleToggle')
@@ -94,10 +308,10 @@ class CollapsibleSection(QFrame):
         self._toggle.setArrowType(Qt.ArrowType.DownArrow if not start_collapsed else Qt.ArrowType.RightArrow)
         self._toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         self._toggle.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._toggle.setStyleSheet("QToolButton#collapsibleToggle { border: none; color: #2c3e50; padding: 0 4px; } QToolButton#collapsibleToggle:hover { color: #154360; }")
+        self._toggle.setStyleSheet("QToolButton#collapsibleToggle { border: none; color: #e8e8fc; padding: 0 4px; } QToolButton#collapsibleToggle:hover { color: #45edf2; }")
 
         self._title = QLabel(title)
-        self._title.setStyleSheet('color:#2c3e50;font-weight:600;')
+        self._title.setStyleSheet('color:#e8e8fc;font-weight:600;border:none;background:transparent;')
 
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
@@ -115,8 +329,8 @@ class CollapsibleSection(QFrame):
             self._info_btn.setAutoRaise(True)
             self._info_btn.setFixedSize(22, 22)
             self._info_btn.setStyleSheet(
-                "QToolButton { background-color: #3498db; color: white; border-radius: 11px; font-weight: bold; }"
-                "QToolButton:hover { background-color: #2980b9; }"
+                "QToolButton { background: rgba(69,237,242,0.1); color: #45edf2; border: 2px solid rgba(69,237,242,0.6); border-radius: 11px; font-weight: bold; }"
+                "QToolButton:hover { background: rgba(69,237,242,0.3); border: 3px solid rgba(69,237,242,1.0); }"
             )
             self._info_btn.clicked.connect(lambda: QToolTip.showText(QCursor.pos(), info_tooltip, self._info_btn))
             header_layout.addWidget(self._info_btn)
@@ -182,15 +396,15 @@ class MediaDropWidget(QFrame):
         self.drop_zone.setMinimumHeight(200)
         self.drop_zone.setStyleSheet("""
             QLabel {
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed #45edf2;
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #34495e;
+                background-color: #0e1625;
+                color: #e8e8fc;
                 font-size: 16px;
             }
             QLabel:hover {
-                border-color: #3498db;
-                background-color: #e3f2fd;
+                border-color: #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
         """)
         self.drop_zone.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -202,7 +416,7 @@ class MediaDropWidget(QFrame):
         self.file_info = QLabel()
         self.file_info.setStyleSheet("""
             QLabel {
-                color: #2c3e50;
+                color: #e8e8fc;
                 font-weight: bold;
                 padding: 5px;
             }
@@ -214,15 +428,16 @@ class MediaDropWidget(QFrame):
         self.remove_btn = QPushButton("Remove Media")
         self.remove_btn.setStyleSheet("""
             QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
             }
         """)
         self.remove_btn.clicked.connect(self.remove_media)
@@ -232,15 +447,16 @@ class MediaDropWidget(QFrame):
         self.browse_btn = QPushButton("Browse Files")
         self.browse_btn.setStyleSheet("""
             QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
             }
         """)
         self.browse_btn.clicked.connect(self.browse_files)
@@ -257,10 +473,10 @@ class MediaDropWidget(QFrame):
             event.acceptProposedAction()
             self.drop_zone.setStyleSheet("""
                 QLabel {
-                    border: 3px dashed #27ae60;
+                    border: 3px dashed #45edf2;
                     border-radius: 15px;
-                    background-color: #d5f4e6;
-                    color: #27ae60;
+                    background-color: rgba(69,237,242,0.2);
+                    color: #45edf2;
                     font-size: 16px;
                     font-weight: bold;
                 }
@@ -271,10 +487,10 @@ class MediaDropWidget(QFrame):
         """Handle drag leave event"""
         self.drop_zone.setStyleSheet("""
             QLabel {
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #34495e;
+                background-color: #0e1625;
+                color: #e8e8fc;
                 font-size: 16px;
             }
         """)
@@ -421,9 +637,9 @@ class ImagePreviewWidget(QWidget):
         self.graphics_view.setMaximumHeight(400)
         self.graphics_view.setStyleSheet("""
             QGraphicsView {
-                border: 2px solid #bdc3c7;
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 10px;
-                background-color: #f8f9fa;
+                background-color: #0e1625;
             }
         """)
 
@@ -434,7 +650,7 @@ class ImagePreviewWidget(QWidget):
         self.info_label = QLabel("Click on image to select starting pixel")
         self.info_label.setStyleSheet("""
             QLabel {
-                color: #2c3e50;
+                color: #e8e8fc;
                 font-weight: bold;
                 padding: 5px;
                 text-align: center;
@@ -536,7 +752,7 @@ class AudioPreviewWidget(QWidget):
             QLabel {
                 border: 2px solid #bdc3c7;
                 border-radius: 10px;
-                background-color: #f8f9fa;
+                background-color: #0e1625;
             }
         """)
         self.waveform_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -548,7 +764,7 @@ class AudioPreviewWidget(QWidget):
             QSlider::groove:horizontal {
                 border: 1px solid #bdc3c7;
                 height: 8px;
-                background: #ecf0f1;
+                background: rgba(14,22,37,0.8);
                 border-radius: 4px;
             }
             QSlider::handle:horizontal {
@@ -566,7 +782,7 @@ class AudioPreviewWidget(QWidget):
             "Click on waveform or use slider to select start time")
         self.info_label.setStyleSheet("""
             QLabel {
-                color: #2c3e50;
+                color: #e8e8fc;
                 font-weight: bold;
                 padding: 5px;
                 text-align: center;
@@ -687,7 +903,7 @@ class VideoPreviewWidget(QWidget):
             QLabel {
                 border: 2px solid #bdc3c7;
                 border-radius: 10px;
-                background-color: #f8f9fa;
+                background-color: #0e1625;
             }
         """)
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -701,8 +917,8 @@ class VideoPreviewWidget(QWidget):
         self.status_pill.setStyleSheet(
             """
             QLabel {
-                background-color: #eef5ff;
-                color: #2c3e50;
+                background-color: rgba(69,237,242,0.1);
+                color: #e8e8fc;
                 border-radius: 12px;
                 padding: 4px 10px;
                 font-weight: bold;
@@ -713,13 +929,13 @@ class VideoPreviewWidget(QWidget):
         self.clear_marker_btn.setStyleSheet(
             """
             QPushButton {
-                background-color: #bdc3c7;
-                color: #2c3e50;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 6px 10px;
                 border-radius: 6px;
             }
-            QPushButton:hover { background-color: #aeb6bf; }
+            QPushButton:hover { background: rgba(69,237,242,0.3); border: 3px solid rgba(69,237,242,1.0); }
             """
         )
         self.clear_marker_btn.clicked.connect(self.on_clear_marker)
@@ -733,7 +949,7 @@ class VideoPreviewWidget(QWidget):
             QSlider::groove:horizontal {
                 border: 1px solid #bdc3c7;
                 height: 8px;
-                background: #ecf0f1;
+                background: rgba(14,22,37,0.8);
                 border-radius: 4px;
             }
             QSlider::handle:horizontal {
@@ -752,9 +968,9 @@ class VideoPreviewWidget(QWidget):
         self.prev_frame_btn = QPushButton("â—€")
         self.prev_frame_btn.setStyleSheet("""
             QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 5px 10px;
                 border-radius: 3px;
             }
@@ -764,9 +980,9 @@ class VideoPreviewWidget(QWidget):
         self.next_frame_btn = QPushButton("â–¶")
         self.next_frame_btn.setStyleSheet("""
             QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 5px 10px;
                 border-radius: 3px;
             }
@@ -781,7 +997,7 @@ class VideoPreviewWidget(QWidget):
         self.info_label = QLabel("Use slider or buttons to select start frame")
         self.info_label.setStyleSheet("""
             QLabel {
-                color: #2c3e50;
+                color: #e8e8fc;
                 font-weight: bold;
                 padding: 5px;
                 text-align: center;
@@ -972,26 +1188,26 @@ class PayloadDropWidget(QFrame):
         self.drop_zone.setMinimumHeight(150)
         self.drop_zone.setStyleSheet("""
             QLabel {
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed #45edf2;
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #34495e;
+                background-color: #0e1625;
+                color: #e8e8fc;
                 font-size: 16px;
             }
             QLabel:hover {
-                border-color: #3498db;
-                background-color: #e3f2fd;
+                border-color: #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
         """)
         self.drop_zone.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.drop_zone.setText(
-            "Drag & Drop File Here\n\nSupported: .txt, .pdf, .exe, .wav, .mp3, .mov, .mp4")
+            "Drag & Drop File Here\n\nSupported: .txt, .pdf, .png, .jpg, .jpeg, .bmp, .exe, .wav, .mp3, .mov, .mp4")
 
         # File info
         self.file_info = QLabel()
         self.file_info.setStyleSheet("""
             QLabel {
-                color: #2c3e50;
+                color: #e8e8fc;
                 font-weight: bold;
                 padding: 5px;
             }
@@ -1003,15 +1219,16 @@ class PayloadDropWidget(QFrame):
         self.remove_btn = QPushButton("Remove File")
         self.remove_btn.setStyleSheet("""
             QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
             }
         """)
         self.remove_btn.clicked.connect(self.remove_file)
@@ -1021,15 +1238,16 @@ class PayloadDropWidget(QFrame):
         self.browse_btn = QPushButton("Browse File")
         self.browse_btn.setStyleSheet("""
             QPushButton {
-                background-color: #9b59b6;
-                color: white;
-                border: none;
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #8e44ad;
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
             }
         """)
         self.browse_btn.clicked.connect(self.browse_files)
@@ -1064,15 +1282,15 @@ class PayloadDropWidget(QFrame):
         self.drop_zone.setStyleSheet(
             """
             QLabel {
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed #45edf2;
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #34495e;
+                background-color: #0e1625;
+                color: #e8e8fc;
                 font-size: 16px;
             }
             """
         )
-        self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .exe, .wav, .mp3, .mov, .mp4")
+        self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .png, .jpg, .jpeg, .bmp, .exe, .wav, .mp3, .mov, .mp4")
 
     def dropEvent(self, event: QDropEvent):
         """Handle drop event"""
@@ -1084,8 +1302,9 @@ class PayloadDropWidget(QFrame):
         """Browse for files"""
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select Payload File", "",
-            "All Supported (*.txt *.pdf *.exe *.wav *.mp3 *.mov *.mp4);;"
+            "All Supported (*.txt *.pdf *.exe *.wav *.mp3 *.mov *.mp4 *.png *.jpg *.jpeg *.bmp);;"
             "Text Files (*.txt);;PDF Files (*.pdf);;Executable Files (*.exe);;"
+            "Image Files (*.png *.jpg *.jpeg *.bmp);;"
             "Audio Files (*.wav *.mp3);;Video Files (*.mov *.mp4);;All Files (*)"
         )
         if file_path:
@@ -1098,7 +1317,7 @@ class PayloadDropWidget(QFrame):
 
         # Check file extension
         ext = os.path.splitext(file_path)[1].lower()
-        supported_extensions = ['.txt', '.pdf',
+        supported_extensions = ['.txt', '.pdf', '.png', '.jpg', '.jpeg', '.bmp',
                                 '.exe', '.wav', '.mp3', '.mov', '.mp4']
 
         if ext not in supported_extensions:
@@ -1110,7 +1329,7 @@ class PayloadDropWidget(QFrame):
                 pass
             # Brief inline hint
             self.drop_zone.setText("Unsupported file type")
-            QTimer.singleShot(1500, lambda: self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .exe, .wav, .mp3, .mov, .mp4"))
+            QTimer.singleShot(1500, lambda: self.drop_zone.setText("Drag & Drop File Here\n\nSupported: .txt, .pdf, .png, .jpg, .jpeg, .bmp, .exe, .wav, .mp3, .mov, .mp4"))
             return
 
         self.file_path = file_path
@@ -1155,7 +1374,9 @@ class StegaEncodeWindow(QMainWindow):
         super().__init__()
         self.setObjectName('StegaEncodeWindow')
         self.setWindowTitle("Steganography - Hide Messages")
-        self.setMinimumSize(1200, 800)
+        
+        # Setup responsive sizing to match main window
+        self.setup_responsive_sizing()
 
         # Initialize the steganography machine
         from machine.stega_encode_machine import StegaEncodeMachine
@@ -1191,17 +1412,32 @@ class StegaEncodeWindow(QMainWindow):
         self._live_preview_job_id = 0
         self._live_preview_cancelled_jobs = set()
 
-        # Set gradient background
+        # Cybersecurity theme: fonts & background
+        # Colors:
+        #   Background: #0e1625 (very dark navy)
+        #   Headings/accents: #49299a (purple)
+        #   Highlights/buttons: #45edf2 (aqua/cyan)
+        #   Light contrast: #e8e8fc (very light lavender)
         self.setStyleSheet("""
             QMainWindow {
-                background: #e3f2fd;
+                background-color: #0e1625;
+                font-family: 'Syne', 'Segoe UI', 'Arial', sans-serif;
+                color: #e8e8fc;
+            }
+            QWidget {
+                font-family: 'Syne', 'Segoe UI', 'Arial', sans-serif;
+                color: #e8e8fc;
             }
         """)
+
         # Create central widget and main layout
         central_widget = QWidget()
-        # Transparent background so the window gradient shows cleanly (avoids dark corners)
-        central_widget.setStyleSheet("background: transparent;")
         self.setCentralWidget(central_widget)
+
+        # Create background widget
+        self.background_widget = CyberBackgroundWidget()
+        self.background_widget.setParent(central_widget)
+        self.background_widget.lower()  # Put it behind other widgets
 
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(20)
@@ -1214,6 +1450,10 @@ class StegaEncodeWindow(QMainWindow):
         main_layout.addLayout(self.notice_container)
         # Track overflow banner to avoid duplicates
         self._overflow_banner = None
+        # Track guided tour banner for toggle functionality
+        self._tour_banner = None
+        self._tour_visible = False
+        self._tour_button = None
         self.step_boxes = []
         self.helper_hint_label = None
         self.status_label = None
@@ -1237,9 +1477,76 @@ class StegaEncodeWindow(QMainWindow):
         # Main content area
         self.create_content_area(main_layout)
 
-        # Make the window fullscreen
-        self.showMaximized()
+        # Set window size and position to match main window
+        self.setGeometry(self.window_x, self.window_y, self.window_width, self.window_height)
+        self.show()
 
+        # Initialize background widget size
+        self.background_widget.setGeometry(0, 0, self.width(), self.height())
+
+    def resizeEvent(self, event):
+        """Handle window resize to update background"""
+        super().resizeEvent(event)
+        if hasattr(self, 'background_widget'):
+            self.background_widget.setGeometry(
+                0, 0, self.width(), self.height())
+
+    def setup_responsive_sizing(self):
+        """Setup responsive sizing based on screen dimensions to match main window"""
+        from PyQt6.QtWidgets import QApplication
+        
+        # Get screen dimensions using modern PyQt6 approach
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication([])
+        screen = app.primaryScreen().geometry()
+        screen_width = screen.width()
+        screen_height = screen.height()
+        
+        # Define responsive scaling factors
+        # For screens between 1200x1080 and 1920x1200
+        if screen_width <= 1366:  # Smaller laptops
+            scale_factor = 0.8
+        elif screen_width <= 1600:  # Medium laptops
+            scale_factor = 0.9
+        else:  # Larger screens
+            scale_factor = 1.0
+        
+        # Calculate window dimensions (leave some margin from screen edges)
+        margin_percent = 0.05  # 5% margin from screen edges
+        self.window_width = int(screen_width * (1 - 2 * margin_percent))
+        self.window_height = int(screen_height * (1 - 2 * margin_percent))
+        
+        # Center the window
+        self.window_x = int(screen_width * margin_percent)
+        self.window_y = int(screen_height * margin_percent)
+        
+        # Set minimum size to ensure usability on smaller screens
+        min_width = 1000
+        min_height = 700
+        self.window_width = max(self.window_width, min_width)
+        self.window_height = max(self.window_height, min_height)
+        
+        # Responsive layout parameters
+        self.margins = int(40 * scale_factor)  # Responsive margins
+        self.spacing = int(30 * scale_factor)  # Responsive spacing
+        
+        # Responsive font sizes
+        self.title_font_size = int(28 * scale_factor)
+        self.subtitle_font_size = int(14 * scale_factor)
+        self.card_title_font_size = int(18 * scale_factor)
+        self.card_desc_font_size = int(10 * scale_factor)
+        self.button_font_size = int(12 * scale_factor)
+        
+        # Responsive card dimensions
+        self.card_min_width = int(280 * scale_factor)
+        self.card_max_width = int(350 * scale_factor)
+        self.card_min_height = int(320 * scale_factor)
+        self.card_max_height = int(400 * scale_factor)
+        self.card_spacing = int(30 * scale_factor)
+        
+        # Responsive icon size
+        self.icon_size = int(100 * scale_factor)
 
     def create_quickstart_panel(self, layout):
         """Create the top quick-start guidance panel."""
@@ -1247,47 +1554,47 @@ class StegaEncodeWindow(QMainWindow):
         frame.setObjectName("quickStartFrame")
         frame.setStyleSheet("""
             QFrame#quickStartFrame {
-                background-color: rgba(255, 255, 255, 0.9);
+                background-color: #0e1625;
                 border-radius: 18px;
-                border: 1px solid #d6e4f3;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 12px 18px;
             }
             QFrame[class="stepCard"] {
-                background-color: #f4f9ff;
-                border: 1px dashed #c9d6eb;
-                border-radius: 14px;
+                background-color: #0e1625;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 15px;
             }
             QFrame[class="stepCard"][completed="true"] {
-                border: 1px solid #27ae60;
-                background-color: #eafaf1;
+                border: 2px solid #22c55e;
+                background-color: rgba(34,197,94,0.1);
             }
             QFrame[class="stepCard"][active="true"] {
-                border: 2px solid #3498db;
-                background-color: #e6f2ff;
+                border: 2px solid #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
             QLabel[class="stepNumber"] {
-                color: #3498db;
+                color: #45edf2;
                 font-size: 13px;
                 font-weight: bold;
                 letter-spacing: 1px;
             }
             QLabel[class="stepTitle"] {
-                color: #2c3e50;
+                color: #e8e8fc;
                 font-size: 15px;
                 font-weight: 600;
             }
             QLabel[class="stepDetail"] {
-                color: #2c3e50;
+                color: #e8e8fc;
                 font-size: 12px;
             }
         """)
 
         wrapper_layout = QVBoxLayout(frame)
-        wrapper_layout.setContentsMargins(6, 6, 6, 6)
-        wrapper_layout.setSpacing(8)
+        wrapper_layout.setContentsMargins(4, 4, 4, 4)
+        wrapper_layout.setSpacing(6)
 
         steps_layout = QHBoxLayout()
-        steps_layout.setSpacing(8)
+        steps_layout.setSpacing(6)
 
         steps = [
             ("Select Cover", "Drag & drop or browse for the image / audio / video cover.", "Pick the carrier file that will hide your payload."),
@@ -1305,8 +1612,8 @@ class StegaEncodeWindow(QMainWindow):
             card.setProperty("completed", False)
             card.setToolTip(tip)
             card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(10, 8, 10, 8)
-            card_layout.setSpacing(3)
+            card_layout.setContentsMargins(6, 4, 6, 4)
+            card_layout.setSpacing(1)
 
             number_lbl = QLabel(f"Step {idx}")
             number_lbl.setProperty("class", "stepNumber")
@@ -1320,7 +1627,6 @@ class StegaEncodeWindow(QMainWindow):
             card_layout.addWidget(number_lbl)
             card_layout.addWidget(title_lbl)
             card_layout.addWidget(detail_lbl)
-            card_layout.addStretch()
 
             steps_layout.addWidget(card)
             self.step_boxes.append(card)
@@ -1330,26 +1636,28 @@ class StegaEncodeWindow(QMainWindow):
         helper_layout.setSpacing(8)
 
         self.helper_hint_label = QLabel("Step 1: Start by selecting a cover file.")
-        self.helper_hint_label.setStyleSheet("color:#2c3e50;font-weight:600;")
+        self.helper_hint_label.setStyleSheet("color:#e8e8fc;font-weight:600;")
         self.helper_hint_label.setWordWrap(True)
 
         tour_btn = QPushButton("Show Guided Tour")
         tour_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         tour_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 6px 16px;
                 border-radius: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #1f8a4c;
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
             }
         """)
         tour_btn.setToolTip("Walk through the encoding workflow and learn where each feature lives.")
         tour_btn.clicked.connect(self.show_onboarding_tour)
+        self._tour_button = tour_btn
 
         helper_layout.addWidget(self.helper_hint_label)
         helper_layout.addStretch()
@@ -1363,6 +1671,13 @@ class StegaEncodeWindow(QMainWindow):
         steps_container_layout.addLayout(helper_layout)
 
         steps_section = CollapsibleSection("Workflow overview", start_collapsed=True)
+        steps_section.setStyleSheet("""
+            QFrame#collapsibleSection {
+                background: rgba(14,22,37,0.8);
+                border: none;
+                border-radius: 10px;
+            }
+        """)
         steps_section.addWidget(steps_container)
 
         wrapper_layout.addWidget(steps_section)
@@ -1414,19 +1729,37 @@ class StegaEncodeWindow(QMainWindow):
         )
 
     def show_onboarding_tour(self):
-        """Display a guided tour banner with workflow tips."""
-        tour_text = (
-            "1. Select your cover image/audio/video.\n"
-            "2. Add a payload (type a message or attach a file).\n"
-            "3. Enter a numeric key and pick encryption preferences.\n"
-            "4. Adjust LSB bits and choose a start location.\n"
-            "5. Press 'Hide Message' and review the proof & diagnostics panel."
-        )
-        banner = NotificationBanner(f"Guided tour\n{tour_text}", 'info', self)
-        self.notice_container.addWidget(banner)
-        banner.show()
-        self.set_status("Guided tour: follow the numbered steps above.", 'info')
-        self.show_step_hint("Start at Step 1 and work your way across.")
+        """Toggle guided tour banner with workflow tips."""
+        if self._tour_visible and self._tour_banner is not None:
+            # Hide the tour
+            try:
+                self._tour_banner._on_close()
+            except Exception:
+                pass
+            self._tour_banner = None
+            self._tour_visible = False
+            if self._tour_button:
+                self._tour_button.setText("Show Guided Tour")
+            self.set_status("Guided tour hidden.", 'info')
+        else:
+            # Show the tour
+            tour_text = (
+                "1. Select your cover image/audio/video.\n"
+                "2. Add a payload (type a message or attach a file).\n"
+                "3. Enter a numeric key and pick encryption preferences.\n"
+                "4. Adjust LSB bits and choose a start location.\n"
+                "5. Press 'Hide Message' and review the proof & diagnostics panel."
+            )
+            banner = NotificationBanner(f"Guided tour\n{tour_text}", 'info', self, show_close_button=False)
+            self.notice_container.addWidget(banner)
+            banner.show()
+            self._tour_banner = banner
+            self._tour_visible = True
+            if self._tour_button:
+                self._tour_button.setText("Hide Guided Tour")
+            self.set_status("Guided tour: follow the numbered steps above.", 'info')
+            self.show_step_hint("Start at Step 1 and work your way across.")
+
 
     def create_info_button(self, tooltip_text: str) -> QPushButton:
         """Create a styled info button with tooltip text."""
@@ -1437,15 +1770,16 @@ class StegaEncodeWindow(QMainWindow):
         btn.setStyleSheet(
             """
             QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #45edf2;
+                border: 2px solid rgba(69,237,242,0.6);
                 border-radius: 12px;
                 font-weight: bold;
                 font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
             }
             """
         )
@@ -1458,18 +1792,23 @@ class StegaEncodeWindow(QMainWindow):
         title_layout = QHBoxLayout()
 
         # Back button
-        back_button = QPushButton("â† Back to Main")
+        back_button = QPushButton("← Back to Main")
         back_button.setStyleSheet("""
             QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
+                background: rgba(69,237,242,0.1);
+                color: #e8e8fc;
+                border: 2px solid rgba(69,237,242,0.6);
                 padding: 10px 20px;
-                border-radius: 5px;
+                border-radius: 12px;
                 font-weight: bold;
+                font-size: 14px;
             }
             QPushButton:hover {
-                background-color: #2980b9;
+                background: rgba(69,237,242,0.3);
+                border: 3px solid rgba(69,237,242,1.0);
+            }
+            QPushButton:pressed {
+                background: rgba(69,237,242,0.3);
             }
         """)
         back_button.clicked.connect(self.go_back)
@@ -1481,7 +1820,7 @@ class StegaEncodeWindow(QMainWindow):
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #2c3e50;")
+        title_label.setStyleSheet("color: #45edf2; margin: 10px 0;")
 
         title_layout.addWidget(back_button)
         title_layout.addStretch()
@@ -1496,8 +1835,12 @@ class StegaEncodeWindow(QMainWindow):
         content_scroll.setWidgetResizable(True)
         content_scroll.setFrameShape(QFrame.Shape.NoFrame)
         content_scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # Make scroll area transparent to show page background
+        content_scroll.setStyleSheet("QScrollArea { background-color: transparent; }")
 
         content_container = QWidget()
+        # Make container transparent to show page background
+        content_container.setStyleSheet("QWidget { background-color: transparent; }")
         columns_layout = QHBoxLayout(content_container)
         columns_layout.setContentsMargins(0, 0, 0, 0)
         columns_layout.setSpacing(16)
@@ -1520,12 +1863,11 @@ class StegaEncodeWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: white;
+                background-color: #0e1625;
                 border-radius: 15px;
-                border: none;
+                border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
 
         layout = QVBoxLayout(panel)
         layout.setSpacing(16)
@@ -1540,7 +1882,7 @@ class StegaEncodeWindow(QMainWindow):
         title_font.setPointSize(18)
         title_font.setBold(True)
         title.setFont(title_font)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 15px;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 15px; border: none; background: transparent;")
 
         # Info button
         info_btn = self.create_info_button(
@@ -1565,7 +1907,7 @@ class StegaEncodeWindow(QMainWindow):
             pass
         layout.addWidget(self.media_drop_widget)
         self.cover_info_label = QLabel('Drop a cover file to begin. Supported: PNG/BMP/GIF images, WAV audio, MOV/MP4 video.')
-        self.cover_info_label.setStyleSheet('color:#2c3e50;')
+        self.cover_info_label.setStyleSheet('color:#e8e8fc;border:none;background:transparent;')
         self.cover_info_label.setWordWrap(True)
         layout.addWidget(self.cover_info_label)
         layout.addStretch()
@@ -1577,12 +1919,11 @@ class StegaEncodeWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: white;
+                background-color: #0e1625;
                 border-radius: 15px;
-                border: none;
+                border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
 
         layout = QVBoxLayout(panel)
         layout.setSpacing(16)
@@ -1597,7 +1938,7 @@ class StegaEncodeWindow(QMainWindow):
         title_font.setPointSize(18)
         title_font.setBold(True)
         title.setFont(title_font)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 15px;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 15px; border: none; background: transparent;")
 
         # Info button
         info_btn = self.create_info_button(
@@ -1621,21 +1962,21 @@ class StegaEncodeWindow(QMainWindow):
         self.message_text.setMaximumHeight(80)
         self.message_text.setStyleSheet("""
             QTextEdit {
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed #45edf2;
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #34495e;
+                background-color: #0e1625;
+                color: #e8e8fc;
                 font-size: 14px;
                 padding: 15px;
                 font-family: 'Segoe UI', sans-serif;
             }
             QTextEdit:focus {
-                border-color: #3498db;
-                background-color: #e3f2fd;
+                border-color: #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
             QTextEdit:hover {
-                border-color: #3498db;
-                background-color: #e3f2fd;
+                border-color: #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
         """)
         self.message_text.textChanged.connect(self.on_payload_text_changed)
@@ -1645,10 +1986,12 @@ class StegaEncodeWindow(QMainWindow):
         or_separator.setAlignment(Qt.AlignmentFlag.AlignCenter)
         or_separator.setStyleSheet("""
             QLabel {
-                color: #34495e;
+                color: #e8e8fc;
                 font-size: 14px;
                 font-weight: bold;
                 margin: 5px 0;
+                border: none;
+                background: transparent;
             }
         """)
 
@@ -1674,12 +2017,11 @@ class StegaEncodeWindow(QMainWindow):
         panel = QFrame()
         panel.setStyleSheet("""
             QFrame {
-                background-color: white;
+                background-color: #0e1625;
                 border-radius: 15px;
-                border: none;
+                border: 2px solid rgba(69,237,242,0.6);
             }
         """)
-        panel.setGraphicsEffect(self.create_shadow_effect())
 
         layout = QVBoxLayout(panel)
         layout.setSpacing(16)
@@ -1694,7 +2036,7 @@ class StegaEncodeWindow(QMainWindow):
         title_font.setPointSize(18)
         title_font.setBold(True)
         title.setFont(title_font)
-        title.setStyleSheet("color: #2c3e50; margin-bottom: 15px;")
+        title.setStyleSheet("color: #e8e8fc; margin-bottom: 15px; border: none; background: transparent;")
 
         # Info button
         info_btn = self.create_info_button(
@@ -1709,6 +2051,22 @@ class StegaEncodeWindow(QMainWindow):
 
         # LSB slider
         lsb_group = QGroupBox("LSB Settings")
+        lsb_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         lsb_layout = QVBoxLayout(lsb_group)
 
         # LSB value display
@@ -1718,10 +2076,10 @@ class StegaEncodeWindow(QMainWindow):
             QLabel {
                 font-size: 16px;
                 font-weight: bold;
-                color: #2c3e50;
+                color: #e8e8fc;
                 padding: 15px;
-                background-color: #f8f9fa;
-                border: 3px dashed #bdc3c7;
+                background-color: #0e1625;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
                 font-family: 'Segoe UI', sans-serif;
             }
@@ -1739,18 +2097,18 @@ class StegaEncodeWindow(QMainWindow):
             QSlider::groove:horizontal {
                 border: 1px solid #bdc3c7;
                 height: 8px;
-                background: #ecf0f1;
+                background: rgba(14,22,37,0.8);
                 border-radius: 4px;
             }
             QSlider::handle:horizontal {
-                background: #3498db;
-                border: 1px solid #2980b9;
+                background: #45edf2;
+                border: 1px solid #45edf2;
                 width: 18px;
                 margin: -5px 0;
                 border-radius: 9px;
             }
             QSlider::handle:horizontal:hover {
-                background: #2980b9;
+                background: #45edf2;
             }
         """)
         self.lsb_slider.valueChanged.connect(self.update_lsb_value)
@@ -1763,30 +2121,33 @@ class StegaEncodeWindow(QMainWindow):
         key_group = QGroupBox("Key (numeric, required)")
         key_group.setStyleSheet("""
             QGroupBox {
-                background-color: rgba(255, 255, 255, 0.9);
-                border: 1px solid #bbdefb;
-                border-radius: 12px;
-                color: #1c2833;
-                font-weight: 600;
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
             }
             QGroupBox::title {
-                color: #1c2833;
-                background-color: transparent;
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
             }
             QCheckBox {
-                color: #1c2833;
+                color: #e8e8fc;
                 font-weight: 500;
             }
             QComboBox {
-                color: #1c2833;
-                background-color: #ffffff;
-                border: 1px solid #90caf9;
+                color: #e8e8fc;
+                background-color: #0e1625;
+                border: 1px solid #45edf2;
                 border-radius: 6px;
                 padding: 4px 6px;
             }
             QComboBox QAbstractItemView {
-                background-color: #ffffff;
-                color: #1c2833;
+                background-color: #0e1625;
+                color: #e8e8fc;
             }
         """)
         key_layout = QVBoxLayout(key_group)
@@ -1798,20 +2159,20 @@ class StegaEncodeWindow(QMainWindow):
         self.key_input.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #ffffff;
-                color: #1c2833;
+                background-color: #0e1625;
+                color: #e8e8fc;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
             }
             QLineEdit:focus {
-                border-color: #3498db;
-                background-color: #e3f2fd;
+                border: 3px dashed #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
             QLineEdit:hover {
-                border-color: #3498db;
-                background-color: #e3f2fd;
+                border: 3px dashed #45edf2;
+                background-color: rgba(69,237,242,0.1);
             }
         """)
 
@@ -1819,16 +2180,14 @@ class StegaEncodeWindow(QMainWindow):
         key_layout.addWidget(self.key_input)
 
 
-        self.encrypt_checkbox = QCheckBox("Encrypt payload before embedding (recommended)")
+        self.encrypt_checkbox = CustomCheckBox("Encrypt payload before embedding (recommended)")
         self.encrypt_checkbox.setToolTip('Use the numeric key to derive an XOR keystream before embedding the payload.')
         self.encrypt_checkbox.setChecked(True)
-        self.encrypt_checkbox.setStyleSheet("color:#1c2833;font-weight:500;")
         self.encrypt_checkbox.toggled.connect(self.on_encrypt_toggle)
         key_layout.addWidget(self.encrypt_checkbox)
 
-        self.honey_checkbox = QCheckBox("Honey Encryption (Demo)")
+        self.honey_checkbox = CustomCheckBox("Honey Encryption (Demo)")
         self.honey_checkbox.setToolTip('Enable the Honey Encryption demo (text payloads only).')
-        self.honey_checkbox.setStyleSheet("color:#1c2833;font-weight:500;")
         self.honey_checkbox.toggled.connect(self.on_honey_toggle)
         key_layout.addWidget(self.honey_checkbox)
 
@@ -1839,7 +2198,7 @@ class StegaEncodeWindow(QMainWindow):
         if idx >= 0:
             self.honey_universe_combo.setCurrentIndex(idx)
         self.honey_universe_combo.setEnabled(False)
-        self.honey_universe_combo.setStyleSheet("color:#1c2833;background-color:#ffffff;border:1px solid #90caf9;border-radius:6px;padding:4px 6px;")
+        self.honey_universe_combo.setStyleSheet("color:#e8e8fc;background-color:#0e1625;border:1px solid #45edf2;border-radius:6px;padding:4px 6px;")
         self.honey_universe_combo.currentTextChanged.connect(self.on_honey_universe_changed)
         key_layout.addWidget(self.honey_universe_combo)
 
@@ -1847,17 +2206,53 @@ class StegaEncodeWindow(QMainWindow):
 
         # Capacity group
         capacity_group = QGroupBox("Capacity")
-        cap_layout = QVBoxLayout(capacity_group)
-        self.cap_dims = QLabel("Cover: -")
-        self.cap_payload = QLabel("Payload: -")
-        self.cap_lsb = QLabel("LSB bits: 1")
-        self.cap_header = QLabel("Header bytes: -")
-        self.cap_startbits = QLabel("Start bit offset: 0")
-        self.cap_max = QLabel("Capacity (bytes): -")
-        self.cap_avail = QLabel("Available bytes: -")
-        for lbl in [self.cap_dims, self.cap_payload, self.cap_lsb, self.cap_header, self.cap_startbits, self.cap_max, self.cap_avail]:
-            lbl.setStyleSheet("color:#2c3e50;")
-            cap_layout.addWidget(lbl)
+        capacity_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        cap_layout = QGridLayout(capacity_group)
+        cap_layout.setHorizontalSpacing(12)
+        cap_layout.setVerticalSpacing(6)
+        capacity_fields = [
+            ("Cover", "dims"),
+            ("Payload", "payload"),
+            ("LSB bits", "lsb"),
+            ("Header bytes", "header"),
+            ("Start bit offset", "startbits"),
+            ("Capacity (bytes)", "max"),
+            ("Available bytes", "avail"),
+        ]
+        self.cap_detail_labels = {}
+        for row, (label, key) in enumerate(capacity_fields):
+            lbl = QLabel(f"{label}:")
+            lbl.setStyleSheet("color:#e8e8fc;font-weight:600;background:rgba(14,22,37,0.8);border:none;")
+            value_lbl = QLabel("-")
+            value_lbl.setStyleSheet("color:#e8e8fc;background:transparent;border:none;")
+            value_lbl.setWordWrap(True)
+            cap_layout.addWidget(lbl, row, 0)
+            cap_layout.addWidget(value_lbl, row, 1)
+            self.cap_detail_labels[key] = value_lbl
+        
+        # Store references for backward compatibility
+        self.cap_dims = self.cap_detail_labels["dims"]
+        self.cap_payload = self.cap_detail_labels["payload"]
+        self.cap_lsb = self.cap_detail_labels["lsb"]
+        self.cap_header = self.cap_detail_labels["header"]
+        self.cap_startbits = self.cap_detail_labels["startbits"]
+        self.cap_max = self.cap_detail_labels["max"]
+        self.cap_avail = self.cap_detail_labels["avail"]
         # Capacity usage bar
         self.cap_usage_bar = QProgressBar()
         self.cap_usage_bar.setRange(0, 100)
@@ -1865,21 +2260,37 @@ class StegaEncodeWindow(QMainWindow):
         self.cap_usage_bar.setTextVisible(True)
         self.cap_usage_bar.setFormat("Payload: %v / %m bytes")
         self.cap_usage_bar.setStyleSheet(
-            "QProgressBar{border:1px solid #bdc3c7;border-radius:6px;background:#ecf0f1;text-align:center;}"
-            "QProgressBar::chunk{background-color:#2ecc71;border-radius:6px;}"
+            "QProgressBar{border:1px solid #45edf2;border-radius:6px;background:#0e1625;text-align:center;color:#e8e8fc;}"
+            "QProgressBar::chunk{background-color:#45edf2;border-radius:6px;}"
         )
-        cap_layout.addWidget(self.cap_usage_bar)
+        cap_layout.addWidget(self.cap_usage_bar, len(capacity_fields), 0, 1, 2)
         # Capacity status pill
         self.cap_status = QLabel("OK")
         self.cap_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cap_status.setStyleSheet(
-            "QLabel{background:#eafaf1;color:#2e7d32;border-radius:10px;padding:4px 8px;font-weight:bold;}" 
+            "QLabel{background:rgba(69,237,242,0.2);color:#45edf2;border-radius:10px;padding:4px 8px;font-weight:bold;}" 
         )
-        cap_layout.addWidget(self.cap_status)
+        cap_layout.addWidget(self.cap_status, len(capacity_fields) + 1, 0, 1, 2)
         capacity_group.setLayout(cap_layout)
 
         # Output path
         output_group = QGroupBox("Output Path")
+        output_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         output_layout = QVBoxLayout(output_group)
 
         self.output_path = QLineEdit()
@@ -1888,10 +2299,10 @@ class StegaEncodeWindow(QMainWindow):
         self.output_path.setStyleSheet("""
             QLineEdit {
                 padding: 15px;
-                border: 3px dashed #bdc3c7;
+                border: 3px dashed rgba(69,237,242,0.6);
                 border-radius: 15px;
-                background-color: #f8f9fa;
-                color: #34495e;
+                background-color: #0e1625;
+                color: #e8e8fc;
                 font-size: 14px;
                 font-family: 'Segoe UI', sans-serif;
             }
@@ -1900,15 +2311,16 @@ class StegaEncodeWindow(QMainWindow):
         output_button = QPushButton("Choose Output")
         output_button.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
+                background: rgba(34,139,34,0.2);
+                color: #22c55e;
+                border: 2px solid #22c55e;
                 padding: 10px 20px;
                 border-radius: 5px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #229954;
+                background: rgba(34,139,34,0.4);
+                border: 3px solid #22c55e;
             }
         """)
         output_button.clicked.connect(self.choose_output_path)
@@ -1923,30 +2335,79 @@ class StegaEncodeWindow(QMainWindow):
         layout.addWidget(capacity_group)
         # Proof panel (How embedded)
         proof_group = QGroupBox("How embedded")
-        proof_layout = QVBoxLayout(proof_group)
-        self.proof_lsb = QLabel("LSB bits: -")
-        self.proof_start = QLabel("Start bit: -")
-        self.proof_perm = QLabel("Perm [0:8]: -")
-        self.proof_header = QLabel("Header: -")
-        self.proof_stats = QLabel("LSB stats: -")
-        for lbl in [self.proof_lsb, self.proof_start, self.proof_perm, self.proof_header, self.proof_stats]:
-            lbl.setStyleSheet("color:#2c3e50;")
-            lbl.setWordWrap(True)
-            proof_layout.addWidget(lbl)
+        proof_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        proof_layout = QGridLayout(proof_group)
+        proof_layout.setHorizontalSpacing(12)
+        proof_layout.setVerticalSpacing(6)
+        proof_fields = [
+            ("LSB bits", "lsb"),
+            ("Start bit", "start"),
+            ("Perm [0:8]", "perm"),
+            ("Header", "header"),
+            ("LSB stats", "stats"),
+        ]
+        self.proof_detail_labels = {}
+        for row, (label, key) in enumerate(proof_fields):
+            lbl = QLabel(f"{label}:")
+            lbl.setStyleSheet("color:#e8e8fc;font-weight:600;")
+            value_lbl = QLabel("-")
+            value_lbl.setStyleSheet("color:#e8e8fc;")
+            value_lbl.setWordWrap(True)
+            proof_layout.addWidget(lbl, row, 0)
+            proof_layout.addWidget(value_lbl, row, 1)
+            self.proof_detail_labels[key] = value_lbl
+        
+        # Store references for backward compatibility
+        self.proof_lsb = self.proof_detail_labels["lsb"]
+        self.proof_start = self.proof_detail_labels["start"]
+        self.proof_perm = self.proof_detail_labels["perm"]
+        self.proof_header = self.proof_detail_labels["header"]
+        self.proof_stats = self.proof_detail_labels["stats"]
         # Mini visualization for permutation (8-wide max)
         self.perm_vis = QLabel()
         self.perm_vis.setFixedHeight(20)
         self.perm_vis.setToolTip('Permutation visual: colours map the bit positions (0-7) in the embedding order.')
-        self.perm_vis.setStyleSheet("QLabel{background:#f8f9fa;border:1px dashed #bdc3c7;border-radius:8px;}")
-        proof_layout.addWidget(self.perm_vis)
+        self.perm_vis.setStyleSheet("QLabel{background:#0e1625;border:1px dashed #45edf2;border-radius:8px;}")
+        proof_layout.addWidget(self.perm_vis, len(proof_fields), 0, 1, 2)
 
         legend = QLabel('Legend: coloured squares show the per-byte LSB permutation order; LSB stats compare the percentage of ones in cover vs stego for each bit.')
-        legend.setStyleSheet('color:#2c3e50;font-size:12px;')
+        legend.setStyleSheet('color:#e8e8fc;font-size:12px;')
         legend.setWordWrap(True)
-        proof_layout.addWidget(legend)
+        proof_layout.addWidget(legend, len(proof_fields) + 1, 0, 1, 2)
 
         # Header diagnostics panel
         header_group = QGroupBox("Header Details")
+        header_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         header_layout = QGridLayout(header_group)
         header_layout.setHorizontalSpacing(12)
         header_layout.setVerticalSpacing(6)
@@ -1964,35 +2425,75 @@ class StegaEncodeWindow(QMainWindow):
         self.header_detail_labels = {}
         for row, (label, key) in enumerate(header_fields):
             lbl = QLabel(f"{label}:")
-            lbl.setStyleSheet("color:#2c3e50;font-weight:600;")
+            lbl.setStyleSheet("color:#e8e8fc;font-weight:600;")
             value_lbl = QLabel("-")
-            value_lbl.setStyleSheet("color:#2c3e50;")
+            value_lbl.setStyleSheet("color:#e8e8fc;")
             value_lbl.setWordWrap(True)
             header_layout.addWidget(lbl, row, 0, Qt.AlignmentFlag.AlignTop)
             header_layout.addWidget(value_lbl, row, 1)
             self.header_detail_labels[key] = value_lbl
         self.header_warning_label = QLabel("")
-        self.header_warning_label.setStyleSheet("color:#c0392b;font-weight:bold;")
+        self.header_warning_label.setStyleSheet("color:#45edf2;font-weight:bold;")
         self.header_warning_label.setWordWrap(True)
         self.header_warning_label.hide()
         header_layout.addWidget(self.header_warning_label, len(header_fields), 0, 1, 2)
 
         # Encryption diagnostics panel
         encryption_group = QGroupBox("Encryption Diagnostics")
-        encryption_layout = QVBoxLayout(encryption_group)
-        self.enc_detail_labels = {
-            "status": QLabel("Encrypted: -"),
-            "nonce": QLabel("Nonce: -"),
-            "crc": QLabel("CRC32 match: -"),
-            "note": QLabel("Payload storage: -"),
-        }
-        for lbl in self.enc_detail_labels.values():
-            lbl.setStyleSheet("color:#2c3e50;")
-            lbl.setWordWrap(True)
-            encryption_layout.addWidget(lbl)
+        encryption_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        encryption_layout = QGridLayout(encryption_group)
+        encryption_layout.setHorizontalSpacing(12)
+        encryption_layout.setVerticalSpacing(6)
+        encryption_fields = [
+            ("Encrypted", "status"),
+            ("Nonce", "nonce"),
+            ("CRC32 match", "crc"),
+            ("Payload storage", "note"),
+        ]
+        self.enc_detail_labels = {}
+        for row, (label, key) in enumerate(encryption_fields):
+            lbl = QLabel(f"{label}:")
+            lbl.setStyleSheet("color:#e8e8fc;font-weight:600;")
+            value_lbl = QLabel("-")
+            value_lbl.setStyleSheet("color:#e8e8fc;")
+            value_lbl.setWordWrap(True)
+            encryption_layout.addWidget(lbl, row, 0)
+            encryption_layout.addWidget(value_lbl, row, 1)
+            self.enc_detail_labels[key] = value_lbl
 
         # Post-encode capacity summary
         summary_group = QGroupBox("Post-Encode Capacity Summary")
+        summary_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         summary_layout = QVBoxLayout(summary_group)
         summary_grid = QGridLayout()
         summary_grid.setHorizontalSpacing(12)
@@ -2008,9 +2509,9 @@ class StegaEncodeWindow(QMainWindow):
         ]
         for row, (label, key) in enumerate(summary_fields):
             lbl = QLabel(f"{label}:")
-            lbl.setStyleSheet("color:#2c3e50;font-weight:600;")
+            lbl.setStyleSheet("color:#e8e8fc;font-weight:600;")
             value_lbl = QLabel("-")
-            value_lbl.setStyleSheet("color:#2c3e50;")
+            value_lbl.setStyleSheet("color:#e8e8fc;")
             value_lbl.setWordWrap(True)
             summary_grid.addWidget(lbl, row, 0, Qt.AlignmentFlag.AlignTop)
             summary_grid.addWidget(value_lbl, row, 1)
@@ -2021,8 +2522,8 @@ class StegaEncodeWindow(QMainWindow):
         self.result_util_bar.setValue(0)
         self.result_util_bar.setFormat("No encode yet")
         self.result_util_bar.setStyleSheet(
-            "QProgressBar{border:1px solid #bdc3c7;border-radius:6px;background:#f2f4f6;text-align:center;}"
-            "QProgressBar::chunk{background-color:#8e44ad;border-radius:6px;}"
+            "QProgressBar{border:1px solid #45edf2;border-radius:6px;background:#0e1625;text-align:center;color:#e8e8fc;}"
+            "QProgressBar::chunk{background-color:#45edf2;border-radius:6px;}"
         )
         summary_layout.addWidget(self.result_util_bar)
 
@@ -2033,6 +2534,16 @@ class StegaEncodeWindow(QMainWindow):
                 "After encoding, review this panel to confirm header metadata, encryption status, and capacity utilisation before sharing."
             ),
         )
+        diagnostics_section.setStyleSheet("""
+            QFrame#collapsibleSection {
+                border: none !important;
+                background: transparent !important;
+                outline: none;
+            }
+            QFrame {
+                border: none !important;
+            }
+        """)
         diagnostics_section.addWidget(proof_group)
         diagnostics_section.addWidget(header_group)
         diagnostics_section.addWidget(encryption_group)
@@ -2041,6 +2552,22 @@ class StegaEncodeWindow(QMainWindow):
 
         # Video start controls
         video_group = QGroupBox("Video Start")
+        video_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         video_vlayout = QVBoxLayout(video_group)
         self.video_frame_slider = QSlider(Qt.Orientation.Horizontal)
         self.video_frame_slider.setMinimum(0)
@@ -2052,12 +2579,28 @@ class StegaEncodeWindow(QMainWindow):
 
         # Audio playback controls (enabled only for audio)
         audio_play_group = QGroupBox("Audio Playback")
+        audio_play_group.setStyleSheet("""
+            QGroupBox {
+                color: #e8e8fc;
+                font-weight: bold;
+                font-size: 16px;
+                border: 2px solid rgba(69,237,242,0.6);
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
         audio_play_layout = QHBoxLayout(audio_play_group)
         self.play_cover_btn = QPushButton("Play Cover")
         self.play_stego_btn = QPushButton("Play Stego")
         for btn in (self.play_cover_btn, self.play_stego_btn):
             btn.setEnabled(False)
-            btn.setStyleSheet("QPushButton { background-color: #3498db; color: white; border: none; padding: 8px 12px; border-radius: 5px; }")
+            btn.setStyleSheet("QPushButton { background: rgba(69,237,242,0.1); color: #45edf2; border: 2px solid rgba(69,237,242,0.6); padding: 8px 12px; border-radius: 5px; }")
         self.play_cover_btn.clicked.connect(self.play_cover_audio)
         self.play_stego_btn.clicked.connect(self.play_stego_audio)
         audio_play_layout.addWidget(self.play_cover_btn)
@@ -2077,6 +2620,16 @@ class StegaEncodeWindow(QMainWindow):
                 "Use these helpers to scrub videos for start frames or audition audio covers before and after encoding."
             ),
         )
+        tools_section.setStyleSheet("""
+            QFrame#collapsibleSection {
+                border: none !important;
+                background: transparent !important;
+                outline: none;
+            }
+            QFrame {
+                border: none !important;
+            }
+        """)
         tools_section.addWidget(tools_container)
         layout.addWidget(tools_section)
 
@@ -2089,17 +2642,22 @@ class StegaEncodeWindow(QMainWindow):
         self.hide_button.setMinimumHeight(52)
         self.hide_button.setStyleSheet(
             "QPushButton {"
-            "    background-color: #e67e22;"
-            "    color: white;"
-            "    border: none;"
+            "    background: rgba(255,140,0,0.2);"
+            "    color: #ff8c00;"
+            "    border: 2px solid #ff8c00;"
             "    padding: 16px 32px;"
             "    border-radius: 10px;"
             "    font-size: 16px;"
             "    font-weight: bold;"
             "    min-width: 180px;"
             "}"
-            "QPushButton:hover { background-color: #d35400; }"
-            "QPushButton:pressed { background-color: #c0392b; }"
+            "QPushButton:hover { background: rgba(255,140,0,0.4); border: 3px solid #ff8c00; color: #ffffff; }"
+            "QPushButton:pressed { background: rgba(255,140,0,0.4); }"
+            "QPushButton:disabled {"
+            "    background: rgba(128,128,128,0.1);"
+            "    color: #808080;"
+            "    border: 2px solid rgba(128,128,128,0.3);"
+            "}"
         )
         self.hide_button.clicked.connect(self.hide_message)
 
@@ -2112,7 +2670,7 @@ class StegaEncodeWindow(QMainWindow):
             self.status_label = QLabel('Status: Waiting for inputs.')
             self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.status_label.setWordWrap(True)
-            self.status_label.setStyleSheet("QLabel { color:#2980b9; background-color:#e8f4ff; border:1px solid #2980b9; border-radius:10px; padding:8px 16px; font-weight:600; }")
+            self.status_label.setStyleSheet("QLabel { color:#45edf2; background-color:rgba(69,237,242,0.1); border:1px solid #45edf2; border-radius:10px; padding:8px 16px; font-weight:600; }")
         layout.addWidget(self.status_label)
         self.set_status('Waiting for inputs.', 'info')
         layout.addStretch()
@@ -2176,7 +2734,7 @@ class StegaEncodeWindow(QMainWindow):
                     status_css = "QLabel{background:#eafaf1;color:#2e7d32;border-radius:10px;padding:4px 8px;font-weight:bold;}"
                     status_txt = "Fits"
             self.cap_usage_bar.setStyleSheet(
-                "QProgressBar{border:1px solid #bdc3c7;border-radius:6px;background:#ecf0f1;text-align:center;}"
+                "QProgressBar{border:1px solid rgba(69,237,242,0.6);border-radius:6px;background:rgba(14,22,37,0.8);text-align:center;color:#e8e8fc;}"
                 f"QProgressBar::chunk{{background-color:{chunk};border-radius:6px;}}"
             )
             self.cap_status.setStyleSheet(status_css)
@@ -2185,13 +2743,14 @@ class StegaEncodeWindow(QMainWindow):
             pass
 
     def create_shadow_effect(self):
-        """Create a shadow effect for panels"""
+        """Create an enhanced shadow effect for panels"""
         from PyQt6.QtWidgets import QGraphicsDropShadowEffect
         shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(20)
+        shadow.setBlurRadius(35)  # Increased blur for stronger glow
         shadow.setXOffset(0)
-        shadow.setYOffset(5)
-        shadow.setColor(QColor(0, 0, 0, 30))
+        shadow.setYOffset(8)  # Increased offset for more depth
+        # Enhanced cyan glow with higher opacity
+        shadow.setColor(QColor(69, 237, 242, 80))
         return shadow
 
     def update_lsb_value(self, value):
@@ -2219,6 +2778,48 @@ class StegaEncodeWindow(QMainWindow):
             banner.show()
         except Exception as e:
             print(f"Failed to show banner: {e}")
+
+    def _style_message_box(self, msg_box, button_style='default'):
+        """Apply dark theme styling to QMessageBox for better text visibility"""
+        if button_style == 'error':
+            button_bg = "rgba(231,76,60,0.1)"
+            button_color = "#e74c3c"
+            button_border = "rgba(231,76,60,0.6)"
+            button_hover_bg = "rgba(231,76,60,0.3)"
+            button_pressed_bg = "rgba(231,76,60,0.5)"
+        else:  # default/info
+            button_bg = "rgba(69,237,242,0.1)"
+            button_color = "#45edf2"
+            button_border = "rgba(69,237,242,0.6)"
+            button_hover_bg = "rgba(69,237,242,0.3)"
+            button_pressed_bg = "rgba(69,237,242,0.5)"
+            
+        msg_box.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: #0e1625;
+                color: #e8e8fc;
+            }}
+            QMessageBox QLabel {{
+                color: #e8e8fc;
+                background-color: transparent;
+            }}
+            QMessageBox QPushButton {{
+                background-color: {button_bg};
+                color: {button_color};
+                border: 2px solid {button_border};
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: bold;
+                min-width: 80px;
+            }}
+            QMessageBox QPushButton:hover {{
+                background-color: {button_hover_bg};
+                border: 2px solid {button_color};
+            }}
+            QMessageBox QPushButton:pressed {{
+                background-color: {button_pressed_bg};
+            }}
+        """)
 
     def _set_overflow_banner(self, message: str | None):
         """Create/update/clear the capacity overflow persistent banner."""
@@ -2304,10 +2905,17 @@ class StegaEncodeWindow(QMainWindow):
             ext = os.path.splitext(file_path)[1].lower()
             if ext in ['.jpg', '.jpeg']:
                 from PyQt6.QtWidgets import QMessageBox
-                resp = QMessageBox.question(self, 'Convert JPEG to PNG?',
-                                            'JPEG is lossy and will not preserve LSBs reliably. Convert to PNG for lossless embedding?',
-                                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                            QMessageBox.StandardButton.Yes)
+                msg_box = QMessageBox(self)
+                msg_box.setIcon(QMessageBox.Icon.Question)
+                msg_box.setWindowTitle('Convert JPEG to PNG?')
+                msg_box.setText('JPEG is lossy and will not preserve LSBs reliably. Convert to PNG for lossless embedding?')
+                msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                msg_box.setDefaultButton(QMessageBox.StandardButton.Yes)
+                
+                # Apply dark theme styling for better text visibility
+                self._style_message_box(msg_box, 'info')
+                
+                resp = msg_box.exec()
                 if resp == QMessageBox.StandardButton.Yes:
                     try:
                         img = Image.open(file_path)
@@ -2787,13 +3395,32 @@ class StegaEncodeWindow(QMainWindow):
             print("Steganography completed successfully!")
             self.set_status(f"Stego saved: {self.machine.output_path}", 'success')
             self.update_helper_step(5, "Step 5: Review the proof & diagnostics panel.")
+            
+            # Show success popup matching decoding style
+            from PyQt6.QtWidgets import QMessageBox
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Icon.Information)
+            msg.setWindowTitle('Encode Successful')
+            out_path_display = self.machine.output_path or 'saved file'
+            msg.setText(f"Message hidden successfully.\nSaved to: {out_path_display}")
+            open_btn = msg.addButton('Open file', QMessageBox.ButtonRole.AcceptRole)
+            msg.addButton('Close', QMessageBox.ButtonRole.RejectRole)
+            
+            # Apply dark theme styling for better text visibility
+            self._style_message_box(msg, 'info')
+            
+            msg.exec()
+            if msg.clickedButton() == open_btn and self.machine.output_path:
+                from PyQt6.QtGui import QDesktopServices
+                from PyQt6.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl.fromLocalFile(self.machine.output_path))
             info = getattr(self.machine, 'last_embed_info', None)
             if info:
                 encrypted_flag = info.get('encrypted')
-                self.proof_lsb.setText(f"LSB bits: {info.get('lsb_bits')} | encrypted: {'yes' if encrypted_flag else 'no'}")
-                self.proof_start.setText(f"Start bit: {info.get('start_bit')}")
+                self.proof_lsb.setText(f"{info.get('lsb_bits')} | encrypted: {'yes' if encrypted_flag else 'no'}")
+                self.proof_start.setText(f"{info.get('start_bit')}")
                 perm = info.get('perm', [])
-                self.proof_perm.setText(f"Perm [0:8]: {perm[:8]}")
+                self.proof_perm.setText(f"{perm[:8]}")
                 hdr = info.get('header', {}) or {}
                 flags_val = hdr.get('flags', info.get('flags'))
                 try:
@@ -3217,12 +3844,12 @@ class StegaEncodeWindow(QMainWindow):
 
     def _format_payload_summary(self, raw_len: int, effective_len: int) -> str:
         if raw_len <= 0 and effective_len <= 0:
-            return 'Payload: -'
+            return '-'
         if getattr(self.machine, 'honey_enabled', False) and raw_len != effective_len:
-            return f'Payload: Raw {raw_len} B -> Honey blob {effective_len} B'
+            return f'Raw {raw_len} B -> Honey blob {effective_len} B'
         if raw_len != effective_len:
-            return f'Payload: Raw {raw_len} B -> Effective {effective_len} B'
-        return f'Payload: {effective_len} B'
+            return f'Raw {raw_len} B -> Effective {effective_len} B'
+        return f'{effective_len} B'
 
     def update_capacity_panel(self):
         raw_payload = 0
@@ -3262,13 +3889,13 @@ class StegaEncodeWindow(QMainWindow):
                     h = self.video_meta.get('h', 0)
                     start_bit = ((f * (w * h) + y * w + x) * 3 * max(1, lsb)) if (w and h) else 0
                     if f == 0 and x == 0 and y == 0 and header_bits:
-                        self.cap_startbits.setText(f"Start bit offset: {header_bits} (header reserved)")
+                        self.cap_startbits.setText(f"{header_bits} (header reserved)")
                     else:
-                        self.cap_startbits.setText(f"Start bit offset: {start_bit}")
-                self.cap_lsb.setText(f"LSB bits: {lsb}")
-                self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
-                self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
-                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                        self.cap_startbits.setText(f"{start_bit}")
+                self.cap_lsb.setText(f"{lsb}")
+                self.cap_header.setText(f"{len(header_bytes)}")
+                self.cap_max.setText(f"{max_bytes}")
+                self.cap_avail.setText(f"{self.available_bytes}")
                 try:
                     self._update_capacity_visuals(max_bytes, self.available_bytes)
                 except Exception:
@@ -3285,8 +3912,8 @@ class StegaEncodeWindow(QMainWindow):
                         pass
                     try:
                         self.cap_avail.setToolTip(msg)
-                        self.cap_avail.setStyleSheet("color:#e74c3c;")
-                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+                        self.cap_avail.setStyleSheet("color:#e74c3c;background:transparent;border:none;")
+                        self.cap_avail.setText(f"{self.available_bytes}  (Too large)")
                     except Exception:
                         pass
                     # Persistent banner
@@ -3297,8 +3924,8 @@ class StegaEncodeWindow(QMainWindow):
                 else:
                     try:
                         self.cap_avail.setToolTip("")
-                        self.cap_avail.setStyleSheet("color:#2c3e50;")
-                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                        self.cap_avail.setStyleSheet("color:#e8e8fc;background:transparent;border:none;")
+                        self.cap_avail.setText(f"{self.available_bytes}")
                     except Exception:
                         pass
                     try:
@@ -3310,10 +3937,10 @@ class StegaEncodeWindow(QMainWindow):
             return
         # Default reset
         self.cap_dims.setText("Cover: -")
-        self.cap_lsb.setText(f"LSB bits: {self.lsb_slider.value()}")
-        self.cap_header.setText("Header bytes: -")
-        self.cap_max.setText("Capacity (bytes): -")
-        self.cap_avail.setText("Available bytes: -")
+        self.cap_lsb.setText(f"{self.lsb_slider.value()}")
+        self.cap_header.setText("-")
+        self.cap_max.setText("-")
+        self.cap_avail.setText("-")
         try:
             self._update_capacity_visuals(0, 0)
         except Exception:
@@ -3353,17 +3980,17 @@ class StegaEncodeWindow(QMainWindow):
                 bytes_per_frame = max(1, channels * max(1, samp_bits // 8))
                 start_bit_offset = start_sample * bytes_per_frame * max(1, lsb)
                 if start_sample == 0 and header_bits:
-                    self.cap_startbits.setText(f"Start bit offset: {header_bits} (header reserved)")
+                    self.cap_startbits.setText(f"{header_bits} (header reserved)")
                 else:
-                    self.cap_startbits.setText(f"Start bit offset: {start_bit_offset}")
+                    self.cap_startbits.setText(f"{start_bit_offset}")
                 total_bits = self.machine.estimate_capacity_bits(self.media_drop_widget.media_path, 'audio', lsb, start_sample)
                 max_bytes = total_bits // 8
                 available_bits = max(0, total_bits - header_bits) if start_sample == 0 else max(0, total_bits)
                 self.available_bytes = available_bits // 8
-                self.cap_lsb.setText(f"LSB bits: {lsb}")
-                self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
-                self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
-                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                self.cap_lsb.setText(f"{lsb}")
+                self.cap_header.setText(f"{len(header_bytes)}")
+                self.cap_max.setText(f"{max_bytes}")
+                self.cap_avail.setText(f"{self.available_bytes}")
                 try:
                     self._update_capacity_visuals(max_bytes, self.available_bytes)
                 except Exception:
@@ -3379,8 +4006,8 @@ class StegaEncodeWindow(QMainWindow):
                         pass
                     try:
                         self.cap_avail.setToolTip(msg)
-                        self.cap_avail.setStyleSheet("color:#e74c3c;")
-                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+                        self.cap_avail.setStyleSheet("color:#e74c3c;background:transparent;border:none;")
+                        self.cap_avail.setText(f"{self.available_bytes}  (Too large)")
                     except Exception:
                         pass
                     try:
@@ -3390,8 +4017,8 @@ class StegaEncodeWindow(QMainWindow):
                 else:
                     try:
                         self.cap_avail.setToolTip("")
-                        self.cap_avail.setStyleSheet("color:#2c3e50;")
-                        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                        self.cap_avail.setStyleSheet("color:#e8e8fc;background:transparent;border:none;")
+                        self.cap_avail.setText(f"{self.available_bytes}")
                     except Exception:
                         pass
                     try:
@@ -3425,12 +4052,12 @@ class StegaEncodeWindow(QMainWindow):
             pixel_index = y * w + x
             start_bit = pixel_index * channels * lsb
             if header_bits and start_bit < header_bits:
-                self.cap_startbits.setText(f"Start bit offset: {start_bit} (overlaps header)")
+                self.cap_startbits.setText(f"{start_bit} (overlaps header)")
             else:
-                self.cap_startbits.setText(f"Start bit offset: {start_bit}")
+                self.cap_startbits.setText(f"{start_bit}")
         else:
             start_bit = header_bits
-            self.cap_startbits.setText(f"Start bit offset: {header_bits}")
+            self.cap_startbits.setText(f"{header_bits}")
 
         payload_start = max(start_bit, header_bits)
         usable_bits = max(0, total_bits - payload_start)
@@ -3438,10 +4065,10 @@ class StegaEncodeWindow(QMainWindow):
         self.available_bytes = max_bytes
 
         self.cap_dims.setText(f"Cover: {w}x{h}x{channels}")
-        self.cap_lsb.setText(f"LSB bits: {lsb}")
-        self.cap_header.setText(f"Header bytes: {len(header_bytes)}")
-        self.cap_max.setText(f"Capacity (bytes): {max_bytes}")
-        self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+        self.cap_lsb.setText(f"{lsb}")
+        self.cap_header.setText(f"{len(header_bytes)}")
+        self.cap_max.setText(f"{max_bytes}")
+        self.cap_avail.setText(f"{self.available_bytes}")
         try:
             self._update_capacity_visuals(max_bytes, self.available_bytes)
         except Exception:
@@ -3459,8 +4086,8 @@ class StegaEncodeWindow(QMainWindow):
                 pass
             try:
                 self.cap_avail.setToolTip(msg)
-                self.cap_avail.setStyleSheet("color:#e74c3c;")
-                self.cap_avail.setText(f"Available bytes: {self.available_bytes}  (Too large)")
+                self.cap_avail.setStyleSheet("color:#e74c3c;background:transparent;border:none;")
+                self.cap_avail.setText(f"{self.available_bytes}  (Too large)")
             except Exception:
                 pass
             try:
@@ -3470,8 +4097,8 @@ class StegaEncodeWindow(QMainWindow):
         else:
             try:
                 self.cap_avail.setToolTip("")
-                self.cap_avail.setStyleSheet("color:#2c3e50;")
-                self.cap_avail.setText(f"Available bytes: {self.available_bytes}")
+                self.cap_avail.setStyleSheet("color:#e8e8fc;background:transparent;border:none;")
+                self.cap_avail.setText(f"{self.available_bytes}")
             except Exception:
                 pass
             try:
@@ -3526,7 +4153,7 @@ class StegaEncodeWindow(QMainWindow):
         except Exception as e:
             self.proof_stats.setText(f"LSB stats unavailable: {e}")
 
-    def reset_lsb_stats(self, message: str = "LSB stats: -") -> None:
+    def reset_lsb_stats(self, message: str = "-") -> None:
         if hasattr(self, 'proof_stats'):
             self.proof_stats.setText(message)
 
@@ -3540,18 +4167,8 @@ class StegaEncodeWindow(QMainWindow):
             self.header_warning_label.hide()
             self.header_warning_label.setText('')
         if hasattr(self, 'enc_detail_labels'):
-            status_lbl = self.enc_detail_labels.get('status')
-            if status_lbl:
-                status_lbl.setText('Encrypted: -')
-            nonce_lbl = self.enc_detail_labels.get('nonce')
-            if nonce_lbl:
-                nonce_lbl.setText('Nonce: -')
-            crc_lbl = self.enc_detail_labels.get('crc')
-            if crc_lbl:
-                crc_lbl.setText('CRC32 match: -')
-            note_lbl = self.enc_detail_labels.get('note')
-            if note_lbl:
-                note_lbl.setText('Payload storage: -')
+            for label in self.enc_detail_labels.values():
+                label.setText('-')
         if hasattr(self, 'cap_summary_labels'):
             for label in self.cap_summary_labels.values():
                 label.setText('-')
@@ -3695,7 +4312,7 @@ class StegaEncodeWindow(QMainWindow):
                     enc_enabled = bool(int(flags_val) & FLAG_PAYLOAD_ENCRYPTED)
             except Exception:
                 pass
-            status_text = f"Encrypted: {'yes' if enc_enabled else 'no'} (flags {flags_text})"
+            status_text = f"{'yes' if enc_enabled else 'no'} (flags {flags_text})"
             if 'status' in labels:
                 labels['status'].setText(status_text)
             nonce_bytes = header.get('nonce')
@@ -3706,17 +4323,17 @@ class StegaEncodeWindow(QMainWindow):
             if not nonce_hex:
                 nonce_hex = 'none'
             if 'nonce' in labels:
-                labels['nonce'].setText(f"Nonce: {nonce_hex}")
+                labels['nonce'].setText(f"{nonce_hex}")
             crc_val_info = info.get('crc32')
-            match_text = 'CRC32 match: -'
+            match_text = '-'
             if header.get('crc32') is not None:
                 try:
                     header_crc = int(header.get('crc32')) & 0xFFFFFFFF
                     info_crc = int(crc_val_info) & 0xFFFFFFFF if crc_val_info is not None else None
                     match_ok = info_crc is None or header_crc == info_crc
-                    match_text = f"CRC32 match: {'ok' if match_ok else 'mismatch'} (0x{header_crc:08X})"
+                    match_text = f"{'ok' if match_ok else 'mismatch'} (0x{header_crc:08X})"
                 except Exception:
-                    match_text = f"CRC32: {header.get('crc32')}"
+                    match_text = f"{header.get('crc32')}"
             if 'crc' in labels:
                 labels['crc'].setText(match_text)
             if 'note' in labels:
