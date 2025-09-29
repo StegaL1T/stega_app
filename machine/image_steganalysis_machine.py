@@ -39,31 +39,22 @@ class ImageSteganalysisMachine:
         """Get sensitivity thresholds based on current level"""
         thresholds = {
             "ultra": {
-                "lsb_primary": 0.05,      # 5% deviation
-                "lsb_secondary": 0.08,    # 8% max deviation
-                "lsb_avg": 0.04,          # 4% avg deviation
-                "lsb_special": 0.025,     # 2.5% special case
-                "chi_square": 0.25,       # 25% chi-square threshold
-                "comprehensive": 0.15,    # 15% weighted voting
-                "advanced": 0.15          # 15% advanced weighted voting
+                "lsb_primary": 0.15,      # 15% combined score threshold - extremely sensitive, catches tiny LSB changes
+                "chi_square": 0.15,       # 15% chi-square threshold - very sensitive
+                "comprehensive": 0.1,     # 10% weighted voting - flags almost everything
+                "advanced": 0.1           # 10% advanced weighted voting - maximum detection
             },
             "medium": {
-                "lsb_primary": 0.10,      # 10% deviation
-                "lsb_secondary": 0.15,    # 15% max deviation
-                "lsb_avg": 0.08,          # 8% avg deviation
-                "lsb_special": 0.05,      # 5% special case
+                "lsb_primary": 0.45,      # 45% combined score threshold - balanced for practical use
                 "chi_square": 0.30,       # 30% chi-square threshold
-                "comprehensive": 0.25,    # 25% weighted voting
-                "advanced": 0.25          # 25% advanced weighted voting
+                "comprehensive": 0.4,     # 40% weighted voting
+                "advanced": 0.4           # 40% advanced weighted voting
             },
             "low": {
-                "lsb_primary": 0.20,      # 20% deviation
-                "lsb_secondary": 0.25,    # 25% max deviation
-                "lsb_avg": 0.15,          # 15% avg deviation
-                "lsb_special": 0.10,      # 10% special case
+                "lsb_primary": 0.65,      # 65% combined score threshold - conservative
                 "chi_square": 0.40,       # 40% chi-square threshold
-                "comprehensive": 0.35,    # 35% weighted voting
-                "advanced": 0.35          # 35% advanced weighted voting
+                "comprehensive": 0.6,     # 60% weighted voting
+                "advanced": 0.6           # 60% advanced weighted voting
             }
         }
         return thresholds.get(self.sensitivity_level, thresholds["ultra"])
@@ -185,7 +176,7 @@ class ImageSteganalysisMachine:
             return False
 
     def _perform_lsb_analysis(self):
-        """Perform LSB analysis"""
+        """Perform LSB analysis using Chi-square test and cross-channel correlation"""
         start_time = time.time()
         print("Performing LSB analysis...")
 
@@ -204,19 +195,44 @@ class ImageSteganalysisMachine:
         g_lsb_ratio = np.mean(g_lsb)
         b_lsb_ratio = np.mean(b_lsb)
 
-        avg_lsb_ratio = (r_lsb_ratio + g_lsb_ratio + b_lsb_ratio) / 3
-        # More conservative threshold: only flag if significantly deviant from 0.5
-        # Also check if multiple channels show similar deviation (stronger indicator)
-        channel_deviations = [abs(r_lsb_ratio - 0.5), abs(g_lsb_ratio - 0.5), abs(b_lsb_ratio - 0.5)]
-        max_deviation = max(channel_deviations)
-        avg_deviation = np.mean(channel_deviations)
+        # Chi-square test for LSB randomness per channel
+        r_chi2 = self._calculate_lsb_chi_square(r_lsb)
+        g_chi2 = self._calculate_lsb_chi_square(g_lsb)
+        b_chi2 = self._calculate_lsb_chi_square(b_lsb)
         
-        # Suspicious if: high average deviation OR multiple channels show significant deviation
+        avg_chi2 = (r_chi2 + g_chi2 + b_chi2) / 3
+        
+        # Cross-channel LSB correlation analysis
+        correlations = []
+        lsb_patterns = [r_lsb.flatten(), g_lsb.flatten(), b_lsb.flatten()]
+        
+        for i in range(len(lsb_patterns)):
+            for j in range(i+1, len(lsb_patterns)):
+                corr = np.corrcoef(lsb_patterns[i], lsb_patterns[j])[0, 1]
+                if not np.isnan(corr):
+                    correlations.append(abs(corr))
+        
+        avg_correlation = np.mean(correlations) if correlations else 0
+        
+        # Combine chi-square and correlation analysis
+        combined_score = (avg_chi2 + avg_correlation) / 2
+        
+        # Also check for extreme LSB distributions (secondary indicator)
+        lsb_ratios = [r_lsb_ratio, g_lsb_ratio, b_lsb_ratio]
+        extreme_ratios = sum(1 for ratio in lsb_ratios if ratio < 0.15 or ratio > 0.85)
+        
         # Configurable image LSB thresholds based on sensitivity level
         thresholds = self.get_sensitivity_thresholds()
-        suspicious = (abs(avg_lsb_ratio - 0.5) > thresholds["lsb_primary"]) or \
-                    (max_deviation > thresholds["lsb_secondary"] and avg_deviation > thresholds["lsb_avg"]) or \
-                    (max_deviation > thresholds["lsb_special"])
+        
+        # Adjust extreme ratio threshold based on sensitivity
+        if self.sensitivity_level == "ultra":
+            extreme_threshold = 1  # Ultra: flag if ANY channel has extreme ratio
+        elif self.sensitivity_level == "medium":
+            extreme_threshold = 2  # Medium: flag if 2+ channels have extreme ratios
+        else:  # low
+            extreme_threshold = 3  # Low: flag only if ALL channels have extreme ratios
+        
+        suspicious = (combined_score > thresholds["lsb_primary"]) or (extreme_ratios >= extreme_threshold)
         
         end_time = time.time()
         execution_time = end_time - start_time
@@ -226,14 +242,36 @@ class ImageSteganalysisMachine:
             'r_lsb_ratio': r_lsb_ratio,
             'g_lsb_ratio': g_lsb_ratio,
             'b_lsb_ratio': b_lsb_ratio,
-            'avg_lsb_ratio': avg_lsb_ratio,
-            'max_deviation': max_deviation,
-            'avg_deviation': avg_deviation,
+            'avg_chi2': avg_chi2,
+            'avg_correlation': avg_correlation,
+            'combined_score': combined_score,
+            'extreme_ratios': extreme_ratios,
             'suspicious': suspicious,
             'execution_time_ms': round(execution_time * 1000, 2)
         }
         
         print(f"LSB Analysis completed in {execution_time*1000:.2f}ms")
+
+    def _calculate_lsb_chi_square(self, lsb_array: np.ndarray) -> float:
+        """Calculate chi-square statistic for LSB randomness"""
+        # Count LSB=0 and LSB=1
+        lsb_0_count = np.sum(lsb_array == 0)
+        lsb_1_count = np.sum(lsb_array == 1)
+        total_pixels = lsb_0_count + lsb_1_count
+        
+        if total_pixels > 0:
+            # Expected counts for random distribution
+            expected = total_pixels / 2
+            
+            # Chi-square statistic
+            chi_square = ((lsb_0_count - expected) ** 2 + (lsb_1_count - expected) ** 2) / expected
+            
+            # Normalize chi-square to 0-1 range (higher = more suspicious)
+            # Chi-square > 3.84 indicates significant deviation from randomness (p < 0.05)
+            chi_square_normalized = min(chi_square / 10.0, 1.0)  # Cap at 1.0
+            
+            return chi_square_normalized
+        return 0.0
 
     def _perform_chi_square_test(self):
         """Perform Chi-Square test"""
@@ -258,12 +296,9 @@ class ImageSteganalysisMachine:
         chi2_values = [r_chi2, g_chi2, b_chi2]
         max_chi2 = max(chi2_values)
         
-        # Balanced chi-square thresholds: catch subtle statistical anomalies
-        # Primary threshold: moderate chi-square (0.25 instead of 0.3)
-        # Secondary threshold: multiple channels showing consistent anomalies
         # Configurable chi-square thresholds based on sensitivity level
         thresholds = self.get_sensitivity_thresholds()
-        suspicious = (avg_chi2 > thresholds["chi_square"]) or (max_chi2 > 0.4 and avg_chi2 > 0.15)
+        suspicious = (avg_chi2 > thresholds["chi_square"]) or (max_chi2 > 0.5 and avg_chi2 > 0.2)
         
         end_time = time.time()
         execution_time = end_time - start_time

@@ -182,14 +182,12 @@ class SteganalysisWindow(QMainWindow):
 
         # Initialize the steganalysis machine
         from machine.steganalysis_machine import SteganalysisMachine
-        from machine.video_steganalysis_machine import VideoSteganalysisMachine
         self.machine = SteganalysisMachine()
-        self.video_machine = VideoSteganalysisMachine()
         
         # Initialize individual window modules
         self.image_window = ImageSteganalysisWindow(self.machine)
         self.audio_window = AudioSteganalysisWindow(self.machine)
-        self.video_window = VideoSteganalysisWindow(self.video_machine)
+        self.video_window = VideoSteganalysisWindow(self.machine)
         
         # Set main GUI references
         self.image_window.set_main_gui(self)
@@ -2215,8 +2213,9 @@ class SteganalysisWindow(QMainWindow):
                     lines.append(f"Audio: {self.machine.audio_path}")
                 if getattr(self.machine, 'video_path', None):
                     lines.append(f"Video: {self.machine.video_path}")
-                lines.append(
-                    f"Confidence: {self.machine.get_confidence_level():.2%}")
+                # Get confidence from the main machine (which delegates to specialized machines)
+                confidence = self.machine.get_confidence_level()
+                lines.append(f"Confidence: {confidence:.2%}")
                 y = 0.95
                 axc.text(0.05, y, "Steganalysis Charts", fontsize=16,
                          weight='bold', transform=axc.transAxes)
@@ -2232,7 +2231,7 @@ class SteganalysisWindow(QMainWindow):
                                      dpi=200)  # A4 landscape
                     ax1, ax2 = fig_img.subplots(1, 2)
                     # Recompute from machine to ensure high-res
-                    img = self.machine.image_array
+                    img = self.machine.image_machine.image_array
                     if img is not None:
                         if img.dtype != np.uint8:
                             img = img.astype(np.uint8)
@@ -2279,8 +2278,8 @@ class SteganalysisWindow(QMainWindow):
                         pdf.savefig(fig_hist, bbox_inches='tight')
 
                 # Audio page(s): waveform + spectrogram + entropy
-                samples = getattr(self.machine, 'audio_samples', None)
-                sr = getattr(self.machine, 'audio_sample_rate', None)
+                samples = getattr(self.machine.audio_machine, 'audio_samples', None)
+                sr = getattr(self.machine.audio_machine, 'audio_sample_rate', None)
                 if samples is not None and sr:
                     if samples.ndim == 2:
                         data = samples[:, 0].astype(np.float32)
@@ -2337,7 +2336,7 @@ class SteganalysisWindow(QMainWindow):
                     pdf.savefig(fig_ent, bbox_inches='tight')
 
                 # Video page(s): frame analysis + motion analysis + LSB analysis
-                frames = getattr(self.machine, 'video_frames', None)
+                frames = getattr(self.machine.video_machine, 'video_frames', None)
                 if frames is not None and len(frames) > 0:
                     # Sample frames for analysis (max 20 frames)
                     sample_frames = frames[::max(1, len(frames)//20)]

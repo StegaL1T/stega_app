@@ -200,6 +200,8 @@ class SteganalysisMachine:
             # Copy results from video machine to main machine for backward compatibility
             self.results = self.video_machine.get_results()
             self.confidence_level = self.video_machine.get_confidence_level()
+            self._results_set = True
+            self._confidence_set = True
         return success
 
     def get_video_statistics(self) -> Dict:
@@ -223,6 +225,8 @@ class SteganalysisMachine:
             # Copy results from image machine to main machine for backward compatibility
             self.results = self.image_machine.get_results()
             self.confidence_level = self.image_machine.get_confidence_level()
+            self._results_set = True
+            self._confidence_set = True
         return success
 
     def analyze_audio(self, method: str = "Audio LSB Analysis") -> bool:
@@ -240,6 +244,8 @@ class SteganalysisMachine:
             # Copy results from audio machine to main machine for backward compatibility
             self.results = self.audio_machine.get_results()
             self.confidence_level = self.audio_machine.get_confidence_level()
+            self._results_set = True
+            self._confidence_set = True
         return success
 
 
@@ -248,12 +254,24 @@ class SteganalysisMachine:
 
     def get_results(self) -> Dict:
         """
-        Get analysis results
+        Get analysis results from the appropriate specialized machine
 
         Returns:
             Dict: Analysis results
         """
-        return self.results.copy()
+        # If results are already copied locally (for backward compatibility), use them
+        if hasattr(self, '_results_set') and self._results_set:
+            return self.results.copy()
+        
+        # Otherwise, get results from the specialized machine that was used
+        if self.image_path:
+            return self.image_machine.get_results()
+        elif self.audio_path:
+            return self.audio_machine.get_results()
+        elif self.video_path:
+            return self.video_machine.get_results()
+        else:
+            return {}
 
     def get_statistics(self) -> Dict:
         """
@@ -275,12 +293,32 @@ class SteganalysisMachine:
 
     def get_confidence_level(self) -> float:
         """
-        Get confidence level in the analysis
+        Get confidence level from the appropriate specialized machine
 
         Returns:
             float: Confidence level (0.0 to 1.0)
         """
-        return self.confidence_level
+        # If confidence is already set locally (for backward compatibility), use it
+        # Check if it's been set (not just default 0.0)
+        if hasattr(self, '_confidence_set') and self._confidence_set:
+            return self.confidence_level
+        
+        # Otherwise, get confidence from the specialized machine that was used
+        if self.image_path:
+            return self.image_machine.get_confidence_level()
+        elif self.audio_path:
+            return self.audio_machine.get_confidence_level()
+        elif self.video_path:
+            return self.video_machine.get_confidence_level()
+        else:
+            return 0.0
+
+    def set_sensitivity_level(self, level: str):
+        """Set the sensitivity level for all analysis machines"""
+        self.image_machine.set_sensitivity_level(level)
+        self.audio_machine.set_sensitivity_level(level)
+        self.video_machine.set_sensitivity_level(level)
+        print(f"All machines sensitivity level set to: {level}")
 
     def export_report(self, file_path: str) -> bool:
         """
@@ -297,16 +335,26 @@ class SteganalysisMachine:
                 f.write("STEGANALYSIS REPORT\n")
                 f.write("==================\n\n")
 
+                # Get confidence and results from the appropriate specialized machine
                 if self.image_path:
                     f.write(f"Image: {self.image_path}\n")
                 if self.audio_path:
                     f.write(f"Audio: {self.audio_path}\n")
-                f.write(f"Confidence Level: {self.confidence_level:.2%}\n\n")
+                if self.video_path:
+                    f.write(f"Video: {self.video_path}\n")
+                
+                confidence = self.get_confidence_level()
+                results = self.get_results()
+                
+                f.write(f"Confidence Level: {confidence:.2%}\n\n")
 
                 f.write("RESULTS:\n")
                 f.write("--------\n")
-                for key, value in self.results.items():
-                    f.write(f"{key}: {value}\n")
+                if results:
+                    for key, value in results.items():
+                        f.write(f"{key}: {value}\n")
+                else:
+                    f.write("No analysis results available.\n")
 
                 if self.image_path:
                     f.write("\nIMAGE STATISTICS:\n")
@@ -320,6 +368,13 @@ class SteganalysisMachine:
                     f.write("------------------\n")
                     astats = self.get_audio_statistics()
                     for key, value in astats.items():
+                        f.write(f"{key}: {value}\n")
+                        
+                if self.video_path:
+                    f.write("\nVIDEO STATISTICS:\n")
+                    f.write("------------------\n")
+                    vstats = self.get_video_statistics()
+                    for key, value in vstats.items():
                         f.write(f"{key}: {value}\n")
 
             print(f"Report exported to: {file_path}")

@@ -20,7 +20,7 @@ class VideoSteganalysisMachine:
         self.video_duration: Optional[float] = None
         self.video_width: Optional[int] = None
         self.video_height: Optional[int] = None
-        self.sensitivity_level: str = "ultra"  # Default to ultra-sensitive
+        self.sensitivity_level: str = "ultra"  # Default to ultra-sensitive for maximum detection
 
         # Analysis results
         self.results: Dict = {}
@@ -35,25 +35,31 @@ class VideoSteganalysisMachine:
         print(f"Video sensitivity level set to: {self.sensitivity_level}")
 
     def get_sensitivity_thresholds(self) -> Dict[str, float]:
-        """Get sensitivity thresholds based on current level"""
+        """Get sensitivity thresholds based on current level
+        
+        Sensitivity levels explained:
+        - ultra: Detects even subtle LSB modifications (high false positive rate expected)
+        - medium: Balanced detection with reasonable false positive rate
+        - low: Conservative detection, only flags obvious steganography
+        """
         thresholds = {
             "ultra": {
-                "lsb_frame": 0.025,      # 2.5% frame deviation
-                "lsb_ratio": 0.1,        # 10% suspicious frame ratio
-                "comprehensive": 0.15     # 15% weighted voting
+                "lsb_frame": 0.3,        # 30% combined score threshold - catches subtle LSB anomalies
+                "lsb_ratio": 0.15,       # 15% suspicious frame ratio - very sensitive
+                "comprehensive": 0.2      # 20% weighted voting - flags almost everything
             },
             "medium": {
-                "lsb_frame": 0.05,       # 5% frame deviation
-                "lsb_ratio": 0.2,        # 20% suspicious frame ratio
-                "comprehensive": 0.25     # 25% weighted voting
+                "lsb_frame": 0.65,       # 65% combined score threshold - more conservative for practical use
+                "lsb_ratio": 0.4,        # 40% suspicious frame ratio
+                "comprehensive": 0.6      # 60% weighted voting - requires stronger evidence
             },
             "low": {
-                "lsb_frame": 0.10,       # 10% frame deviation
-                "lsb_ratio": 0.3,        # 30% suspicious frame ratio
-                "comprehensive": 0.35     # 35% weighted voting
+                "lsb_frame": 0.7,        # 70% combined score threshold - conservative
+                "lsb_ratio": 0.5,        # 50% suspicious frame ratio
+                "comprehensive": 0.6      # 60% weighted voting
             }
         }
-        return thresholds.get(self.sensitivity_level, thresholds["ultra"])
+        return thresholds.get(self.sensitivity_level, thresholds["medium"])
 
     def set_video(self, video_path: str) -> bool:
         """
@@ -199,26 +205,60 @@ class VideoSteganalysisMachine:
             return False
 
     def _perform_video_lsb_analysis(self):
-        """Perform LSB analysis on video frames."""
+        """Perform LSB analysis on video frames using Chi-square test and LSB distribution analysis."""
         start_time = time.time()
         print("Performing Video LSB analysis...")
 
         suspicious_frames = 0
-        frame_deviations = []
+        frame_scores = []
         
         for frame in self.video_frames[::max(1, len(self.video_frames)//50)]:  # sample frames
-            r = frame[:, :, 0]
-            lsb_ratio = np.mean(r & 1)
-            deviation = abs(lsb_ratio - 0.5)
-            frame_deviations.append(deviation)
+            # Convert to grayscale for LSB analysis
+            if len(frame.shape) == 3:
+                gray_frame = np.mean(frame, axis=2).astype(np.uint8)
+            else:
+                gray_frame = frame
             
-            # Configurable threshold for video frames based on sensitivity level
-            thresholds = self.get_sensitivity_thresholds()
-            if deviation > thresholds["lsb_frame"]:
-                suspicious_frames += 1
+            # Extract LSBs
+            lsbs = gray_frame & 1
+            
+            # Chi-square test for LSB randomness
+            # Count LSB=0 and LSB=1
+            lsb_0_count = np.sum(lsbs == 0)
+            lsb_1_count = np.sum(lsbs == 1)
+            total_pixels = lsb_0_count + lsb_1_count
+            
+            if total_pixels > 0:
+                # Expected counts for random distribution
+                expected = total_pixels / 2
+                
+                # Chi-square statistic
+                chi_square = ((lsb_0_count - expected) ** 2 + (lsb_1_count - expected) ** 2) / expected
+                
+                # Normalize chi-square to 0-1 range (higher = more suspicious)
+                # Chi-square > 3.84 indicates significant deviation from randomness (p < 0.05)
+                chi_square_normalized = min(chi_square / 10.0, 1.0)  # Cap at 1.0
+                
+                # LSB ratio analysis
+                lsb_ratio = lsb_1_count / total_pixels
+                # Extreme ratios are suspicious (too far from 0.5)
+                ratio_deviation = abs(lsb_ratio - 0.5) * 2  # Scale to 0-1
+                
+                # Combine chi-square and ratio analysis
+                combined_score = (chi_square_normalized + ratio_deviation) / 2
+                frame_scores.append(combined_score)
+                
+                # Determine if frame is suspicious based on sensitivity
+                thresholds = self.get_sensitivity_thresholds()
+                is_suspicious = combined_score > thresholds["lsb_frame"]
+                
+                if is_suspicious:
+                    suspicious_frames += 1
+            else:
+                frame_scores.append(0)
 
         # Configurable frame analysis based on sensitivity level
-        total_sampled_frames = len(frame_deviations)
+        total_sampled_frames = len(frame_scores)
         suspicious_ratio = suspicious_frames / max(total_sampled_frames, 1)
         thresholds = self.get_sensitivity_thresholds()
         suspicious = suspicious_ratio > thresholds["lsb_ratio"]
@@ -230,8 +270,8 @@ class VideoSteganalysisMachine:
             'frames_analyzed': len(self.video_frames),
             'suspicious_frames': suspicious_frames,
             'suspicious_ratio': suspicious_ratio,
-            'avg_deviation': np.mean(frame_deviations) if frame_deviations else 0,
-            'max_deviation': max(frame_deviations) if frame_deviations else 0,
+            'avg_deviation': np.mean(frame_scores) if frame_scores else 0,
+            'max_deviation': max(frame_scores) if frame_scores else 0,
             'suspicious': suspicious,
             'execution_time_ms': round(execution_time * 1000, 2)
         }
@@ -269,11 +309,24 @@ class VideoSteganalysisMachine:
         
         # More sophisticated motion analysis
         # Consider both absolute differences and statistical outliers
-        unusual_motion = sum(1 for d in diffs if abs(d - avg_diff) > avg_diff * 0.7)
-        extreme_motion = sum(1 for d in diffs if abs(d - avg_diff) > 2 * std_diff)
+        # Adjust thresholds based on sensitivity level
+        thresholds = self.get_sensitivity_thresholds()
         
-        # Only flag as suspicious if there are both unusual and extreme motion patterns
-        suspicious = unusual_motion > 3 and extreme_motion > 1
+        if self.sensitivity_level == "ultra":
+            # Ultra-sensitive: catch subtle motion anomalies
+            unusual_motion = sum(1 for d in diffs if abs(d - avg_diff) > avg_diff * 0.8)
+            extreme_motion = sum(1 for d in diffs if abs(d - avg_diff) > 1.5 * std_diff)
+            suspicious = unusual_motion > len(diffs) * 0.05 and extreme_motion > len(diffs) * 0.02
+        elif self.sensitivity_level == "medium":
+            # Medium: balanced approach
+            unusual_motion = sum(1 for d in diffs if abs(d - avg_diff) > avg_diff * 1.5)
+            extreme_motion = sum(1 for d in diffs if abs(d - avg_diff) > 2.5 * std_diff)
+            suspicious = unusual_motion > len(diffs) * 0.08 and extreme_motion > len(diffs) * 0.03
+        else:  # low
+            # Low: conservative approach
+            unusual_motion = sum(1 for d in diffs if abs(d - avg_diff) > avg_diff * 2.0)
+            extreme_motion = sum(1 for d in diffs if abs(d - avg_diff) > 3.0 * std_diff)
+            suspicious = unusual_motion > len(diffs) * 0.1 and extreme_motion > len(diffs) * 0.05
 
         self.results = {
             'method': 'Video Motion Analysis',
@@ -324,11 +377,28 @@ class VideoSteganalysisMachine:
         motion_results = self.results.copy()
 
         # Weighted voting system for video advanced comprehensive analysis
-        method_weights = {
-            'video_lsb_analysis': 0.5,      # Highest weight - most reliable
-            'video_frame_analysis': 0.3,    # Medium weight
-            'video_motion_analysis': 0.2    # Lower weight - most prone to false positives
-        }
+        # Adjust weights based on sensitivity level
+        if self.sensitivity_level == "ultra":
+            # Ultra-sensitive: emphasize LSB analysis for subtle detection
+            method_weights = {
+                'video_lsb_analysis': 0.6,      # Higher weight for subtle LSB detection
+                'video_frame_analysis': 0.3,    # Medium weight
+                'video_motion_analysis': 0.1    # Lower weight but still considered
+            }
+        elif self.sensitivity_level == "medium":
+            # Medium: balanced approach
+            method_weights = {
+                'video_lsb_analysis': 0.4,      # Balanced weight
+                'video_frame_analysis': 0.4,    # Balanced weight
+                'video_motion_analysis': 0.2    # Lower weight
+            }
+        else:  # low
+            # Low: emphasize frame analysis for obvious steganography
+            method_weights = {
+                'video_lsb_analysis': 0.3,      # Lower weight
+                'video_frame_analysis': 0.5,    # Higher weight for obvious changes
+                'video_motion_analysis': 0.2    # Lower weight
+            }
         
         weighted_score = 0.0
         total_weight = 0.0
