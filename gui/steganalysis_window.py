@@ -2505,191 +2505,197 @@ class SteganalysisWindow(QMainWindow):
                     y -= 0.035
                 pdf.savefig(fig_cover, bbox_inches='tight')
 
-                # Image page: LSB + Diff side-by-side
-                if hasattr(self, 'img_canvas_lsb') and hasattr(self, 'img_canvas_diff'):
-                    fig_img = Figure(figsize=(11.69, 8.27),
-                                     dpi=200)  # A4 landscape
-                    ax1, ax2 = fig_img.subplots(1, 2)
-                    # Recompute from machine to ensure high-res
-                    img = self.machine.image_machine.image_array
-                    if img is not None:
-                        if img.dtype != np.uint8:
-                            img = img.astype(np.uint8)
-                        lsb = (img & 1)
-                        if lsb.ndim == 3:
-                            lsb_vis = (np.mean(lsb, axis=2)
-                                       * 255).astype(np.uint8)
-                        else:
-                            lsb_vis = (lsb * 255).astype(np.uint8)
-                        ax1.imshow(lsb_vis, cmap='gray')
-                        ax1.set_title('LSB Plane', fontsize=14)
-                        ax1.axis('off')
-                        blurred = cv2.GaussianBlur(img, (5, 5), 0)
-                        residual = cv2.absdiff(img, blurred)
-                        residual_gray = cv2.cvtColor(
-                            residual, cv2.COLOR_BGR2GRAY) if residual.ndim == 3 else residual
-                        ax2.imshow(residual_gray, cmap='inferno')
-                        ax2.set_title('Difference Map', fontsize=14)
-                        ax2.axis('off')
-                        pdf.savefig(fig_img, bbox_inches='tight')
+                # Determine file type and export only relevant charts
+                if hasattr(self.machine, 'last_analyzed_path') and self.machine.last_analyzed_path:
+                    file_ext = self.machine.last_analyzed_path.lower().split('.')[-1] if '.' in self.machine.last_analyzed_path else ''
+                    
+                    # Image charts: LSB + Diff side-by-side
+                    if file_ext in ['png', 'jpg', 'jpeg', 'bmp', 'gif'] and hasattr(self, 'img_canvas_lsb') and hasattr(self, 'img_canvas_diff'):
+                        fig_img = Figure(figsize=(11.69, 8.27),
+                                         dpi=200)  # A4 landscape
+                        ax1, ax2 = fig_img.subplots(1, 2)
+                        # Recompute from machine to ensure high-res
+                        img = self.machine.image_machine.image_array
+                        if img is not None:
+                            if img.dtype != np.uint8:
+                                img = img.astype(np.uint8)
+                            lsb = (img & 1)
+                            if lsb.ndim == 3:
+                                lsb_vis = (np.mean(lsb, axis=2)
+                                           * 255).astype(np.uint8)
+                            else:
+                                lsb_vis = (lsb * 255).astype(np.uint8)
+                            ax1.imshow(lsb_vis, cmap='gray')
+                            ax1.set_title('LSB Plane', fontsize=14)
+                            ax1.axis('off')
+                            blurred = cv2.GaussianBlur(img, (5, 5), 0)
+                            residual = cv2.absdiff(img, blurred)
+                            residual_gray = cv2.cvtColor(
+                                residual, cv2.COLOR_BGR2GRAY) if residual.ndim == 3 else residual
+                            ax2.imshow(residual_gray, cmap='inferno')
+                            ax2.set_title('Difference Map', fontsize=14)
+                            ax2.axis('off')
+                            pdf.savefig(fig_img, bbox_inches='tight')
 
-                    # Histogram page full width
-                    fig_hist = Figure(figsize=(11.69, 8.27), dpi=200)
-                    axh = fig_hist.subplots(1, 1)
-                    if img is not None:
-                        colors = ('r', 'g', 'b') if (
-                            img.ndim == 3 and img.shape[2] == 3) else ('k',)
-                        if len(colors) == 3:
-                            for i, c in enumerate(colors):
-                                hist = cv2.calcHist([img], [i], None, [
-                                                    256], [0, 256]).flatten()
-                                axh.plot(hist, color=c,
-                                         label=f'Channel {c.upper()}')
-                        else:
-                            hist, _ = np.histogram(
-                                img.flatten(), bins=256, range=(0, 256))
-                            axh.plot(hist, color='k', label='Gray')
-                        axh.set_title('Histogram', fontsize=16)
-                        axh.set_xlabel('Pixel value', fontsize=12)
-                        axh.set_ylabel('Count', fontsize=12)
-                        axh.set_xlim(0, 255)
-                        axh.legend(loc='upper right', fontsize=10)
-                        axh.grid(True, alpha=0.2)
-                        pdf.savefig(fig_hist, bbox_inches='tight')
+                        # Histogram page full width
+                        fig_hist = Figure(figsize=(11.69, 8.27), dpi=200)
+                        axh = fig_hist.subplots(1, 1)
+                        if img is not None:
+                            colors = ('r', 'g', 'b') if (
+                                img.ndim == 3 and img.shape[2] == 3) else ('k',)
+                            if len(colors) == 3:
+                                for i, c in enumerate(colors):
+                                    hist = cv2.calcHist([img], [i], None, [
+                                                        256], [0, 256]).flatten()
+                                    axh.plot(hist, color=c,
+                                             label=f'Channel {c.upper()}')
+                            else:
+                                hist, _ = np.histogram(
+                                    img.flatten(), bins=256, range=(0, 256))
+                                axh.plot(hist, color='k', label='Gray')
+                            axh.set_title('Histogram', fontsize=16)
+                            axh.set_xlabel('Pixel value', fontsize=12)
+                            axh.set_ylabel('Count', fontsize=12)
+                            axh.set_xlim(0, 255)
+                            axh.legend(loc='upper right', fontsize=10)
+                            axh.grid(True, alpha=0.2)
+                            pdf.savefig(fig_hist, bbox_inches='tight')
 
-                # Audio page(s): waveform + spectrogram + entropy
-                samples = getattr(self.machine.audio_machine, 'audio_samples', None)
-                sr = getattr(self.machine.audio_machine, 'audio_sample_rate', None)
-                if samples is not None and sr:
-                    if samples.ndim == 2:
-                        data = samples[:, 0].astype(np.float32)
-                    else:
-                        data = samples.astype(np.float32)
+                    # Audio charts: waveform + spectrogram + entropy
+                    elif file_ext in ['wav', 'mp3']:
+                        samples = getattr(self.machine.audio_machine, 'audio_samples', None)
+                        sr = getattr(self.machine.audio_machine, 'audio_sample_rate', None)
+                        if samples is not None and sr:
+                            if samples.ndim == 2:
+                                data = samples[:, 0].astype(np.float32)
+                            else:
+                                data = samples.astype(np.float32)
 
-                    # Waveform page
-                    fig_wave = Figure(figsize=(11.69, 8.27), dpi=200)
-                    axw = fig_wave.subplots(1, 1)
-                    t = np.arange(len(data)) / float(sr)
-                    axw.plot(t, data, color='#34495e', linewidth=0.7)
-                    axw.set_title('Waveform', fontsize=16)
-                    axw.set_xlabel('Time (s)', fontsize=12)
-                    axw.set_ylabel('Amplitude', fontsize=12)
-                    axw.grid(True, alpha=0.2)
-                    pdf.savefig(fig_wave, bbox_inches='tight')
+                            # Waveform page
+                            fig_wave = Figure(figsize=(11.69, 8.27), dpi=200)
+                            axw = fig_wave.subplots(1, 1)
+                            t = np.arange(len(data)) / float(sr)
+                            axw.plot(t, data, color='#34495e', linewidth=0.7)
+                            axw.set_title('Waveform', fontsize=16)
+                            axw.set_xlabel('Time (s)', fontsize=12)
+                            axw.set_ylabel('Amplitude', fontsize=12)
+                            axw.grid(True, alpha=0.2)
+                            pdf.savefig(fig_wave, bbox_inches='tight')
 
-                    # Spectrogram page
-                    fig_spec = Figure(figsize=(11.69, 8.27), dpi=200)
-                    axs = fig_spec.subplots(1, 1)
-                    nfft = 1024
-                    noverlap = 512
-                    axs.specgram(data, NFFT=nfft, Fs=sr,
-                                 noverlap=noverlap, cmap='magma')
-                    axs.set_title('Spectrogram', fontsize=16)
-                    axs.set_xlabel('Time (s)', fontsize=12)
-                    axs.set_ylabel('Frequency (Hz)', fontsize=12)
-                    pdf.savefig(fig_spec, bbox_inches='tight')
+                            # Spectrogram page
+                            fig_spec = Figure(figsize=(11.69, 8.27), dpi=200)
+                            axs = fig_spec.subplots(1, 1)
+                            nfft = 1024
+                            noverlap = 512
+                            axs.specgram(data, NFFT=nfft, Fs=sr,
+                                         noverlap=noverlap, cmap='magma')
+                            axs.set_title('Spectrogram', fontsize=16)
+                            axs.set_xlabel('Time (s)', fontsize=12)
+                            axs.set_ylabel('Frequency (Hz)', fontsize=12)
+                            pdf.savefig(fig_spec, bbox_inches='tight')
 
-                    # Entropy page
-                    fig_ent = Figure(figsize=(11.69, 8.27), dpi=200)
-                    axe = fig_ent.subplots(1, 1)
-                    x = data - np.min(data)
-                    denom = (np.max(x) - np.min(x) + 1e-9)
-                    x = (x / denom * 255.0).astype(np.uint8)
-                    win = max(int(sr * 0.05), 256)
-                    hop = max(win // 2, 128)
-                    ent_values = []
-                    times = []
-                    for start in range(0, len(x) - win + 1, hop):
-                        seg = x[start:start + win]
-                        hist, _ = np.histogram(seg, bins=256, range=(0, 256))
-                        p = hist.astype(np.float32)
-                        p = p / max(np.sum(p), 1.0)
-                        p = p[p > 0]
-                        ent = float(-np.sum(p * np.log2(p)))
-                        ent_values.append(ent)
-                        times.append(start / float(sr))
-                    axe.plot(times, ent_values, color='#8e44ad', linewidth=1.0)
-                    axe.set_title('Short-time Entropy', fontsize=16)
-                    axe.set_xlabel('Time (s)', fontsize=12)
-                    axe.set_ylabel('Entropy (bits)', fontsize=12)
-                    axe.grid(True, alpha=0.2)
-                    pdf.savefig(fig_ent, bbox_inches='tight')
+                            # Entropy page
+                            fig_ent = Figure(figsize=(11.69, 8.27), dpi=200)
+                            axe = fig_ent.subplots(1, 1)
+                            x = data - np.min(data)
+                            denom = (np.max(x) - np.min(x) + 1e-9)
+                            x = (x / denom * 255.0).astype(np.uint8)
+                            win = max(int(sr * 0.05), 256)
+                            hop = max(win // 2, 128)
+                            ent_values = []
+                            times = []
+                            for start in range(0, len(x) - win + 1, hop):
+                                seg = x[start:start + win]
+                                hist, _ = np.histogram(seg, bins=256, range=(0, 256))
+                                p = hist.astype(np.float32)
+                                p = p / max(np.sum(p), 1.0)
+                                p = p[p > 0]
+                                ent = float(-np.sum(p * np.log2(p)))
+                                ent_values.append(ent)
+                                times.append(start / float(sr))
+                            axe.plot(times, ent_values, color='#8e44ad', linewidth=1.0)
+                            axe.set_title('Short-time Entropy', fontsize=16)
+                            axe.set_xlabel('Time (s)', fontsize=12)
+                            axe.set_ylabel('Entropy (bits)', fontsize=12)
+                            axe.grid(True, alpha=0.2)
+                            pdf.savefig(fig_ent, bbox_inches='tight')
 
-                # Video page(s): frame analysis + motion analysis + LSB analysis
-                frames = getattr(self.machine.video_machine, 'video_frames', None)
-                if frames is not None and len(frames) > 0:
-                    # Sample frames for analysis (max 20 frames)
-                    sample_frames = frames[::max(1, len(frames)//20)]
+                    # Video charts: frame analysis + motion analysis + LSB analysis
+                    elif file_ext in ['mp4', 'mov', 'avi']:
+                        frames = getattr(self.machine.video_machine, 'video_frames', None)
+                        if frames is not None and len(frames) > 0:
+                            # Sample frames for analysis (max 20 frames)
+                            sample_frames = frames[::max(1, len(frames)//20)]
 
-                    # Frame Statistics page
-                    fig_frame = Figure(figsize=(11.69, 8.27), dpi=200)
-                    ax_frame = fig_frame.subplots(1, 1)
+                            # Frame Statistics page
+                            fig_frame = Figure(figsize=(11.69, 8.27), dpi=200)
+                            ax_frame = fig_frame.subplots(1, 1)
 
-                    frame_stats = []
-                    for i, frame in enumerate(sample_frames):
-                        if frame.ndim == 3:
-                            gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-                        else:
-                            gray = frame
-                        mean_val = np.mean(gray)
-                        std_val = np.std(gray)
-                        frame_stats.append((i, mean_val, std_val))
+                            frame_stats = []
+                            for i, frame in enumerate(sample_frames):
+                                if frame.ndim == 3:
+                                    gray = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
+                                else:
+                                    gray = frame
+                                mean_val = np.mean(gray)
+                                std_val = np.std(gray)
+                                frame_stats.append((i, mean_val, std_val))
 
-                    frame_nums, means, stds = zip(*frame_stats)
-                    ax_frame.plot(frame_nums, means, 'b-',
-                                  label='Mean', linewidth=2)
-                    ax_frame.plot(frame_nums, stds, 'r-',
-                                  label='Std Dev', linewidth=2)
-                    ax_frame.set_title('Video Frame Statistics', fontsize=16)
-                    ax_frame.set_xlabel('Frame Number', fontsize=12)
-                    ax_frame.set_ylabel('Pixel Value', fontsize=12)
-                    ax_frame.legend()
-                    ax_frame.grid(True, alpha=0.2)
-                    pdf.savefig(fig_frame, bbox_inches='tight')
+                            frame_nums, means, stds = zip(*frame_stats)
+                            ax_frame.plot(frame_nums, means, 'b-',
+                                          label='Mean', linewidth=2)
+                            ax_frame.plot(frame_nums, stds, 'r-',
+                                          label='Std Dev', linewidth=2)
+                            ax_frame.set_title('Video Frame Statistics', fontsize=16)
+                            ax_frame.set_xlabel('Frame Number', fontsize=12)
+                            ax_frame.set_ylabel('Pixel Value', fontsize=12)
+                            ax_frame.legend()
+                            ax_frame.grid(True, alpha=0.2)
+                            pdf.savefig(fig_frame, bbox_inches='tight')
 
-                    # Motion Analysis page
-                    fig_motion = Figure(figsize=(11.69, 8.27), dpi=200)
-                    ax_motion = fig_motion.subplots(1, 1)
+                            # Motion Analysis page
+                            fig_motion = Figure(figsize=(11.69, 8.27), dpi=200)
+                            ax_motion = fig_motion.subplots(1, 1)
 
-                    motion_diffs = []
-                    for i in range(1, len(sample_frames)):
-                        diff = np.mean(np.abs(sample_frames[i].astype(np.float32) -
-                                              sample_frames[i-1].astype(np.float32)))
-                        motion_diffs.append((i, diff))
+                            motion_diffs = []
+                            for i in range(1, len(sample_frames)):
+                                diff = np.mean(np.abs(sample_frames[i].astype(np.float32) -
+                                                      sample_frames[i-1].astype(np.float32)))
+                                motion_diffs.append((i, diff))
 
-                    if motion_diffs:
-                        frame_nums, diffs = zip(*motion_diffs)
-                        ax_motion.plot(frame_nums, diffs, 'g-', linewidth=2)
-                        ax_motion.set_title(
-                            'Video Motion Analysis', fontsize=16)
-                        ax_motion.set_xlabel('Frame Number', fontsize=12)
-                        ax_motion.set_ylabel('Motion Difference', fontsize=12)
-                        ax_motion.grid(True, alpha=0.2)
-                        pdf.savefig(fig_motion, bbox_inches='tight')
+                            if motion_diffs:
+                                frame_nums, diffs = zip(*motion_diffs)
+                                ax_motion.plot(frame_nums, diffs, 'g-', linewidth=2)
+                                ax_motion.set_title(
+                                    'Video Motion Analysis', fontsize=16)
+                                ax_motion.set_xlabel('Frame Number', fontsize=12)
+                                ax_motion.set_ylabel('Motion Difference', fontsize=12)
+                                ax_motion.grid(True, alpha=0.2)
+                                pdf.savefig(fig_motion, bbox_inches='tight')
 
-                    # LSB Analysis page
-                    fig_lsb = Figure(figsize=(11.69, 8.27), dpi=200)
-                    ax_lsb = fig_lsb.subplots(1, 1)
+                            # LSB Analysis page
+                            fig_lsb = Figure(figsize=(11.69, 8.27), dpi=200)
+                            ax_lsb = fig_lsb.subplots(1, 1)
 
-                    lsb_ratios = []
-                    for i, frame in enumerate(sample_frames):
-                        if frame.ndim == 3:
-                            r = frame[:, :, 0]
-                        else:
-                            r = frame
-                        lsb_ratio = np.mean(r & 1)
-                        lsb_ratios.append((i, lsb_ratio))
+                            lsb_ratios = []
+                            for i, frame in enumerate(sample_frames):
+                                if frame.ndim == 3:
+                                    r = frame[:, :, 0]
+                                else:
+                                    r = frame
+                                lsb_ratio = np.mean(r & 1)
+                                lsb_ratios.append((i, lsb_ratio))
 
-                    frame_nums, ratios = zip(*lsb_ratios)
-                    ax_lsb.plot(frame_nums, ratios, 'm-', linewidth=2)
-                    ax_lsb.axhline(y=0.5, color='r',
-                                   linestyle='--', label='Expected (0.5)')
-                    ax_lsb.set_title('Video LSB Analysis', fontsize=16)
-                    ax_lsb.set_xlabel('Frame Number', fontsize=12)
-                    ax_lsb.set_ylabel('LSB Ratio', fontsize=12)
-                    ax_lsb.legend()
-                    ax_lsb.grid(True, alpha=0.2)
-                    pdf.savefig(fig_lsb, bbox_inches='tight')
+                            frame_nums, ratios = zip(*lsb_ratios)
+                            ax_lsb.plot(frame_nums, ratios, 'm-', linewidth=2)
+                            ax_lsb.axhline(y=0.5, color='r',
+                                           linestyle='--', label='Expected (0.5)')
+                            ax_lsb.set_title('Video LSB Analysis', fontsize=16)
+                            ax_lsb.set_xlabel('Frame Number', fontsize=12)
+                            ax_lsb.set_ylabel('LSB Ratio', fontsize=12)
+                            ax_lsb.legend()
+                            ax_lsb.grid(True, alpha=0.2)
+                            pdf.savefig(fig_lsb, bbox_inches='tight')
 
             # Notify success
             if hasattr(self, 'img_results_text'):
